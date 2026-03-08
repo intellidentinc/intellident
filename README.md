@@ -7,3 +7,15 @@
 5. npx prisma generate
 6. npm run dev to run in local
 7. BOOM!
+
+
+## Commands
+
+For database changes or prisma changes:
+ - npx prisma generate (sync in cloud database)
+ - npx prisma db push (push in cloud)
+
+For local & code shits:
+ - npm run dev (to run system in local)
+ - npm install (to install dependencies)
+
