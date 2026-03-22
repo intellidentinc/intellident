@@ -7,12 +7,329 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  PATIENT
+  STAFF
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  RESCHEDULED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum RecordStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  VIEW
+  EXPORT
+  VERIFY
+}
+
+enum ConsentStatus {
+  PENDING
+  GIVEN
+  REVOKED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Clinic {
+  id        String    @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users        User[]
+  staff        Staff[]
+  patients     Patient[]
+  services     Service[]
+  appointments Appointment[]
+  auditLogs    AuditLog[]
+
+  @@map("clinics")
+}
+
 model User {
-  id         Int      @id @default(autoincrement())
-  email      String   @unique
+  id         String    @id @default(cuid())
+  email      String    @unique
   name       String?
   password   String
+  role       UserRole  @default(PATIENT)
   wrappedKey String?
   keySalt    String?
-  createdAt  DateTime @default(now())
+  clinicId   String?
+  isDeleted  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  clinic    Clinic?    @relation(fields: [clinicId], references: [id])
+  patient   Patient?
+  staff     Staff?
+  auditLogs AuditLog[]
+
+  @@index([email])
+  @@index([clinicId])
+  @@map("users")
+}
+
+model Patient {
+  id              String        @id @default(cuid())
+  userId          String        @unique
+  clinicId        String
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime?
+  gender          Gender?
+  phone           String?
+  address         String?
+  consentStatus   ConsentStatus @default(PENDING)
+  consentGivenAt  DateTime?
+  isDeleted       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  user          User            @relation(fields: [userId], references: [id])
+  clinic        Clinic          @relation(fields: [clinicId], references: [id])
+  appointments  Appointment[]
+  records       PatientRecord[]
+  billings      Billing[]
+  notifications Notification[]
+
+  @@index([clinicId])
+  @@map("patients")
+}
+
+model Staff {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  clinicId   String
+  specialty  String?
+  isDeleted  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  user         User          @relation(fields: [userId], references: [id])
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  appointments Appointment[]
+
+  @@index([clinicId])
+  @@map("staff")
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  clinicId    String
+  name        String
+  description String?
+  duration    Int       // minutes
+  price       Float
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  appointments Appointment[]
+
+  @@index([clinicId])
+  @@map("services")
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  clinicId    String
+  patientId   String
+  dentistId   String
+  serviceId   String
+  scheduledAt DateTime
+  endsAt      DateTime
+  status      AppointmentStatus @default(PENDING)
+  notes       String?
+  aiSuggested Boolean           @default(false)
+  isDeleted   Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+
+  clinic        Clinic         @relation(fields: [clinicId], references: [id])
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  dentist       Staff          @relation(fields: [dentistId], references: [id])
+  service       Service        @relation(fields: [serviceId], references: [id])
+  billing       Billing?
+  notifications Notification[]
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([dentistId])
+  @@index([scheduledAt])
+  @@map("appointments")
+}
+
+model PatientRecord {
+  id            String       @id @default(cuid())
+  patientId     String
+  clinicId      String
+  title         String
+  encryptedData String?      // AES-GCM encrypted blob (client-side E2EE)
+  dataIv        String?      // IV for decryption
+  contentHash   String?      // SHA-256 hash for tamper detection
+  status        RecordStatus @default(ACTIVE)
+  isDeleted     Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  patient     Patient      @relation(fields: [patientId], references: [id])
+  attachments Attachment[]
+
+  @@index([patientId])
+  @@index([clinicId])
+  @@map("patient_records")
+}
+
+model Attachment {
+  id        String    @id @default(cuid())
+  recordId  String
+  fileName  String
+  fileUrl   String
+  mimeType  String
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  record PatientRecord @relation(fields: [recordId], references: [id])
+
+  @@index([recordId])
+  @@map("attachments")
+}
+
+model Billing {
+  id            String        @id @default(cuid())
+  clinicId      String
+  patientId     String
+  appointmentId String        @unique
+  amount        Float
+  amountPaid    Float         @default(0)
+  balance       Float
+  status        PaymentStatus @default(UNPAID)
+  receiptNumber String?       @unique
+  isDeleted     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  patient     Patient     @relation(fields: [patientId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  payments    Payment[]
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@map("billings")
+}
+
+model Payment {
+  id        String    @id @default(cuid())
+  billingId String
+  amount    Float
+  method    String?
+  notes     String?
+  paidAt    DateTime  @default(now())
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  billing Billing @relation(fields: [billingId], references: [id])
+
+  @@index([billingId])
+  @@map("payments")
+}
+
+model Notification {
+  id            String             @id @default(cuid())
+  clinicId      String
+  patientId     String
+  appointmentId String?
+  status        NotificationStatus @default(PENDING)
+  subject       String?
+  message       String
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  isDeleted     Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  deletedAt     DateTime?
+
+  patient     Patient      @relation(fields: [patientId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@index([patientId])
+  @@index([clinicId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String?
+  clinicId  String?
+  action    AuditAction
+  entity    String      // e.g. "Appointment", "PatientRecord"
+  entityId  String?
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  clinic Clinic? @relation(fields: [clinicId], references: [id])
+
+  @@index([userId])
+  @@index([clinicId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
