@@ -20,6 +20,7 @@ import {
   CreditCard,
   Bell,
   ShieldCheck,
+  UserCog,
 } from 'lucide-react';
 import SignOutButton from './SignOutButton';
 
@@ -29,17 +30,26 @@ function getInitials(firstName, lastName) {
   return (f + l).toUpperCase() || '?';
 }
 
-const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, href: '#' },
-  { label: 'Appointments', icon: CalendarDays, href: '#' },
-  { label: 'Patients', icon: Users, href: '#' },
-  { label: 'Records', icon: FileText, href: '#' },
-  { label: 'Billing', icon: CreditCard, href: '#' },
-  { label: 'Reminders', icon: Bell, href: '#' },
-  { label: 'Audit Log', icon: ShieldCheck, href: '#' },
-];
-
 export default function AppSidebar({ session }) {
+  const clinicId = session?.clinicId;
+
+  const mainNavItems = [
+    { label: 'Dashboard', icon: LayoutDashboard, href: `/${clinicId}/dashboard` },
+    { label: 'Appointments', icon: CalendarDays, href: `/${clinicId}/appointments` },
+    { label: 'Billing', icon: CreditCard, href: `/${clinicId}/billing` },
+    { label: 'Reminders', icon: Bell, href: `/${clinicId}/reminders` },
+  ];
+
+  const staffNavItems = [
+    { label: 'Patients', icon: Users, href: `/${clinicId}/patients` },
+    { label: 'Records', icon: FileText, href: `/${clinicId}/records` },
+  ];
+
+  const resolvedAdminItems = [
+    { label: 'User Management', icon: UserCog, href: `/${clinicId}/users` },
+    { label: 'Audit Log', icon: ShieldCheck, href: `/${clinicId}/audit-log` },
+  ];
+
   return (
     <Sidebar>
       {/* Header */}
@@ -49,11 +59,54 @@ export default function AppSidebar({ session }) {
 
       {/* Nav */}
       <SidebarContent>
+        {/* Main */}
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1 px-3">
-              {navItems.map((item) => (
+              {mainNavItems.map((item) => (
+                <SidebarMenuItem key={item.label}>
+                  <SidebarMenuButton
+                    size="lg"
+                    render={<a href={item.href} />}
+                    className="cursor-pointer pl-4"
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Staff */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Staff</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-1 px-3">
+              {staffNavItems.map((item) => (
+                <SidebarMenuItem key={item.label}>
+                  <SidebarMenuButton
+                    size="lg"
+                    render={<a href={item.href} />}
+                    className="cursor-pointer pl-4"
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Admin */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Admin</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-1 px-3">
+              {resolvedAdminItems.map((item) => (
                 <SidebarMenuItem key={item.label}>
                   <SidebarMenuButton
                     size="lg"
