@@ -1,43 +1,23 @@
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/auth';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
-import SignOutButton from './SignOutButton';
+import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 
-export default async function DashboardPage({ params }) {
-  const session = await getSession();
-
-  if (!session) {
-    redirect('/sign-in');
-  }
-
-  const { clinicId } = await params;
-
-  // Prevent users from accessing another clinic's dashboard
-  if (session.clinicId !== clinicId) {
-    redirect('/sign-in');
-  }
-
+export default async function DashboardPage({ session }) {
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#F8FAFC' }}>
-      <Box component="nav" sx={{ bgcolor: 'white', borderBottom: '1px solid #e3f0ff', boxShadow: 1 }}>
-        <Box sx={{ maxWidth: 1280, mx: 'auto', px: { xs: 2, sm: 3, lg: 4 } }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 64 }}>
-            <Typography variant="h6" fontWeight={700} color="primary">
-              Dashboard
-            </Typography>
-            <SignOutButton />
-          </Box>
-        </Box>
-      </Box>
+    <SidebarInset>
+      <header className="flex h-14 items-center gap-3 border-b bg-white px-4">
+        <SidebarTrigger />
+        <div className="h-5 w-px bg-gray-200" />
+        <span className="font-semibold text-slate-700">Dashboard</span>
+      </header>
 
-      <Box sx={{ maxWidth: 1280, mx: 'auto', px: { xs: 2, sm: 3, lg: 4 }, py: 6 }}>
+      <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
         <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
           <Box sx={{ mb: 4 }}>
             <Typography variant="h4" fontWeight={700} color="text.primary">
-              Welcome back{session.name ? `, ${session.name}` : ''}!
+              Welcome back{session.firstName ? `, ${session.firstName}` : ''}!
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
               Email: {session.email}
@@ -89,6 +69,6 @@ export default async function DashboardPage({ params }) {
           </Box>
         </Paper>
       </Box>
-    </Box>
+    </SidebarInset>
   );
 }
