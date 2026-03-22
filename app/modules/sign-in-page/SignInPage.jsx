@@ -9,6 +9,8 @@ import Paper from '@mui/material/Paper';
 import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
 import { useToast } from '@/app/providers/ToastProvider';
+import { useCrypto } from '@/app/providers/CryptoProvider';
+import { deriveKEK, unwrapMasterKey, fromBase64 } from '@/lib/crypto';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -16,6 +18,7 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
+  const { setMasterKey } = useCrypto();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,6 +39,13 @@ export default function SignInPage() {
         return;
       }
 
+      // Unwrap the master key client-side using the password — server cannot do this
+      const salt = fromBase64(data.keySalt);
+      const kek = await deriveKEK(password, salt);
+      const masterKey = await unwrapMasterKey(data.wrappedKey, kek);
+
+      // Store master key in memory for the session
+      setMasterKey(masterKey);
       showToast('Signed in successfully!', 'success');
       router.push('/dashboard');
     } catch (err) {

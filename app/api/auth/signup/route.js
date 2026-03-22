@@ -5,7 +5,7 @@ import { setSession } from '@/lib/auth';
 
 export async function POST(request) {
   try {
-    const { email, password, name } = await request.json();
+    const { email, password, name, wrappedKey, keySalt } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -14,9 +14,14 @@ export async function POST(request) {
       );
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
+    if (!wrappedKey || !keySalt) {
+      return NextResponse.json(
+        { error: 'Encryption key material is required' },
+        { status: 400 }
+      );
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
 
     if (existingUser) {
       return NextResponse.json(
@@ -31,8 +36,10 @@ export async function POST(request) {
       data: {
         email,
         password: hashedPassword,
-        name: name || null
-      }
+        name: name || null,
+        wrappedKey,
+        keySalt,
+      },
     });
 
     await setSession(user.id, user.email, user.name);

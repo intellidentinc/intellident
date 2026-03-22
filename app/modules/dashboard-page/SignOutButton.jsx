@@ -4,16 +4,19 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import Button from '@/components/commons/Button';
 import { useToast } from '@/app/providers/ToastProvider';
+import { useCrypto } from '@/app/providers/CryptoProvider';
 
 export default function SignOutButton() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
+  const { clearKey } = useCrypto();
 
   const handleSignOut = async () => {
     setLoading(true);
     try {
       await fetch('/api/auth/sign-out', { method: 'POST' });
+      clearKey();
       showToast('Signed out successfully.', 'success');
       router.push('/sign-in');
       router.refresh();

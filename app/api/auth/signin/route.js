@@ -14,9 +14,7 @@ export async function POST(request) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email }
-    });
+    const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
       return NextResponse.json(
@@ -36,8 +34,15 @@ export async function POST(request) {
 
     await setSession(user.id, user.email, user.name);
 
+    // Return wrapped key material so the client can unwrap the master key.
+    // The server cannot derive the master key — it does not know the password.
     return NextResponse.json(
-      { message: 'Signed in successfully', userId: user.id },
+      {
+        message: 'Signed in successfully',
+        userId: user.id,
+        wrappedKey: user.wrappedKey,
+        keySalt: user.keySalt,
+      },
       { status: 200 }
     );
   } catch (error) {

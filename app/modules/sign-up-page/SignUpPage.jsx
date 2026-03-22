@@ -9,6 +9,14 @@ import Paper from '@mui/material/Paper';
 import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
 import { useToast } from '@/app/providers/ToastProvider';
+import { useCrypto } from '@/app/providers/CryptoProvider';
+import {
+  generateSalt,
+  generateMasterKey,
+  deriveKEK,
+  wrapMasterKey,
+  toBase64,
+} from '@/lib/crypto';
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
@@ -17,16 +25,24 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
+  const { setMasterKey } = useCrypto();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
+      // Generate key material client-side before sending anything to the server
+      const salt = generateSalt();
+      const masterKey = await generateMasterKey();
+      const kek = await deriveKEK(password, salt);
+      const wrappedKey = await wrapMasterKey(masterKey, kek);
+      const keySalt = toBase64(salt);
+
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ email, password, name, wrappedKey, keySalt }),
       });
 
       const data = await response.json();
@@ -37,6 +53,8 @@ export default function SignUpPage() {
         return;
       }
 
+      // Store master key in memory for the session
+      setMasterKey(masterKey);
       showToast('Account created successfully!', 'success');
       router.push('/dashboard');
     } catch (err) {
