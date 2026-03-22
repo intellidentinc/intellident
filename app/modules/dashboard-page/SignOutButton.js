@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import Button from '@mui/material/Button';
 
 export default function SignOutButton() {
   const [loading, setLoading] = useState(false);
@@ -20,12 +21,12 @@ export default function SignOutButton() {
   };
 
   return (
-    <button
+    <Button
+      variant="contained"
       onClick={handleSignOut}
       disabled={loading}
-      className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {loading ? 'Signing out...' : 'Sign Out'}
-    </button>
+    </Button>
   );
 }
