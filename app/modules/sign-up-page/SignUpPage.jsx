@@ -279,6 +279,12 @@ export default function SignUpPage() {
             </Typography>
           </Box>
         </Paper>
+
+        <Box sx={{ mt: 3, textAlign: 'center' }}>
+          <Link href="/" style={{ color: '#2563eb', fontWeight: 600, fontSize: 14 }}>
+            ← Back to Home
+          </Link>
+        </Box>
       </Box>
     </Box>
   );
