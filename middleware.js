@@ -5,10 +5,16 @@ export function middleware(request) {
   const { pathname } = request.nextUrl;
 
   const isAuthPage = pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up');
-  const isDashboard = pathname.startsWith('/dashboard');
+  const isDashboard = /^\/[^/]+\/dashboard/.test(pathname);
 
   if (userCookie && isAuthPage) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    try {
+      const session = JSON.parse(userCookie.value);
+      const dest = session.clinicId ? `/${session.clinicId}/dashboard` : '/sign-in';
+      return NextResponse.redirect(new URL(dest, request.url));
+    } catch {
+      return NextResponse.next();
+    }
   }
 
   if (!userCookie && isDashboard) {
@@ -19,5 +25,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/sign-in', '/sign-up']
+  matcher: ['/:clinicId/dashboard/:path*', '/sign-in', '/sign-up'],
 };
