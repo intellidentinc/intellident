@@ -5,21 +5,20 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import Alert from '@mui/material/Alert';
 import Paper from '@mui/material/Paper';
-import Input from '@/commons/Input';
+import Button from '@/components/commons/Button';
+import Input from '@/components/commons/Input';
+import { useToast } from '@/app/providers/ToastProvider';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { showToast } = useToast();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
 
     try {
@@ -32,31 +31,32 @@ export default function SignInPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Something went wrong');
+        showToast(data.error || 'Something went wrong', 'error');
         setLoading(false);
         return;
       }
 
+      showToast('Signed in successfully!', 'success');
       router.push('/dashboard');
     } catch (err) {
-      setError('Failed to sign in. Please try again.');
+      showToast('Failed to sign in. Please try again.', 'error');
       setLoading(false);
     }
   };
 
   return (
-    <Box className="min-h-screen flex items-center justify-center px-4 bg-[#F8FAFC]">
+    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', px: 2, bgcolor: 'background.default' }}>
       <Box sx={{ width: '100%', maxWidth: 440 }}>
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <Typography variant="h4" fontWeight={700} color="primary">
             Welcome Back
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             Sign in to your account
           </Typography>
         </Box>
 
-        <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
+        <Paper elevation={3} sx={{ p: 4 }}>
           <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Input
               id="email"
@@ -75,19 +75,11 @@ export default function SignInPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="Enter your password"
             />
 
-            {error && <Alert severity="error">{error}</Alert>}
-
-            <Button
-              type="submit"
-              variant="contained"
-              size="large"
-              disabled={loading}
-              fullWidth
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
+            <Button type="submit" variant="contained" size="large" loading={loading} fullWidth>
+              Sign In
             </Button>
           </Box>
 

@@ -3,20 +3,10 @@
 import createCache from '@emotion/cache';
 import { useServerInsertedHTML } from 'next/navigation';
 import { CacheProvider } from '@emotion/react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { useState } from 'react';
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#2563eb',
-    },
-  },
-  typography: {
-    fontFamily: 'var(--font-inter), sans-serif',
-  },
-});
+import theme from '@/components/commons/theme';
 
 export default function ThemeRegistry({ children }) {
   const [{ cache, flush }] = useState(() => {
