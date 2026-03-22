@@ -9,13 +9,13 @@ export default function Home() {
             <h1 className="text-2xl font-bold text-blue-600">Intellident</h1>
             <div className="flex gap-4">
               <Link
-                href="/signin"
+                href="/sign-in"
                 className="px-4 py-2 text-blue-600 font-semibold hover:text-blue-700 transition"
               >
                 Sign In
               </Link>
               <Link
-                href="/signup"
+                href="/sign-up"
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
               >
                 Sign Up
@@ -43,7 +43,7 @@ export default function Home() {
               Get Started
             </Link>
             <Link
-              href="/signin"
+              href="/sign-in"
               className="px-8 py-4 bg-white text-blue-600 rounded-lg text-lg font-semibold hover:bg-gray-50 transition border-2 border-blue-600"
             >
               Sign In
