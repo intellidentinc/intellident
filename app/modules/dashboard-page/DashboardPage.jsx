@@ -6,11 +6,18 @@ import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
 import SignOutButton from './SignOutButton';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ params }) {
   const session = await getSession();
 
   if (!session) {
-    redirect('/signin');
+    redirect('/sign-in');
+  }
+
+  const { clinicId } = await params;
+
+  // Prevent users from accessing another clinic's dashboard
+  if (session.clinicId !== clinicId) {
+    redirect('/sign-in');
   }
 
   return (

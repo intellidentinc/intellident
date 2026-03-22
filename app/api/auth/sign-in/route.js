@@ -32,7 +32,7 @@ export async function POST(request) {
       );
     }
 
-    await setSession(user.id, user.email, user.firstName, user.lastName);
+    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId);
 
     // Return wrapped key material so the client can unwrap the master key.
     // The server cannot derive the master key — it does not know the password.
@@ -40,6 +40,7 @@ export async function POST(request) {
       {
         message: 'Signed in successfully',
         userId: user.id,
+        clinicId: user.clinicId,
         wrappedKey: user.wrappedKey,
         keySalt: user.keySalt,
       },

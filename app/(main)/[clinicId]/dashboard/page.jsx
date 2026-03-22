@@ -4,6 +4,6 @@ export const metadata = {
   title: 'Dashboard | Intellident',
 };
 
-export default function Page() {
-  return <DashboardPage />;
+export default function Page({ params }) {
+  return <DashboardPage params={params} />;
 }

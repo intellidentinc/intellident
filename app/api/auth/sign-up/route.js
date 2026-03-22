@@ -6,7 +6,7 @@ import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request) {
   try {
-    const { email, password, firstName, lastName, wrappedKey, keySalt } = await request.json();
+    const { email, password, firstName, lastName, wrappedKey, keySalt, clinicId } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -46,6 +46,7 @@ export async function POST(request) {
         password: hashedPassword,
         wrappedKey,
         keySalt,
+        clinicId: clinicId || null,
         expiresAt,
       },
     });

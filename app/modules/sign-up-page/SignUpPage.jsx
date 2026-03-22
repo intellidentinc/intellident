@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
 import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
+import Select from '@/components/commons/Select';
 import { useToast } from '@/app/providers/ToastProvider';
 import {
   generateSalt,
@@ -21,9 +22,22 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [clinicId, setClinicId] = useState('');
+  const [clinicOptions, setClinicOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const { showToast } = useToast();
+
+  useEffect(() => {
+    fetch('/api/clinics')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setClinicOptions(data.map((c) => ({ value: c.id, label: c.name })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,7 +54,7 @@ export default function SignUpPage() {
       const response = await fetch('/api/auth/sign-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, firstName, lastName, wrappedKey, keySalt }),
+        body: JSON.stringify({ email, password, firstName, lastName, wrappedKey, keySalt, clinicId: clinicId || null }),
       });
 
       const data = await response.json();
@@ -166,6 +180,16 @@ export default function SignUpPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Min. 6 characters"
               slotProps={{ htmlInput: { minLength: 6 } }}
+            />
+
+            <Select
+              id="clinicId"
+              label="Clinic"
+              value={clinicId}
+              onChange={(e) => setClinicId(e.target.value)}
+              options={clinicOptions}
+              placeholder="Select your clinic"
+              required
             />
 
             <Button type="submit" variant="contained" size="large" loading={loading} fullWidth>

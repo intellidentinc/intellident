@@ -98,6 +98,7 @@ model EmailVerification {
   password   String
   wrappedKey String
   keySalt    String
+  clinicId   String?
   expiresAt  DateTime
   createdAt  DateTime @default(now())
 

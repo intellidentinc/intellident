@@ -39,13 +39,14 @@ export async function GET(request) {
         lastName: pending.lastName,
         wrappedKey: pending.wrappedKey,
         keySalt: pending.keySalt,
+        clinicId: pending.clinicId || null,
       },
     });
 
     // Clean up the pending record
     await prisma.emailVerification.delete({ where: { token } });
 
-    await setSession(user.id, user.email, user.firstName, user.lastName);
+    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId);
 
     return NextResponse.redirect(`${appUrl}/sign-in?verified=success`);
   } catch (error) {

@@ -62,7 +62,7 @@ export default function SignInPage() {
       // Store master key in memory for the session
       setMasterKey(masterKey);
       showToast('Signed in successfully!', 'success');
-      router.push('/dashboard');
+      router.push(data.clinicId ? `/${data.clinicId}/dashboard` : '/dashboard');
     } catch (err) {
       showToast('Failed to sign in. Please try again.', 'error');
       setLoading(false);
