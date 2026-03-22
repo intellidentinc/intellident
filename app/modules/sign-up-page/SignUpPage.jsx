@@ -5,6 +5,9 @@ import Link from 'next/link';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
+import { Eye, EyeOff } from 'lucide-react';
 import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
 import Select from '@/components/commons/Select';
@@ -17,6 +20,23 @@ import {
   toBase64,
 } from '@/lib/crypto';
 
+function getPasswordStrength(password) {
+  if (!password) return { score: 0, label: '', color: '' };
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  const levels = [
+    { label: 'Weak', color: '#E05C6A' },
+    { label: 'Fair', color: '#f59e0b' },
+    { label: 'Good', color: '#3b82f6' },
+    { label: 'Strong', color: '#22c55e' },
+  ];
+  return { score, ...levels[score - 1] ?? { label: 'Weak', color: '#E05C6A' } };
+}
+
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +46,9 @@ export default function SignUpPage() {
   const [clinicOptions, setClinicOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { showToast } = useToast();
+  const passwordStrength = getPasswordStrength(password);
 
   useEffect(() => {
     fetch('/api/clinics')
@@ -147,6 +169,7 @@ export default function SignUpPage() {
                 id="firstName"
                 label="First Name"
                 type="text"
+                required
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="John"
@@ -155,6 +178,7 @@ export default function SignUpPage() {
                 id="lastName"
                 label="Last Name"
                 type="text"
+                required
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Doe"
@@ -171,16 +195,65 @@ export default function SignUpPage() {
               placeholder="you@example.com"
             />
 
-            <Input
-              id="password"
-              label="Password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 6 characters"
-              slotProps={{ htmlInput: { minLength: 6 } }}
-            />
+            <Box>
+              <Input
+                id="password"
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+                slotProps={{ htmlInput: { minLength: 8 } }}
+                endAdornment={
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword((v) => !v)}
+                      edge="end"
+                      size="small"
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </IconButton>
+                  </InputAdornment>
+                }
+              />
+              {password && (
+                <Box sx={{ mt: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
+                    {[1, 2, 3, 4].map((n) => (
+                      <Box
+                        key={n}
+                        sx={{
+                          flex: 1,
+                          height: 4,
+                          borderRadius: 2,
+                          bgcolor: n <= passwordStrength.score ? passwordStrength.color : '#e2e8f0',
+                          transition: 'background-color 0.2s',
+                        }}
+                      />
+                    ))}
+                  </Box>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                    {[
+                      { label: 'At least 8 characters', met: password.length >= 8 },
+                      { label: 'One uppercase letter', met: /[A-Z]/.test(password) },
+                      { label: 'One number', met: /[0-9]/.test(password) },
+                      { label: 'One special character', met: /[^A-Za-z0-9]/.test(password) },
+                    ].map(({ label, met }) => (
+                      <Typography
+                        key={label}
+                        variant="caption"
+                        sx={{ color: met ? '#22c55e' : '#94a3b8', display: 'flex', alignItems: 'center', gap: 0.5 }}
+                      >
+                        {met ? '✓' : '·'} {label}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </Box>
 
             <Select
               id="clinicId"

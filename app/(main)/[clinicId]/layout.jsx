@@ -17,14 +17,14 @@ export default async function ClinicLayout({ children, params }) {
     redirect('/sign-in');
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true },
-  });
+  const [user, clinic] = await Promise.all([
+    prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } }),
+    prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true } }),
+  ]);
 
   return (
     <SidebarProvider>
-      <AppSidebar session={session} role={user?.role ?? 'PATIENT'} />
+      <AppSidebar session={session} role={user?.role ?? 'PATIENT'} clinicName={clinic?.name} />
       {children}
     </SidebarProvider>
   );

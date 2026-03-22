@@ -30,7 +30,7 @@ function getInitials(firstName, lastName) {
   return (f + l).toUpperCase() || '?';
 }
 
-export default function AppSidebar({ session, role = 'PATIENT' }) {
+export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
   const clinicId = session?.clinicId;
   const isStaff = role === 'STAFF' || role === 'ADMIN';
   const isAdmin = role === 'ADMIN';
@@ -57,6 +57,9 @@ export default function AppSidebar({ session, role = 'PATIENT' }) {
       {/* Header */}
       <SidebarHeader className="border-b border-sidebar-border px-5 py-4">
         <span className="text-lg font-bold text-[#2563eb]">IntelliDent</span>
+        {clinicName && (
+          <span className="text-xs text-sidebar-foreground/60">{clinicName}</span>
+        )}
       </SidebarHeader>
 
       {/* Nav */}
