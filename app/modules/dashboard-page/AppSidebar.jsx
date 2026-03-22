@@ -30,8 +30,10 @@ function getInitials(firstName, lastName) {
   return (f + l).toUpperCase() || '?';
 }
 
-export default function AppSidebar({ session }) {
+export default function AppSidebar({ session, role = 'PATIENT' }) {
   const clinicId = session?.clinicId;
+  const isStaff = role === 'STAFF' || role === 'ADMIN';
+  const isAdmin = role === 'ADMIN';
 
   const mainNavItems = [
     { label: 'Dashboard', icon: LayoutDashboard, href: `/${clinicId}/dashboard` },
@@ -81,46 +83,50 @@ export default function AppSidebar({ session }) {
         </SidebarGroup>
 
         {/* Staff */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Staff</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-1 px-3">
-              {staffNavItems.map((item) => (
-                <SidebarMenuItem key={item.label}>
-                  <SidebarMenuButton
-                    size="lg"
-                    render={<a href={item.href} />}
-                    className="cursor-pointer pl-4"
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {isStaff && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Staff</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1 px-3">
+                {staffNavItems.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      size="lg"
+                      render={<a href={item.href} />}
+                      className="cursor-pointer pl-4"
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Admin */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Admin</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-1 px-3">
-              {resolvedAdminItems.map((item) => (
-                <SidebarMenuItem key={item.label}>
-                  <SidebarMenuButton
-                    size="lg"
-                    render={<a href={item.href} />}
-                    className="cursor-pointer pl-4"
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1 px-3">
+                {resolvedAdminItems.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      size="lg"
+                      render={<a href={item.href} />}
+                      className="cursor-pointer pl-4"
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       {/* Footer */}
