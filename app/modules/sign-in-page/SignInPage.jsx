@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -17,8 +17,23 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const { setMasterKey } = useCrypto();
+
+  useEffect(() => {
+    const verified = searchParams.get('verified');
+    if (!verified) return;
+    const messages = {
+      success: ['Email verified! You can now sign in.', 'success'],
+      expired: ['Verification link has expired. Please sign up again.', 'error'],
+      invalid: ['Invalid verification link.', 'error'],
+      already: ['Account already verified. Please sign in.', 'info'],
+      error:   ['Verification failed. Please try again.', 'error'],
+    };
+    const [msg, severity] = messages[verified] ?? ['Unknown verification status.', 'warning'];
+    showToast(msg, severity);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

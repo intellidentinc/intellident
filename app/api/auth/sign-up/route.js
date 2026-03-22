@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { setSession } from '@/lib/auth';
+import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request) {
   try {
-    const { email, password, name, wrappedKey, keySalt } = await request.json();
+    const { email, password, firstName, lastName, wrappedKey, keySalt } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -21,32 +22,41 @@ export async function POST(request) {
       );
     }
 
+    // Check if a verified account already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
-
     if (existingUser) {
       return NextResponse.json(
-        { error: 'User already exists' },
+        { error: 'An account with this email already exists' },
         { status: 400 }
       );
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    const user = await prisma.user.create({
+    // Replace any previous pending verification for this email
+    await prisma.emailVerification.deleteMany({ where: { email } });
+    await prisma.emailVerification.create({
       data: {
+        token,
         email,
+        firstName: firstName || null,
+        lastName: lastName || null,
         password: hashedPassword,
-        name: name || null,
         wrappedKey,
         keySalt,
+        expiresAt,
       },
     });
 
-    await setSession(user.id, user.email, user.name);
+    const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/verify?token=${token}`;
+
+    await sendVerificationEmail({ to: email, firstName, verificationUrl });
 
     return NextResponse.json(
-      { message: 'User created successfully', userId: user.id },
-      { status: 201 }
+      { message: 'Verification email sent. Please check your inbox.' },
+      { status: 200 }
     );
   } catch (error) {
     console.error('Signup error:', error);

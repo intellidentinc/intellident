@@ -89,10 +89,28 @@ model Clinic {
   @@map("clinics")
 }
 
+model EmailVerification {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  email      String
+  firstName  String?
+  lastName   String?
+  password   String
+  wrappedKey String
+  keySalt    String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("email_verifications")
+}
+
 model User {
   id         String    @id @default(cuid())
   email      String    @unique
-  name       String?
+  firstName  String?
+  lastName   String?
   password   String
   role       UserRole  @default(PATIENT)
   wrappedKey String?

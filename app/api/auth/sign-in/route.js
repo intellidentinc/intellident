@@ -32,7 +32,7 @@ export async function POST(request) {
       );
     }
 
-    await setSession(user.id, user.email, user.name);
+    await setSession(user.id, user.email, user.firstName, user.lastName);
 
     // Return wrapped key material so the client can unwrap the master key.
     // The server cannot derive the master key — it does not know the password.
