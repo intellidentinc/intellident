@@ -14,13 +14,17 @@ import {
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard,
-  Users,
   CalendarDays,
+  Users,
   FileText,
   CreditCard,
   Bell,
   ShieldCheck,
   UserCog,
+  Settings,
+  Stethoscope,
+  User,
+  ClipboardList,
 } from 'lucide-react';
 import SignOutButton from './SignOutButton';
 
@@ -30,27 +34,98 @@ function getInitials(firstName, lastName) {
   return (f + l).toUpperCase() || '?';
 }
 
+function buildNavGroups(role, clinicId) {
+  const p = (path) => `/${clinicId}${path}`;
+
+  switch (role) {
+    case 'PATIENT':
+      return [
+        {
+          label: 'Navigation',
+          items: [
+            { label: 'Dashboard',     icon: LayoutDashboard, href: p('/dashboard') },
+            { label: 'Appointments',  icon: CalendarDays,    href: p('/appointments') },
+            { label: 'Reminders',     icon: Bell,            href: p('/reminders') },
+          ],
+        },
+        {
+          label: 'Account',
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
+          ],
+        },
+      ];
+
+    case 'DENTIST':
+      return [
+        {
+          label: 'Navigation',
+          items: [
+            { label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard') },
+            { label: 'Schedule',  icon: CalendarDays,    href: p('/appointments') },
+          ],
+        },
+        {
+          label: 'Clinical',
+          items: [
+            { label: 'Patient Records', icon: FileText, href: p('/records') },
+          ],
+        },
+      ];
+
+    case 'RECEPTIONIST':
+      return [
+        {
+          label: 'Navigation',
+          items: [
+            { label: 'Dashboard',    icon: LayoutDashboard, href: p('/dashboard') },
+            { label: 'Appointments', icon: CalendarDays,    href: p('/appointments') },
+            { label: 'Patients',     icon: Users,           href: p('/patients') },
+            { label: 'Reminders',    icon: Bell,            href: p('/reminders') },
+          ],
+        },
+        {
+          label: 'Billing',
+          items: [
+            { label: 'Billing', icon: CreditCard, href: p('/billing') },
+          ],
+        },
+      ];
+
+    case 'ADMIN':
+      return [
+        {
+          label: 'Navigation',
+          items: [
+            { label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard') },
+          ],
+        },
+        {
+          label: 'Management',
+          items: [
+            { label: 'Users',        icon: UserCog,       href: p('/users') },
+            { label: 'Services',     icon: Stethoscope,   href: p('/services') },
+            { label: 'Schedules',    icon: CalendarDays,  href: p('/appointments') },
+            { label: 'Billing',      icon: CreditCard,    href: p('/billing') },
+            { label: 'Settings',     icon: Settings,      href: p('/settings') },
+          ],
+        },
+        {
+          label: 'System',
+          items: [
+            { label: 'Audit Log', icon: ShieldCheck, href: p('/audit-log') },
+          ],
+        },
+      ];
+
+    default:
+      return [];
+  }
+}
+
 export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
   const clinicId = session?.clinicId;
-  const isStaff = role === 'RECEPTIONIST' || role === 'DENTIST' || role === 'ADMIN';
-  const isAdmin = role === 'ADMIN';
-
-  const mainNavItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, href: `/${clinicId}/dashboard` },
-    { label: 'Appointments', icon: CalendarDays, href: `/${clinicId}/appointments` },
-    { label: 'Billing', icon: CreditCard, href: `/${clinicId}/billing` },
-    { label: 'Reminders', icon: Bell, href: `/${clinicId}/reminders` },
-  ];
-
-  const staffNavItems = [
-    { label: 'Patients', icon: Users, href: `/${clinicId}/patients` },
-    { label: 'Records', icon: FileText, href: `/${clinicId}/records` },
-  ];
-
-  const resolvedAdminItems = [
-    { label: 'User Management', icon: UserCog, href: `/${clinicId}/users` },
-    { label: 'Audit Log', icon: ShieldCheck, href: `/${clinicId}/audit-log` },
-  ];
+  const navGroups = buildNavGroups(role, clinicId);
 
   return (
     <Sidebar>
@@ -64,34 +139,12 @@ export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
 
       {/* Nav */}
       <SidebarContent>
-        {/* Main */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-1 px-3">
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.label}>
-                  <SidebarMenuButton
-                    size="lg"
-                    render={<a href={item.href} />}
-                    className="cursor-pointer pl-4"
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Staff */}
-        {isStaff && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Clinic</SidebarGroupLabel>
+        {navGroups.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1 px-3">
-                {staffNavItems.map((item) => (
+                {group.items.map((item) => (
                   <SidebarMenuItem key={item.label}>
                     <SidebarMenuButton
                       size="lg"
@@ -106,30 +159,7 @@ export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        )}
-
-        {/* Admin */}
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-1 px-3">
-                {resolvedAdminItems.map((item) => (
-                  <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton
-                      size="lg"
-                      render={<a href={item.href} />}
-                      className="cursor-pointer pl-4"
-                    >
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        ))}
       </SidebarContent>
 
       {/* Footer */}
