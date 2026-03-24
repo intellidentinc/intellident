@@ -89,8 +89,37 @@ model Clinic {
   services      Service[]
   appointments  Appointment[]
   auditLogs     AuditLog[]
+  schedule      ClinicSchedule?
+  closures      ClinicClosure[]
 
   @@map("clinics")
+}
+
+model ClinicSchedule {
+  id          String   @id @default(cuid())
+  clinicId    String   @unique
+  workingDays String[] @default([])
+  openTime    String   @default("08:00")
+  closeTime   String   @default("17:00")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@map("clinic_schedules")
+}
+
+model ClinicClosure {
+  id        String   @id @default(cuid())
+  clinicId  String
+  date      DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId])
+  @@map("clinic_closures")
 }
 
 model PasswordResetToken {

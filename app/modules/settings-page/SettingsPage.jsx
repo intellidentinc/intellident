@@ -9,6 +9,8 @@ import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { useToast } from '@/app/providers/ToastProvider'
 import ClinicLogoUpload from './ClinicLogoUpload'
 import ClinicProfileForm from './ClinicProfileForm'
+import ClinicSchedule from './ClinicSchedule'
+import ClinicClosures from './ClinicClosures'
 
 function validate(form) {
   const errs = {}
@@ -136,6 +138,28 @@ export default function SettingsPage() {
           onChange={handleChange}
           onSave={handleSave}
         />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant='h6' fontWeight={700} color='text.primary' gutterBottom>
+          Operating Hours
+        </Typography>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+          Set the days and hours your clinic is open.
+        </Typography>
+
+        <ClinicSchedule clinicId={clinicId} />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant='h6' fontWeight={700} color='text.primary' gutterBottom>
+          Clinic Closures
+        </Typography>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+          Add dates when the clinic will be closed (holidays, maintenance, etc).
+        </Typography>
+
+        <ClinicClosures clinicId={clinicId} />
       </Box>
     </SidebarInset>
   )
