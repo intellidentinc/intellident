@@ -1,0 +1,70 @@
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+
+async function getAdminCaller() {
+  const session = await getSession()
+  if (!session) return null
+  const caller = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, clinicId: true }
+  })
+  if (!caller || caller.role !== 'ADMIN') return null
+  return caller
+}
+
+export async function GET() {
+  const caller = await getAdminCaller()
+  if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const services = await prisma.service.findMany({
+    where: { clinicId: caller.clinicId, isDeleted: false },
+    include: {
+      dentists: {
+        where: { isDeleted: false },
+        include: { user: { select: { firstName: true, lastName: true } } }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+
+  return NextResponse.json({ services })
+}
+
+export async function POST(request) {
+  const caller = await getAdminCaller()
+  if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { name, duration, price, bufferTime, dentistIds } = await request.json()
+
+  if (!name?.trim()) {
+    return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+  }
+  if (!duration || duration < 15 || duration > 240) {
+    return NextResponse.json({ error: 'Duration must be between 15 and 240 minutes' }, { status: 400 })
+  }
+  if (bufferTime !== undefined && (bufferTime < 0 || bufferTime > 30)) {
+    return NextResponse.json({ error: 'Buffer time must be between 0 and 30 minutes' }, { status: 400 })
+  }
+
+  const service = await prisma.service.create({
+    data: {
+      clinicId: caller.clinicId,
+      name: name.trim(),
+      duration: parseInt(duration, 10),
+      price: price !== undefined && price !== null && price !== '' ? parseFloat(price) : null,
+      bufferTime: bufferTime !== undefined ? parseInt(bufferTime, 10) : 0,
+      dentists: dentistIds?.length
+        ? { connect: dentistIds.map((id) => ({ id })) }
+        : undefined
+    },
+    include: {
+      dentists: {
+        where: { isDeleted: false },
+        include: { user: { select: { firstName: true, lastName: true } } }
+      }
+    }
+  })
+
+  return NextResponse.json({ service }, { status: 201 })
+}

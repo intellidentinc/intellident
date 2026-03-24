@@ -240,6 +240,7 @@ model Dentist {
   user         User          @relation(fields: [userId], references: [id])
   clinic       Clinic        @relation(fields: [clinicId], references: [id])
   appointments Appointment[]
+  services     Service[]     @relation("ServiceDentists")
 
   @@index([clinicId])
   @@map("dentists")
@@ -251,7 +252,8 @@ model Service {
   name        String
   description String?
   duration    Int       // minutes
-  price       Float
+  price       Float?
+  bufferTime  Int       @default(0) // minutes (0–30)
   isDeleted   Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -259,6 +261,7 @@ model Service {
 
   clinic       Clinic        @relation(fields: [clinicId], references: [id])
   appointments Appointment[]
+  dentists     Dentist[]     @relation("ServiceDentists")
 
   @@index([clinicId])
   @@map("services")
