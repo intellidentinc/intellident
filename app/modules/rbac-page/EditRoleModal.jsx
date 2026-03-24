@@ -12,7 +12,8 @@ import { ManageAccountsOutlined } from '@mui/icons-material'
 
 const ROLE_OPTIONS = [
   { value: 'PATIENT', label: 'Patient' },
-  { value: 'STAFF', label: 'Staff' },
+  { value: 'RECEPTIONIST', label: 'Receptionist' },
+  { value: 'DENTIST', label: 'Dentist' },
   { value: 'ADMIN', label: 'Admin' }
 ]
 

@@ -32,7 +32,7 @@ function getInitials(firstName, lastName) {
 
 export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
   const clinicId = session?.clinicId;
-  const isStaff = role === 'STAFF' || role === 'ADMIN';
+  const isStaff = role === 'RECEPTIONIST' || role === 'DENTIST' || role === 'ADMIN';
   const isAdmin = role === 'ADMIN';
 
   const mainNavItems = [
@@ -88,7 +88,7 @@ export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
         {/* Staff */}
         {isStaff && (
           <SidebarGroup>
-            <SidebarGroupLabel>Staff</SidebarGroupLabel>
+            <SidebarGroupLabel>Clinic</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1 px-3">
                 {staffNavItems.map((item) => (

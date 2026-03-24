@@ -16,9 +16,10 @@ import EditRoleModal from './EditRoleModal'
 import DeleteUserModal from './DeleteUserModal'
 
 const ROLE_STYLES = {
-  PATIENT: { bg: '#dbeafe', color: '#2563eb' },
-  STAFF: { bg: '#dcfce7', color: '#16a34a' },
-  ADMIN: { bg: '#fee2e2', color: '#dc2626' }
+  PATIENT:      { bg: '#dbeafe', color: '#2563eb' },
+  RECEPTIONIST: { bg: '#dcfce7', color: '#16a34a' },
+  DENTIST:      { bg: '#ede9fe', color: '#7c3aed' },
+  ADMIN:        { bg: '#fee2e2', color: '#dc2626' },
 }
 
 function RoleChip({ role }) {

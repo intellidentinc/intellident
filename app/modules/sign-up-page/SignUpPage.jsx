@@ -25,16 +25,18 @@ function getPasswordStrength(password) {
   let score = 0;
   if (password.length >= 8) score++;
   if (/[A-Z]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
   if (/[0-9]/.test(password)) score++;
   if (/[^A-Za-z0-9]/.test(password)) score++;
 
   const levels = [
     { label: 'Weak', color: '#E05C6A' },
+    { label: 'Weak', color: '#E05C6A' },
     { label: 'Fair', color: '#f59e0b' },
     { label: 'Good', color: '#3b82f6' },
     { label: 'Strong', color: '#22c55e' },
   ];
-  return { score, ...levels[score - 1] ?? { label: 'Weak', color: '#E05C6A' } };
+  return { score, ...(levels[score - 1] ?? { label: 'Weak', color: '#E05C6A' }) };
 }
 
 export default function SignUpPage() {
@@ -64,6 +66,13 @@ export default function SignUpPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      showToast('Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.', 'error');
+      setLoading(false);
+      return;
+    }
 
     try {
       // Generate key material client-side before sending anything to the server
@@ -222,7 +231,7 @@ export default function SignUpPage() {
               {password && (
                 <Box sx={{ mt: 1 }}>
                   <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
-                    {[1, 2, 3, 4].map((n) => (
+                    {[1, 2, 3, 4, 5].map((n) => (
                       <Box
                         key={n}
                         sx={{
@@ -239,6 +248,7 @@ export default function SignUpPage() {
                     {[
                       { label: 'At least 8 characters', met: password.length >= 8 },
                       { label: 'One uppercase letter', met: /[A-Z]/.test(password) },
+                      { label: 'One lowercase letter', met: /[a-z]/.test(password) },
                       { label: 'One number', met: /[0-9]/.test(password) },
                       { label: 'One special character', met: /[^A-Za-z0-9]/.test(password) },
                     ].map(({ label, met }) => (

@@ -11,7 +11,7 @@ datasource db {
 
 enum UserRole {
   PATIENT
-  STAFF
+  RECEPTIONIST
   ADMIN
   DENTIST
 }
@@ -80,12 +80,13 @@ model Clinic {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  users        User[]
-  staff        Staff[]
-  patients     Patient[]
-  services     Service[]
-  appointments Appointment[]
-  auditLogs    AuditLog[]
+  users         User[]
+  receptionists Receptionist[]
+  dentists      Dentist[]
+  patients      Patient[]
+  services      Service[]
+  appointments  Appointment[]
+  auditLogs     AuditLog[]
 
   @@map("clinics")
 }
@@ -117,16 +118,20 @@ model User {
   role       UserRole  @default(PATIENT)
   wrappedKey String?
   keySalt    String?
-  clinicId   String?
-  isDeleted  Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
+  clinicId            String?
+  failedLoginAttempts Int       @default(0)
+  lastFailedAt        DateTime?
+  lockedUntil         DateTime?
+  isDeleted           Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
 
-  clinic    Clinic?    @relation(fields: [clinicId], references: [id])
-  patient   Patient?
-  staff     Staff?
-  auditLogs AuditLog[]
+  clinic       Clinic?       @relation(fields: [clinicId], references: [id])
+  patient      Patient?
+  receptionist Receptionist?
+  dentist      Dentist?
+  auditLogs    AuditLog[]
 
   @@index([email])
   @@index([clinicId])
@@ -161,22 +166,38 @@ model Patient {
   @@map("patients")
 }
 
-model Staff {
-  id         String    @id @default(cuid())
-  userId     String    @unique
-  clinicId   String
-  specialty  String?
-  isDeleted  Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
+model Receptionist {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  clinicId  String
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user   User   @relation(fields: [userId], references: [id])
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId])
+  @@map("receptionists")
+}
+
+model Dentist {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  clinicId  String
+  specialty String?
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   user         User          @relation(fields: [userId], references: [id])
   clinic       Clinic        @relation(fields: [clinicId], references: [id])
   appointments Appointment[]
 
   @@index([clinicId])
-  @@map("staff")
+  @@map("dentists")
 }
 
 model Service {
@@ -216,7 +237,7 @@ model Appointment {
 
   clinic        Clinic         @relation(fields: [clinicId], references: [id])
   patient       Patient        @relation(fields: [patientId], references: [id])
-  dentist       Staff          @relation(fields: [dentistId], references: [id])
+  dentist       Dentist        @relation(fields: [dentistId], references: [id])
   service       Service        @relation(fields: [serviceId], references: [id])
   billing       Billing?
   notifications Notification[]

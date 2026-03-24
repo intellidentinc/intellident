@@ -32,7 +32,7 @@ export async function PATCH(request, { params }) {
   const { id } = await params
   const { role } = await request.json()
 
-  const validRoles = ['PATIENT', 'STAFF', 'ADMIN']
+  const validRoles = ['PATIENT', 'RECEPTIONIST', 'DENTIST', 'ADMIN']
   if (!validRoles.includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }

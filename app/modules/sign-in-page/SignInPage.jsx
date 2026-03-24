@@ -23,6 +23,13 @@ export default function SignInPage() {
 
   useEffect(() => {
     const verified = searchParams.get('verified');
+    const reason   = searchParams.get('reason');
+
+    if (reason === 'inactivity') {
+      showToast('You were signed out due to inactivity.', 'warning');
+      return;
+    }
+
     if (!verified) return;
     const messages = {
       success: ['Email verified! You can now sign in.', 'success'],

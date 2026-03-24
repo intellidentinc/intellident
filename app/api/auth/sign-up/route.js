@@ -15,6 +15,14 @@ export async function POST(request) {
       );
     }
 
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.' },
+        { status: 400 }
+      );
+    }
+
     if (!wrappedKey || !keySalt) {
       return NextResponse.json(
         { error: 'Encryption key material is required' },
