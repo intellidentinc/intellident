@@ -123,7 +123,7 @@ function buildNavGroups(role, clinicId) {
   }
 }
 
-export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
+export default function AppSidebar({ session, role = 'PATIENT', clinicName, clinicLogo }) {
   const clinicId = session?.clinicId;
   const navGroups = buildNavGroups(role, clinicId);
 
@@ -131,6 +131,13 @@ export default function AppSidebar({ session, role = 'PATIENT', clinicName }) {
     <Sidebar>
       {/* Header */}
       <SidebarHeader className="border-b border-sidebar-border px-5 py-4">
+        {clinicLogo ? (
+          <img src={clinicLogo} alt="Clinic logo" className="h-10 w-10 rounded-full object-cover mb-1" />
+        ) : (
+          <div className="h-10 w-10 rounded-full bg-[#dbeafe] flex items-center justify-center mb-1">
+            <Stethoscope size={20} className="text-[#2563eb]" />
+          </div>
+        )}
         <span className="text-lg font-bold text-[#2563eb]">IntelliDent</span>
         {clinicName && (
           <span className="text-xs text-sidebar-foreground/60">{clinicName}</span>

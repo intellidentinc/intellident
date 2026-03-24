@@ -19,12 +19,12 @@ export default async function ClinicLayout({ children, params }) {
 
   const [user, clinic] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } }),
-    prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true } }),
+    prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true, logoUrl: true } }),
   ]);
 
   return (
     <SidebarProvider>
-      <AppSidebar session={session} role={user?.role ?? 'PATIENT'} clinicName={clinic?.name} />
+      <AppSidebar session={session} role={user?.role ?? 'PATIENT'} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} />
       {children}
     </SidebarProvider>
   );

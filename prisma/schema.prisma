@@ -74,6 +74,8 @@ model Clinic {
   name      String
   address   String?
   phone     String?
+  landline  String?
+  logoUrl   String?
   email     String?
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
