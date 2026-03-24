@@ -18,6 +18,11 @@ export default function DeleteUserModal({ open, user, onClose, onSuccess }) {
     try {
       const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
+      const data = await res.json()
+      if (data.loggedOut) {
+        window.location.href = '/sign-in'
+        return
+      }
       showToast('User deleted', 'success')
       onSuccess()
     } catch {

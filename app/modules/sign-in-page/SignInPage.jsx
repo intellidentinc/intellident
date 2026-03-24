@@ -30,6 +30,7 @@ export default function SignInPage() {
       return;
     }
 
+
     if (!verified) return;
     const messages = {
       success: ['Email verified! You can now sign in.', 'success'],

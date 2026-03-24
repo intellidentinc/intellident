@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, clearSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 async function getAdminCaller() {
@@ -46,7 +46,11 @@ export async function PATCH(request, { params }) {
     select: { id: true, role: true }
   })
 
-  return NextResponse.json(updated)
+  const session = await getSession()
+  const isSelf = session?.userId === id
+  if (isSelf) await clearSession()
+
+  return NextResponse.json({ ...updated, loggedOut: isSelf })
 }
 
 export async function DELETE(request, { params }) {
@@ -63,5 +67,9 @@ export async function DELETE(request, { params }) {
     data: { isDeleted: true, deletedAt: new Date() }
   })
 
-  return NextResponse.json({ success: true })
+  const session = await getSession()
+  const isSelf = session?.userId === id
+  if (isSelf) await clearSession()
+
+  return NextResponse.json({ success: true, loggedOut: isSelf })
 }

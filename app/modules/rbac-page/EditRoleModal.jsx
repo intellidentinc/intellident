@@ -35,6 +35,11 @@ export default function EditRoleModal({ open, user, onClose, onSuccess }) {
         body: JSON.stringify({ role })
       })
       if (!res.ok) throw new Error()
+      const data = await res.json()
+      if (data.loggedOut) {
+        window.location.href = '/sign-in'
+        return
+      }
       showToast('Role updated', 'success')
       onSuccess()
     } catch {
