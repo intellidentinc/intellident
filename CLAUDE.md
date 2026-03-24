@@ -35,11 +35,14 @@ app/
 │   ├── dashboard/page.jsx
 │   ├── sign-in/page.jsx
 │   └── sign-up/page.jsx
-├── api/auth/                 # Auth API routes (signin, signout, signup, verify)
+├── api/auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password)
 ├── modules/                  # Page-level components (one folder per route)
 │   ├── landing-page/         # Tailwind — public facing
 │   ├── sign-in-page/
 │   ├── sign-up-page/
+│   ├── forgot-password-page/
+│   ├── reset-password-page/
+│   ├── change-password-page/
 │   └── dashboard-page/
 ├── providers/                # App-level React context providers
 │   ├── ThemeRegistry.jsx     # MUI + Emotion SSR setup
@@ -153,6 +156,7 @@ Enforced on both client and server (`app/api/auth/sign-up/route.js`):
 
 ### Session Policy
 - **Token expiry:** 10 minutes (`lib/auth.js` — `maxAge: 60 * 10`)
+- **Remember Me:** extends session to 3 days (`maxAge: 60 * 60 * 24 * 3`) — checkbox on sign-in page
 - **Inactivity logout:** 30 minutes — tracked in `InactivityProvider`; clears master key and redirects to `/sign-in?reason=inactivity`
 
 ### Account Lockout
@@ -161,6 +165,14 @@ Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUn
 - **Lock duration:** 15 minutes
 - Configurable via env vars: `LOCKOUT_MAX_ATTEMPTS`, `LOCKOUT_WINDOW_MINUTES`, `LOCKOUT_DURATION_MINUTES`
 - Resets on successful login
+
+### Password Reset & Change
+- **Forgot password:** `POST /api/auth/forgot-password` → generates one-time token (10 min expiry), sends reset link via email. Always returns 200 to prevent email enumeration.
+- **Reset password:** `POST /api/auth/reset-password` → validates token, enforces policy, checks history, generates fresh E2EE key material (old encrypted data is intentionally inaccessible), sends confirmation email.
+- **Change password (authenticated):** `POST /api/auth/change-password` → requires current password verification, re-wraps existing master key with new KEK (encrypted data stays accessible), sends confirmation email.
+- **Password history:** last 3 hashed passwords stored in `User.passwordHistory String[]`; new password cannot match any of them.
+- Reset token model: `PasswordResetToken` (token, email, expiresAt, usedAt)
+- Email notifications sent via `sendPasswordResetEmail` and `sendPasswordChangedEmail` in `lib/email.js`
 
 ### RBAC Roles
 
@@ -181,7 +193,8 @@ All data is scoped to a `ClinicID`. Every DB query must include a clinic scope f
 
 ## Data Models (key)
 
-- `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`)
+- `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`). Also holds `passwordHistory String[]`, `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`
+- `PasswordResetToken` — one-time reset tokens (email, token, expiresAt, usedAt)
 - `Receptionist` — profile extension for `RECEPTIONIST` users (linked via `userId`)
 - `Dentist` — profile extension for `DENTIST` users; has `specialty`; linked to `Appointment` via `dentistId`
 - `Patient` — profile extension for `PATIENT` users
@@ -196,6 +209,10 @@ All data is scoped to a `ClinicID`. Every DB query must include a clinic scope f
   - [x] Password policy enforcement
   - [x] Account lockout
   - [x] Session expiry + inactivity logout
+  - [x] Remember Me (3-day session)
+  - [x] Forgot password / reset password (email link, 10 min token)
+  - [x] Change password (authenticated, re-wraps master key)
+  - [x] Password history (cannot reuse last 3)
   - [x] RBAC sidebar
   - [x] User management (ADMIN)
 - [ ] Appointment Scheduling + AI slot suggestions (GPT-5)
