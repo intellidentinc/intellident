@@ -13,6 +13,7 @@ enum UserRole {
   PATIENT
   STAFF
   ADMIN
+  DENTIST
 }
 
 enum Gender {
