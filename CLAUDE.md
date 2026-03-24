@@ -248,11 +248,19 @@ Logo is stored in Supabase bucket `clinic-logos` at path `{clinicId}/{timestamp}
   - [x] Password history (cannot reuse last 3)
   - [x] RBAC sidebar
   - [x] User management (ADMIN)
+  - [x] View + paginate + sort users
+  - [x] Edit user role
+  - [x] Delete user (soft delete; auto-logout if self)
+  - [x] Create user (admin-set, default password `Intellident2026#`, E2EE key generated client-side, creates Dentist/Receptionist profile)
 - [x] Clinic Settings (ADMIN)
   - [x] Clinic profile (name, address, email, phone, landline)
   - [x] Clinic logo upload (Supabase Storage, shown in sidebar)
   - [x] Operating hours (working days + open/close time)
   - [x] Clinic closure dates (holidays/maintenance)
+- [x] Service Catalog (ADMIN)
+  - [x] Create / edit / delete dental services
+  - [x] Duration, price, buffer time per service
+  - [x] Assign dentists to services
 - [ ] Appointment Scheduling + AI slot suggestions (GPT-5)
 - [ ] Virtual Assistant / Chatbot
 - [ ] Patient Record Management
