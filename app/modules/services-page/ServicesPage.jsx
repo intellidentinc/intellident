@@ -27,7 +27,7 @@ const HEAD_CELLS = [
   { label: 'Default Price', align: 'right' },
   { label: 'Buffer (min)', align: 'center' },
   { label: 'Assigned Dentists' },
-  { label: 'Actions', align: 'center' },
+  { label: 'Actions', align: 'center' }
 ]
 
 export default function ServicesPage() {
@@ -90,7 +90,10 @@ export default function ServicesPage() {
           </Box>
           <Tooltip title='Add service'>
             <Box
-              onClick={() => { setEditTarget(null); setFormOpen(true) }}
+              onClick={() => {
+                setEditTarget(null)
+                setFormOpen(true)
+              }}
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -102,7 +105,7 @@ export default function ServicesPage() {
                 cursor: 'pointer',
                 transition: 'background 0.15s',
                 '&:hover': { bgcolor: '#f1f5f9' },
-                userSelect: 'none',
+                userSelect: 'none'
               }}
             >
               <AddIcon sx={{ fontSize: 22, color: '#2563eb' }} />
@@ -121,17 +124,25 @@ export default function ServicesPage() {
             borderColor: 'divider',
             borderRadius: 3,
             overflow: 'hidden',
+            height: 'calc(100vh - 280px)' // add this
           }}
         >
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ height: '100%' }}>
+            <Table stickyHeader sx={{ borderCollapse: 'collapse' }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#f8fafc' }}>
                   {HEAD_CELLS.map((cell) => (
                     <TableCell
                       key={cell.label}
                       align={cell.align ?? 'left'}
-                      sx={{ fontWeight: 600, fontSize: '0.8rem', color: '#64748b', py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: '0.8rem',
+                        color: '#64748b',
+                        py: 1.5,
+                        border: '1px solid',
+                        borderColor: 'divider'
+                      }}
                     >
                       {cell.label}
                     </TableCell>
@@ -158,63 +169,75 @@ export default function ServicesPage() {
                   </TableRow>
                 )}
 
-                {!loading && rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    hover
-                    sx={{ '&:last-child td': { border: 0 }, '&:hover': { bgcolor: '#f8fafc' } }}
-                  >
-                    <TableCell sx={{ fontWeight: 500, color: '#334155' }}>
-                      {row.name}
-                    </TableCell>
+                {!loading &&
+                  rows.map((row) => (
+                    <TableRow key={row.id} hover sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                      <TableCell
+                        sx={{ fontWeight: 500, color: '#334155', border: '1px solid', borderColor: 'divider' }}
+                      >
+                        {row.name}
+                      </TableCell>
 
-                    <TableCell align='center' sx={{ color: '#334155' }}>
-                      {row.duration}
-                    </TableCell>
+                      <TableCell align='center' sx={{ color: '#334155', border: '1px solid', borderColor: 'divider' }}>
+                        {row.duration}
+                      </TableCell>
 
-                    <TableCell align='right' sx={{ color: '#334155' }}>
-                      {row.price !== null && row.price !== undefined
-                        ? `₱${Number(row.price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                        : <Typography variant='body2' color='text.disabled'>—</Typography>}
-                    </TableCell>
+                      <TableCell align='right' sx={{ color: '#334155', border: '1px solid', borderColor: 'divider' }}>
+                        {row.price !== null && row.price !== undefined ? (
+                          `₱${Number(row.price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                        ) : (
+                          <Typography variant='body2' color='text.disabled'>
+                            —
+                          </Typography>
+                        )}
+                      </TableCell>
 
-                    <TableCell align='center' sx={{ color: '#334155' }}>
-                      {row.bufferTime}
-                    </TableCell>
+                      <TableCell align='center' sx={{ color: '#334155', border: '1px solid', borderColor: 'divider' }}>
+                        {row.bufferTime}
+                      </TableCell>
 
-                    <TableCell>
-                      {row.dentists?.length ? (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {row.dentists.map((d) => (
-                            <Chip
-                              key={d.id}
-                              label={`${d.user.firstName} ${d.user.lastName}`}
+                      <TableCell sx={{ border: '1px solid', borderColor: 'divider' }}>
+                        {row.dentists?.length ? (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {row.dentists.map((d) => (
+                              <Chip
+                                key={d.id}
+                                label={`${d.user.firstName} ${d.user.lastName}`}
+                                size='small'
+                                sx={{ bgcolor: '#f1f5f9', color: '#334155', fontWeight: 500, fontSize: '0.72rem' }}
+                              />
+                            ))}
+                          </Box>
+                        ) : (
+                          <Typography variant='body2' color='text.disabled'>
+                            —
+                          </Typography>
+                        )}
+                      </TableCell>
+
+                      <TableCell align='center' sx={{ border: '1px solid', borderColor: 'divider' }}>
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          <Tooltip title='Edit'>
+                            <IconButton
                               size='small'
-                              sx={{ bgcolor: '#f1f5f9', color: '#334155', fontWeight: 500, fontSize: '0.72rem' }}
-                            />
-                          ))}
+                              onClick={() => {
+                                setEditTarget(row)
+                                setFormOpen(true)
+                              }}
+                              sx={{ cursor: 'pointer' }}
+                            >
+                              <EditOutlinedIcon fontSize='small' />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title='Delete'>
+                            <IconButton size='small' onClick={() => setDeleteTarget(row)} sx={{ cursor: 'pointer' }}>
+                              <DeleteOutlinedIcon fontSize='small' />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
-                      ) : (
-                        <Typography variant='body2' color='text.disabled'>—</Typography>
-                      )}
-                    </TableCell>
-
-                    <TableCell align='center'>
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                        <Tooltip title='Edit'>
-                          <IconButton size='small' onClick={() => { setEditTarget(row); setFormOpen(true) }} sx={{ cursor: 'pointer' }}>
-                            <EditOutlinedIcon fontSize='small' />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title='Delete'>
-                          <IconButton size='small' onClick={() => setDeleteTarget(row)} sx={{ cursor: 'pointer' }}>
-                            <DeleteOutlinedIcon fontSize='small' />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </TableContainer>
@@ -225,15 +248,25 @@ export default function ServicesPage() {
         open={formOpen}
         service={editTarget}
         dentists={dentists}
-        onClose={() => { setFormOpen(false); setEditTarget(null) }}
-        onSuccess={() => { setFormOpen(false); setEditTarget(null); fetchServices() }}
+        onClose={() => {
+          setFormOpen(false)
+          setEditTarget(null)
+        }}
+        onSuccess={() => {
+          setFormOpen(false)
+          setEditTarget(null)
+          fetchServices()
+        }}
       />
 
       <DeleteServiceModal
         open={!!deleteTarget}
         service={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onSuccess={() => { setDeleteTarget(null); fetchServices() }}
+        onSuccess={() => {
+          setDeleteTarget(null)
+          fetchServices()
+        }}
       />
     </SidebarInset>
   )
