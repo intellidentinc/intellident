@@ -10,7 +10,7 @@ const LOCK_DURATION_MS = parseInt(process.env.LOCKOUT_DURATION_MINUTES  ?? '15')
 
 export async function POST(request) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, rememberMe = false } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -82,7 +82,7 @@ export async function POST(request) {
       data: { failedLoginAttempts: 0, lastFailedAt: null, lockedUntil: null },
     });
 
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId);
+    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe);
 
     return NextResponse.json(
       {
