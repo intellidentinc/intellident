@@ -2,18 +2,33 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
-import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import Chip from '@mui/material/Chip'
-import { DataGrid } from '@mui/x-data-grid'
+import Tooltip from '@mui/material/Tooltip'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableContainer from '@mui/material/TableContainer'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import TablePagination from '@mui/material/TablePagination'
+import TableSortLabel from '@mui/material/TableSortLabel'
+import TextField from '@mui/material/TextField'
+import CircularProgress from '@mui/material/CircularProgress'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { useToast } from '@/app/providers/ToastProvider'
 import EditRoleModal from './EditRoleModal'
 import DeleteUserModal from './DeleteUserModal'
+
+const HEAD_CELLS = [
+  { id: 'firstName', label: 'Name', sortable: true },
+  { id: 'email', label: 'Email', sortable: true },
+  { id: 'role', label: 'Role', sortable: false, align: 'center' },
+  { id: 'actions', label: 'Actions', sortable: false, align: 'center' },
+]
 
 const ROLE_STYLES = {
   PATIENT:      { bg: '#dbeafe', color: '#2563eb' },
@@ -38,15 +53,20 @@ export default function RbacPage() {
   const [rows, setRows] = useState([])
   const [rowCount, setRowCount] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 })
-  const [sortModel, setSortModel] = useState([])
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
+  const [sortField, setSortField] = useState('firstName')
+  const [sortOrder, setSortOrder] = useState('asc')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 400)
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(0)
+    }, 400)
     return () => clearTimeout(timer)
   }, [search])
 
@@ -54,11 +74,11 @@ export default function RbacPage() {
     setLoading(true)
     try {
       const params = new URLSearchParams({
-        page: String(paginationModel.page),
-        pageSize: String(paginationModel.pageSize),
+        page: String(page),
+        pageSize: String(pageSize),
         search: debouncedSearch,
-        sortField: sortModel[0]?.field ?? 'firstName',
-        sortOrder: sortModel[0]?.sort ?? 'asc'
+        sortField,
+        sortOrder,
       })
       const res = await fetch(`/api/users?${params}`)
       if (!res.ok) throw new Error()
@@ -70,50 +90,21 @@ export default function RbacPage() {
     } finally {
       setLoading(false)
     }
-  }, [paginationModel, sortModel, debouncedSearch, showToast])
+  }, [page, pageSize, sortField, sortOrder, debouncedSearch, showToast])
 
   useEffect(() => {
     fetchUsers()
   }, [fetchUsers])
 
-  const columns = [
-    {
-      field: 'name',
-      headerName: 'Name',
-      flex: 1,
-      valueGetter: (value, row) => `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim()
-    },
-    {
-      field: 'email',
-      headerName: 'Email',
-      flex: 1
-    },
-    {
-      field: 'role',
-      headerName: 'Role',
-      width: 130,
-      align: 'center',
-      headerAlign: 'center',
-      renderCell: (params) => <RoleChip role={params.value} />
-    },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 100,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => (
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', height: '100%' }}>
-          <IconButton size='small' onClick={() => setEditTarget(params.row)}>
-            <EditOutlinedIcon fontSize='small' />
-          </IconButton>
-          <IconButton size='small' onClick={() => setDeleteTarget(params.row)}>
-            <DeleteOutlinedIcon fontSize='small' />
-          </IconButton>
-        </Box>
-      )
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
     }
-  ]
+    setPage(0)
+  }
 
   return (
     <SidebarInset>
@@ -124,54 +115,142 @@ export default function RbacPage() {
       </header>
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
-        <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
-          <Typography variant='h5' fontWeight={700} color='text.primary' sx={{ mb: 3 }}>
-            Users
-          </Typography>
-
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3 }}>
+          <Box>
+            <Typography variant='h5' fontWeight={700} color='text.primary'>
+              Users
+            </Typography>
+            <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
+              Manage user roles and accounts for this clinic
+            </Typography>
+          </Box>
           <TextField
             placeholder='Search by name or email...'
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             size='small'
-            sx={{ mb: 2, width: 320 }}
+            sx={{ width: 280 }}
           />
+        </Box>
 
-          <DataGrid
-            rows={rows}
-            columns={columns}
-            rowCount={rowCount}
-            loading={loading}
-            paginationMode='server'
-            sortingMode='server'
-            paginationModel={paginationModel}
-            onPaginationModelChange={setPaginationModel}
-            sortModel={sortModel}
-            onSortModelChange={setSortModel}
-            pageSizeOptions={[10, 25, 50]}
-            disableRowSelectionOnClick
-            autoHeight
+        {/* Table */}
+        <Box
+          sx={{
+            bgcolor: '#fff',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 3,
+            overflow: 'hidden',
+          }}
+        >
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                  {HEAD_CELLS.map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      align={cell.align ?? 'left'}
+                      sx={{ fontWeight: 600, fontSize: '0.8rem', color: '#64748b', py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
+                    >
+                      {cell.sortable ? (
+                        <TableSortLabel
+                          active={sortField === cell.id}
+                          direction={sortField === cell.id ? sortOrder : 'asc'}
+                          onClick={() => handleSort(cell.id)}
+                        >
+                          {cell.label}
+                        </TableSortLabel>
+                      ) : (
+                        cell.label
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={4} align='center' sx={{ py: 6 }}>
+                      <CircularProgress size={28} sx={{ color: '#2563eb' }} />
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {!loading && rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} align='center' sx={{ py: 6 }}>
+                      <Typography variant='body2' color='text.disabled'>
+                        No users found
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {!loading && rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    hover
+                    sx={{ '&:last-child td': { border: 0 }, '&:hover': { bgcolor: '#f8fafc' } }}
+                  >
+                    <TableCell sx={{ fontWeight: 500, color: '#334155' }}>
+                      {`${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || '—'}
+                    </TableCell>
+
+                    <TableCell sx={{ color: '#334155' }}>
+                      {row.email}
+                    </TableCell>
+
+                    <TableCell align='center'>
+                      <RoleChip role={row.role} />
+                    </TableCell>
+
+                    <TableCell align='center'>
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                        <Tooltip title='Edit role'>
+                          <IconButton size='small' onClick={() => setEditTarget(row)} sx={{ cursor: 'pointer' }}>
+                            <EditOutlinedIcon fontSize='small' />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title='Delete user'>
+                          <IconButton size='small' onClick={() => setDeleteTarget(row)} sx={{ cursor: 'pointer' }}>
+                            <DeleteOutlinedIcon fontSize='small' />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <TablePagination
+            component='div'
+            count={rowCount}
+            page={page}
+            rowsPerPage={pageSize}
+            rowsPerPageOptions={[10, 25, 50]}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            onRowsPerPageChange={(e) => { setPageSize(parseInt(e.target.value, 10)); setPage(0) }}
+            sx={{ borderTop: '1px solid', borderColor: 'divider' }}
           />
-        </Paper>
+        </Box>
       </Box>
 
       <EditRoleModal
         open={!!editTarget}
         user={editTarget}
         onClose={() => setEditTarget(null)}
-        onSuccess={() => {
-          setEditTarget(null)
-          fetchUsers()
-        }}
+        onSuccess={() => { setEditTarget(null); fetchUsers() }}
       />
       <DeleteUserModal
         open={!!deleteTarget}
         user={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onSuccess={() => {
-          setDeleteTarget(null)
-          fetchUsers()
-        }}
+        onSuccess={() => { setDeleteTarget(null); fetchUsers() }}
       />
     </SidebarInset>
   )
