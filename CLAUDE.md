@@ -17,9 +17,10 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | Framework | Next.js 16 (App Router) |
 | Language | JavaScript (JSX) |
 | UI Library | MUI v7 (system pages) + Tailwind CSS (landing page only) |
-| Database ORM | Prisma + PostgreSQL |
+| Database ORM | Prisma + PostgreSQL (Neon) |
 | Auth | Custom session-based (cookies via `lib/auth.js`) |
 | Encryption | Web Crypto API — AES-GCM E2EE, PBKDF2 key derivation |
+| File Storage | Supabase Storage (`clinic-logos` bucket) |
 | AI | GPT-5 (for appointment scheduling suggestions) |
 | Analytics | Vercel Analytics |
 
@@ -32,10 +33,20 @@ app/
 ├── (main)/                   # Route group — wraps all authenticated + auth pages
 │   ├── layout.jsx            # Mounts ThemeRegistry, CryptoProvider, ToastProvider, InactivityProvider
 │   ├── page.jsx              # Landing page (Tailwind only)
-│   ├── dashboard/page.jsx
+│   ├── [clinicId]/           # Authenticated clinic-scoped routes
+│   │   ├── layout.jsx        # Session + clinic guard; fetches role + clinic name/logo for sidebar
+│   │   ├── dashboard/page.jsx
+│   │   └── settings/page.jsx
 │   ├── sign-in/page.jsx
 │   └── sign-up/page.jsx
-├── api/auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password)
+├── api/
+│   ├── auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password)
+│   ├── users/                # User list + PATCH role / DELETE (ADMIN only)
+│   └── clinics/[id]/
+│       ├── profile/          # GET + PATCH clinic profile fields
+│       ├── logo/             # POST logo upload → Supabase Storage
+│       ├── schedule/         # GET + PATCH operating hours (working days + open/close time)
+│       └── closures/         # GET + POST closure dates; [closureId]/ DELETE
 ├── modules/                  # Page-level components (one folder per route)
 │   ├── landing-page/         # Tailwind — public facing
 │   ├── sign-in-page/
@@ -43,7 +54,8 @@ app/
 │   ├── forgot-password-page/
 │   ├── reset-password-page/
 │   ├── change-password-page/
-│   └── dashboard-page/
+│   ├── dashboard-page/       # AppSidebar, DashboardPage, SignOutButton
+│   └── settings-page/        # SettingsPage, ClinicLogoUpload, ClinicProfileForm, ClinicSchedule, ClinicClosures
 ├── providers/                # App-level React context providers
 │   ├── ThemeRegistry.jsx     # MUI + Emotion SSR setup
 │   ├── ToastProvider.jsx     # Global toast/snackbar (useToast hook)
@@ -53,11 +65,13 @@ components/
 └── commons/                  # Reusable MUI-based UI primitives
     ├── theme.js              # Design tokens + MUI component overrides
     ├── Button.jsx            # Custom button with loading state
-    └── Input.jsx             # Label-above input field (no floating label)
+    └── Input.jsx             # Label-above input field (no floating label); supports error + helperText
 lib/
 ├── auth.js                   # Session helpers (getSession, setSession, clearSession)
 ├── prisma.js                 # Prisma client singleton
-└── crypto.js                 # Web Crypto API helpers (E2EE)
+├── crypto.js                 # Web Crypto API helpers (E2EE)
+├── supabase.js               # Supabase client (service role — server-side only)
+└── email.js                  # Mailjet email helpers (sendPasswordResetEmail, sendPasswordChangedEmail)
 prisma/
 ├── schema.prisma
 └── seed.js                   # Seeds 3 clinics + 4 users per clinic (all roles)
@@ -71,10 +85,10 @@ prisma/
 Every `page.jsx` contains **only** metadata + one import. All content lives in `app/modules/[page-name]/`.
 
 ```jsx
-// app/(main)/dashboard/page.jsx
-import DashboardPage from '@/app/modules/dashboard-page/DashboardPage';
-export const metadata = { title: 'Dashboard | IntelliDent' };
-export default function Page() { return <DashboardPage />; }
+// app/(main)/[clinicId]/settings/page.jsx
+import SettingsPage from '@/app/modules/settings-page/SettingsPage';
+export const metadata = { title: 'Settings | IntelliDent' };
+export default function Page() { return <SettingsPage />; }
 ```
 
 ### Module Structure
@@ -87,8 +101,9 @@ Each page module lives in `app/modules/[page-name]/`. Page-specific sub-componen
 
 ### Styling Rules
 - **Landing page** (`app/modules/landing-page/`) → Tailwind CSS only
-- **All system pages** (dashboard, auth, etc.) → MUI only, no Tailwind
+- **All system pages** (dashboard, auth, settings, etc.) → MUI only, no Tailwind
 - Never mix Tailwind and MUI in the same component
+- Exception: `SidebarInset` header bar uses Tailwind utility classes (from shadcn sidebar)
 
 ### Providers
 - `ThemeRegistry` — MUI SSR, wraps everything in `(main)`
@@ -195,9 +210,27 @@ All data is scoped to a `ClinicID`. Every DB query must include a clinic scope f
 
 - `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`). Also holds `passwordHistory String[]`, `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`
 - `PasswordResetToken` — one-time reset tokens (email, token, expiresAt, usedAt)
+- `Clinic` — multi-tenant root. Holds `name`, `address`, `email`, `phone`, `landline`, `logoUrl`
+- `ClinicSchedule` — one per clinic; `workingDays String[]` (e.g. `["MON","TUE"]`), `openTime`, `closeTime` (HH:mm strings). Upserted via PATCH.
+- `ClinicClosure` — many per clinic; `date DateTime`, `reason String?` for holidays/maintenance
 - `Receptionist` — profile extension for `RECEPTIONIST` users (linked via `userId`)
 - `Dentist` — profile extension for `DENTIST` users; has `specialty`; linked to `Appointment` via `dentistId`
 - `Patient` — profile extension for `PATIENT` users
+
+---
+
+## Settings Page (`/[clinicId]/settings`)
+
+ADMIN-only. Split into four sections, each its own component:
+
+| Component | Responsibility |
+|---|---|
+| `ClinicLogoUpload` | Avatar preview, file input (jpg/png ≤5MB), POST to `/api/clinics/[id]/logo` |
+| `ClinicProfileForm` | Name, address, email, mobile (optional), landline (optional) — PATCH profile |
+| `ClinicSchedule` | Toggle working days (MON–SUN), set open/close time — PATCH schedule |
+| `ClinicClosures` | Add/delete clinic closure dates with optional reason |
+
+Logo is stored in Supabase bucket `clinic-logos` at path `{clinicId}/{timestamp}.{ext}`. Old logo is deleted on upload. `logoUrl` is persisted to the `Clinic` record and rendered in the sidebar header (`AppSidebar.jsx`).
 
 ---
 
@@ -215,6 +248,11 @@ All data is scoped to a `ClinicID`. Every DB query must include a clinic scope f
   - [x] Password history (cannot reuse last 3)
   - [x] RBAC sidebar
   - [x] User management (ADMIN)
+- [x] Clinic Settings (ADMIN)
+  - [x] Clinic profile (name, address, email, phone, landline)
+  - [x] Clinic logo upload (Supabase Storage, shown in sidebar)
+  - [x] Operating hours (working days + open/close time)
+  - [x] Clinic closure dates (holidays/maintenance)
 - [ ] Appointment Scheduling + AI slot suggestions (GPT-5)
 - [ ] Virtual Assistant / Chatbot
 - [ ] Patient Record Management
@@ -253,6 +291,15 @@ import Input from '@/components/commons/Input';
 <Button variant="contained" loading={loading}>Save</Button>
 <Button variant="outlined">Cancel</Button>
 <Input id="field" label="Label" value={val} onChange={...} placeholder="..." />
+<Input id="field" label="Label" error={!!err} helperText={err} required />
+```
+
+### Supabase File Upload (server-side)
+```js
+import { supabase } from '@/lib/supabase';
+
+const { error } = await supabase.storage.from('clinic-logos').upload(path, buffer, { contentType });
+const { data: { publicUrl } } = supabase.storage.from('clinic-logos').getPublicUrl(path);
 ```
 
 ---
