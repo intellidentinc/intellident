@@ -5,7 +5,6 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import Chip from '@mui/material/Chip'
-import Tooltip from '@mui/material/Tooltip'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -14,14 +13,16 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import TablePagination from '@mui/material/TablePagination'
 import TableSortLabel from '@mui/material/TableSortLabel'
-import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
+import Tooltip from '@mui/material/Tooltip'
+import AddIcon from '@mui/icons-material/Add'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { useToast } from '@/app/providers/ToastProvider'
 import EditRoleModal from './EditRoleModal'
 import DeleteUserModal from './DeleteUserModal'
+import AddUserModal from './AddUserModal'
 
 const HEAD_CELLS = [
   { id: 'firstName', label: 'Name', sortable: true },
@@ -57,18 +58,9 @@ export default function RbacPage() {
   const [pageSize, setPageSize] = useState(10)
   const [sortField, setSortField] = useState('firstName')
   const [sortOrder, setSortOrder] = useState('asc')
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search)
-      setPage(0)
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [search])
+  const [addOpen, setAddOpen] = useState(false)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -76,7 +68,6 @@ export default function RbacPage() {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(pageSize),
-        search: debouncedSearch,
         sortField,
         sortOrder,
       })
@@ -90,7 +81,7 @@ export default function RbacPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, sortField, sortOrder, debouncedSearch, showToast])
+  }, [page, pageSize, sortField, sortOrder, showToast])
 
   useEffect(() => {
     fetchUsers()
@@ -125,13 +116,29 @@ export default function RbacPage() {
               Manage user roles and accounts for this clinic
             </Typography>
           </Box>
-          <TextField
-            placeholder='Search by name or email...'
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            size='small'
-            sx={{ width: 280 }}
-          />
+          <Tooltip title='Add user'>
+            <Box
+              onClick={() => setAddOpen(true)}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 0.25,
+                px: 1.5,
+                py: 1,
+                borderRadius: 2,
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+                '&:hover': { bgcolor: '#f1f5f9' },
+                userSelect: 'none',
+              }}
+            >
+              <AddIcon sx={{ fontSize: 22, color: '#2563eb' }} />
+              <Typography variant='caption' fontWeight={600} sx={{ color: '#334155', lineHeight: 1 }}>
+                Add
+              </Typography>
+            </Box>
+          </Tooltip>
         </Box>
 
         {/* Table */}
@@ -251,6 +258,11 @@ export default function RbacPage() {
         user={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onSuccess={() => { setDeleteTarget(null); fetchUsers() }}
+      />
+      <AddUserModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSuccess={() => { setAddOpen(false); fetchUsers() }}
       />
     </SidebarInset>
   )

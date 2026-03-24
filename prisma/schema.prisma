@@ -158,6 +158,7 @@ model User {
   email      String    @unique
   firstName  String?
   lastName   String?
+  phone      String?
   password        String
   passwordHistory String[] @default([])
   role            UserRole  @default(PATIENT)
