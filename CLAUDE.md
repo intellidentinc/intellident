@@ -30,12 +30,12 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 ```
 app/
 ├── (main)/                   # Route group — wraps all authenticated + auth pages
-│   ├── layout.jsx            # Mounts ThemeRegistry, CryptoProvider, ToastProvider
+│   ├── layout.jsx            # Mounts ThemeRegistry, CryptoProvider, ToastProvider, InactivityProvider
 │   ├── page.jsx              # Landing page (Tailwind only)
 │   ├── dashboard/page.jsx
 │   ├── sign-in/page.jsx
 │   └── sign-up/page.jsx
-├── api/auth/                 # Auth API routes (signin, signout, signup)
+├── api/auth/                 # Auth API routes (signin, signout, signup, verify)
 ├── modules/                  # Page-level components (one folder per route)
 │   ├── landing-page/         # Tailwind — public facing
 │   ├── sign-in-page/
@@ -44,18 +44,20 @@ app/
 ├── providers/                # App-level React context providers
 │   ├── ThemeRegistry.jsx     # MUI + Emotion SSR setup
 │   ├── ToastProvider.jsx     # Global toast/snackbar (useToast hook)
-│   └── CryptoProvider.jsx    # Holds master key in memory (useCrypto hook)
+│   ├── CryptoProvider.jsx    # Holds master key in memory (useCrypto hook)
+│   └── InactivityProvider.jsx # Auto logout after 30 min inactivity
 components/
 └── commons/                  # Reusable MUI-based UI primitives
     ├── theme.js              # Design tokens + MUI component overrides
     ├── Button.jsx            # Custom button with loading state
     └── Input.jsx             # Label-above input field (no floating label)
 lib/
-├── auth.js                   # Session helpers (getSession, setSession)
+├── auth.js                   # Session helpers (getSession, setSession, clearSession)
 ├── prisma.js                 # Prisma client singleton
 └── crypto.js                 # Web Crypto API helpers (E2EE)
 prisma/
-└── schema.prisma
+├── schema.prisma
+└── seed.js                   # Seeds 3 clinics + 4 users per clinic (all roles)
 ```
 
 ---
@@ -89,6 +91,7 @@ Each page module lives in `app/modules/[page-name]/`. Page-specific sub-componen
 - `ThemeRegistry` — MUI SSR, wraps everything in `(main)`
 - `CryptoProvider` — holds the decrypted master key in memory, cleared on sign-out
 - `ToastProvider` — global toast via `useToast()` hook
+- `InactivityProvider` — tracks user activity; auto signs out after 30 min of inactivity on authenticated pages
 
 ---
 
@@ -140,19 +143,61 @@ Using the Web Crypto API — **the server never sees plaintext user data.**
 
 **Important:** Developers cannot read user data. There is no password recovery that restores access to existing encrypted data. This is intentional.
 
+### Password Policy
+Enforced on both client and server (`app/api/auth/sign-up/route.js`):
+- Minimum 8 characters
+- At least 1 uppercase letter
+- At least 1 lowercase letter
+- At least 1 digit
+- At least 1 special character
+
+### Session Policy
+- **Token expiry:** 10 minutes (`lib/auth.js` — `maxAge: 60 * 10`)
+- **Inactivity logout:** 30 minutes — tracked in `InactivityProvider`; clears master key and redirects to `/sign-in?reason=inactivity`
+
+### Account Lockout
+Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`.
+- **Threshold:** 5 failed attempts within 5 minutes
+- **Lock duration:** 15 minutes
+- Configurable via env vars: `LOCKOUT_MAX_ATTEMPTS`, `LOCKOUT_WINDOW_MINUTES`, `LOCKOUT_DURATION_MINUTES`
+- Resets on successful login
+
 ### RBAC Roles
-- `Patient` — book appointments, view own records
-- `Clinic Staff` — manage appointments, update records
-- `Admin` — full access, audit logs, reporting
+
+| Role | Sidebar Access |
+|---|---|
+| `PATIENT` | Dashboard, Appointments, Reminders, My Profile |
+| `RECEPTIONIST` | Dashboard, Appointments, Patients, Reminders, Billing |
+| `DENTIST` | Dashboard, Schedule, Patient Records |
+| `ADMIN` | Dashboard, Users, Services, Schedules, Billing, Settings, Audit Log |
+
+- Sidebar nav is built per-role in `buildNavGroups()` inside `AppSidebar.jsx`
+- Role changes and account deletions applied to the currently logged-in user immediately clear their session and redirect to sign-in
 
 ### Multi-Tenancy
 All data is scoped to a `ClinicID`. Every DB query must include a clinic scope filter. No cross-clinic data access is allowed regardless of role.
 
 ---
 
+## Data Models (key)
+
+- `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`)
+- `Receptionist` — profile extension for `RECEPTIONIST` users (linked via `userId`)
+- `Dentist` — profile extension for `DENTIST` users; has `specialty`; linked to `Appointment` via `dentistId`
+- `Patient` — profile extension for `PATIENT` users
+
+---
+
 ## Core Modules to Build
 
-- [ ] User Access & Authentication (in progress)
+- [x] User Access & Authentication
+  - [x] Sign up / email verification
+  - [x] Sign in / sign out
+  - [x] Password policy enforcement
+  - [x] Account lockout
+  - [x] Session expiry + inactivity logout
+  - [x] RBAC sidebar
+  - [x] User management (ADMIN)
 - [ ] Appointment Scheduling + AI slot suggestions (GPT-5)
 - [ ] Virtual Assistant / Chatbot
 - [ ] Patient Record Management
@@ -192,6 +237,17 @@ import Input from '@/components/commons/Input';
 <Button variant="outlined">Cancel</Button>
 <Input id="field" label="Label" value={val} onChange={...} placeholder="..." />
 ```
+
+---
+
+## Seed
+
+```bash
+npx prisma db seed
+```
+
+Creates 3 clinics + 4 users per clinic (one per role). Password for all: `12345678`.
+Email pattern: `{role}.{clinicSlug}@intellident.test` (e.g. `admin.maria@intellident.test`)
 
 ---
 
