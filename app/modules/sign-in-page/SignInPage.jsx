@@ -6,6 +6,9 @@ import Link from 'next/link';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
+import { Eye, EyeOff } from 'lucide-react';
 import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
 import { useToast } from '@/app/providers/ToastProvider';
@@ -16,6 +19,7 @@ export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -104,11 +108,24 @@ export default function SignInPage() {
             <Input
               id="password"
               label="Password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
+              endAdornment={
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={() => setShowPassword((v) => !v)}
+                    edge="end"
+                    size="small"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </IconButton>
+                </InputAdornment>
+              }
             />
 
             <Button type="submit" variant="contained" size="large" loading={loading} fullWidth>
