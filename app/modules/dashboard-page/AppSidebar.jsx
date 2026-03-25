@@ -184,6 +184,9 @@ export default function AppSidebar({ session, role = 'PATIENT', clinicName, clin
             <p className="text-xs text-sidebar-foreground/60 truncate">
               {session?.email}
             </p>
+            <span className="mt-0.5 inline-block rounded-full bg-[#dbeafe] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2563eb]">
+              {role}
+            </span>
           </div>
         </div>
         <SignOutButton />
