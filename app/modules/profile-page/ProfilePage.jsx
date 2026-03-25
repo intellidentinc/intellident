@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
-import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { SidebarInset } from '@/components/ui/sidebar'
+import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
@@ -89,11 +90,7 @@ export default function ProfilePage() {
 
   return (
     <SidebarInset>
-      <header className='flex h-14 items-center gap-3 border-b bg-white px-4'>
-        <SidebarTrigger />
-        <div className='h-5 w-px bg-gray-200' />
-        <span className='font-semibold text-slate-700'>My Profile</span>
-      </header>
+      <PageHeader title='My Profile' />
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
         <Typography variant='h5' fontWeight={700} color='text.primary' gutterBottom>

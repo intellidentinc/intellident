@@ -27,7 +27,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SearchIcon from '@mui/icons-material/Search'
 import dayjs from 'dayjs'
-import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { SidebarInset } from '@/components/ui/sidebar'
+import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import AppointmentCalendar from './AppointmentCalendar'
 import CreateAppointmentModal from './CreateAppointmentModal'
@@ -234,11 +235,7 @@ export default function AppointmentsPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <SidebarInset>
-      <header className='flex h-14 items-center gap-3 border-b bg-white px-4'>
-        <SidebarTrigger />
-        <div className='h-5 w-px bg-gray-200' />
-        <span className='font-semibold text-slate-700'>Appointments</span>
-      </header>
+      <PageHeader title='Appointments' />
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createNotification } from '@/lib/notifications'
 
 async function getCaller() {
   const session = await getSession()
@@ -78,7 +79,37 @@ export async function PATCH(request, { params }) {
         },
       },
     },
+    include: {
+      patient: { include: { user: { select: { id: true } } } },
+      service: { select: { name: true } },
+    },
   })
+
+  // Notify the patient about status changes
+  if (updated.patient?.user?.id) {
+    const patientUserId = updated.patient.user.id
+    const serviceName   = updated.service?.name ?? 'your appointment'
+    const scheduledStr  = new Date(appointment.scheduledAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+
+    const NOTIF = {
+      CONFIRMED:  { type: 'APPOINTMENT_CONFIRMED', title: 'Appointment Confirmed', body: `Your ${serviceName} on ${scheduledStr} has been confirmed.` },
+      CANCELLED:  { type: 'APPOINTMENT_CANCELLED', title: 'Appointment Cancelled', body: `Your ${serviceName} on ${scheduledStr} has been cancelled.` },
+      COMPLETED:  { type: 'APPOINTMENT_COMPLETED', title: 'Appointment Completed', body: `Your ${serviceName} on ${scheduledStr} is marked as completed. Thank you!` },
+      NO_SHOW:    { type: 'APPOINTMENT_NO_SHOW',   title: 'Appointment No-show',   body: `You were marked as no-show for ${serviceName} on ${scheduledStr}.` },
+    }
+
+    const n = NOTIF[status]
+    if (n) {
+      await createNotification({
+        userId: patientUserId,
+        clinicId: caller.clinicId,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        appointmentId: id,
+      })
+    }
+  }
 
   return NextResponse.json({ appointment: updated })
 }

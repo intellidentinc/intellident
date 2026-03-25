@@ -15,7 +15,8 @@ import Chip from '@mui/material/Chip'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import SearchIcon from '@mui/icons-material/Search'
-import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { SidebarInset } from '@/components/ui/sidebar'
+import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 
 const STATUS_CHIP = {
@@ -61,11 +62,7 @@ export default function RecordsPage() {
 
   return (
     <SidebarInset>
-      <header className='flex h-14 items-center gap-3 border-b bg-white px-4'>
-        <SidebarTrigger />
-        <div className='h-5 w-px bg-gray-200' />
-        <span className='font-semibold text-slate-700'>Patient Records</span>
-      </header>
+      <PageHeader title='Patient Records' />
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
 

@@ -50,6 +50,14 @@ enum NotificationStatus {
   FAILED
 }
 
+enum NotificationType {
+  BOOKING_REQUEST
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_COMPLETED
+  APPOINTMENT_NO_SHOW
+}
+
 enum AuditAction {
   LOGIN
   LOGOUT
@@ -182,6 +190,7 @@ model User {
   dentist                 Dentist?
   auditLogs               AuditLog[]
   appointmentStatusChanges AppointmentStatusHistory[]
+  inAppNotifications      InAppNotification[]
 
   @@index([email])
   @@index([clinicId])
@@ -294,9 +303,10 @@ model Appointment {
   patient       Patient                      @relation(fields: [patientId], references: [id])
   dentist       Dentist?                     @relation(fields: [dentistId], references: [id])
   service       Service                      @relation(fields: [serviceId], references: [id])
-  billing       Billing?
-  notifications Notification[]
-  statusHistory AppointmentStatusHistory[]
+  billing            Billing?
+  notifications      Notification[]
+  inAppNotifications InAppNotification[]
+  statusHistory      AppointmentStatusHistory[]
 
   @@index([clinicId])
   @@index([patientId])
@@ -422,6 +432,25 @@ model Notification {
   @@index([patientId])
   @@index([clinicId])
   @@map("notifications")
+}
+
+model InAppNotification {
+  id            String           @id @default(cuid())
+  userId        String
+  clinicId      String
+  type          NotificationType
+  title         String
+  body          String
+  appointmentId String?
+  isRead        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+
+  user        User         @relation(fields: [userId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([clinicId])
+  @@map("in_app_notifications")
 }
 
 model AuditLog {

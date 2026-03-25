@@ -1,7 +1,8 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
-import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { SidebarInset } from '@/components/ui/sidebar'
+import PageHeader from '@/components/commons/PageHeader'
 import { prisma } from '@/lib/prisma'
 import {
   CalendarDays, CheckCircle, Clock, XCircle,
@@ -461,11 +462,7 @@ export default async function DashboardPage({ session }) {
 
   return (
     <SidebarInset>
-      <header className='flex h-14 items-center gap-3 border-b bg-white px-4'>
-        <SidebarTrigger />
-        <div className='h-5 w-px bg-gray-200' />
-        <span className='font-semibold text-slate-700'>Dashboard</span>
-      </header>
+      <PageHeader title='Dashboard' />
       {content}
     </SidebarInset>
   )

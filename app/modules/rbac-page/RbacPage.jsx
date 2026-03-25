@@ -18,7 +18,8 @@ import Tooltip from '@mui/material/Tooltip'
 import AddIcon from '@mui/icons-material/Add'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
-import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { SidebarInset } from '@/components/ui/sidebar'
+import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import EditRoleModal from './EditRoleModal'
 import DeleteUserModal from './DeleteUserModal'
@@ -99,11 +100,7 @@ export default function RbacPage() {
 
   return (
     <SidebarInset>
-      <header className='flex h-14 items-center gap-3 border-b bg-white px-4'>
-        <SidebarTrigger />
-        <div className='h-5 w-px bg-gray-200' />
-        <span className='font-semibold text-slate-700'>User Management</span>
-      </header>
+      <PageHeader title='User Management' />
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
         {/* Header */}

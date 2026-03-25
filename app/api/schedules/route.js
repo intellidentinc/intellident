@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { notifyStaff } from '@/lib/notifications'
 
 async function getPatientCaller() {
   const session = await getSession()
@@ -161,6 +162,21 @@ export async function POST(request) {
         create: { status: 'PENDING', changedById: caller.userId },
       },
     },
+  })
+
+  // Notify all receptionists and admins of the new booking request
+  const patient = await prisma.patient.findUnique({
+    where: { id: caller.patientId },
+    select: { firstName: true, lastName: true },
+  })
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'A patient'
+  const scheduledStr = apptDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  await notifyStaff({
+    clinicId: caller.clinicId,
+    type: 'BOOKING_REQUEST',
+    title: 'New Booking Request',
+    body: `${patientName} requested a ${service.name} on ${scheduledStr}.`,
+    appointmentId: appointment.id,
   })
 
   return NextResponse.json({ appointment }, { status: 201 })

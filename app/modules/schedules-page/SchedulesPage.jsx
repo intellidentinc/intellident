@@ -9,7 +9,8 @@ import Tooltip from '@mui/material/Tooltip'
 import IconButton from '@mui/material/IconButton'
 import AddIcon from '@mui/icons-material/Add'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
-import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
+import { SidebarInset } from '@/components/ui/sidebar'
+import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import { CalendarDays, Clock, User2, Stethoscope } from 'lucide-react'
 import BookAppointmentModal from './BookAppointmentModal'
@@ -57,11 +58,7 @@ export default function SchedulesPage() {
 
   return (
     <SidebarInset>
-      <header className='flex h-14 items-center gap-3 border-b bg-white px-4'>
-        <SidebarTrigger />
-        <div className='h-5 w-px bg-gray-200' />
-        <span className='font-semibold text-slate-700'>My Schedules</span>
-      </header>
+      <PageHeader title='My Schedules' />
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
         {/* Header */}

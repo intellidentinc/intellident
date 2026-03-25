@@ -18,7 +18,6 @@ import {
   Users,
   FileText,
   CreditCard,
-  Bell,
   ShieldCheck,
   UserCog,
   Settings,
@@ -45,7 +44,6 @@ function buildNavGroups(role, clinicId) {
           items: [
             { label: 'Dashboard',    icon: LayoutDashboard, href: p('/dashboard') },
             { label: 'My Schedules', icon: CalendarDays,    href: p('/schedules') },
-            { label: 'Reminders',    icon: Bell,            href: p('/reminders') },
           ],
         },
         {
@@ -87,7 +85,6 @@ function buildNavGroups(role, clinicId) {
             { label: 'Dashboard',    icon: LayoutDashboard, href: p('/dashboard'), badgeKey: null },
             { label: 'Appointments', icon: CalendarDays,    href: p('/appointments'), badgeKey: 'pending' },
             { label: 'Patients',     icon: Users,           href: p('/patients') },
-            { label: 'Reminders',    icon: Bell,            href: p('/reminders') },
           ],
         },
         {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { notifyStaff } from '@/lib/notifications'
 
 export async function PATCH(request, { params }) {
   const session = await getSession()
@@ -36,7 +37,7 @@ export async function PATCH(request, { params }) {
     )
   }
 
-  await prisma.appointment.update({
+  const updated = await prisma.appointment.update({
     where: { id },
     data: {
       status: 'CANCELLED',
@@ -44,6 +45,17 @@ export async function PATCH(request, { params }) {
         create: { status: 'CANCELLED', changedById: session.userId },
       },
     },
+    include: { service: { select: { name: true } } },
+  })
+
+  // Notify receptionists and admins that the patient cancelled
+  const scheduledStr = new Date(appointment.scheduledAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  await notifyStaff({
+    clinicId: user.clinicId,
+    type: 'APPOINTMENT_CANCELLED',
+    title: 'Appointment Cancelled by Patient',
+    body: `${patient.firstName} ${patient.lastName} cancelled their ${updated.service?.name ?? 'appointment'} on ${scheduledStr}.`,
+    appointmentId: id,
   })
 
   return NextResponse.json({ success: true })
