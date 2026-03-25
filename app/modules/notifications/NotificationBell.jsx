@@ -1,3 +1,13 @@
+/**
+ * NotificationBell — Bell Icon with Unread Badge
+ *
+ * Polls GET /api/notifications every 30 seconds to keep the unread count fresh.
+ * Displays a blue badge (capped at 99+) when there are unread notifications.
+ * Clicking the bell opens the NotificationDrawer slide-in panel.
+ *
+ * The onRead callback is passed down to the drawer so that marking a notification
+ * as read immediately re-fetches the count and collapses the badge if needed.
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'

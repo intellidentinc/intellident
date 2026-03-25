@@ -1,3 +1,17 @@
+/**
+ * InactivityProvider — Auto Logout After 30 Minutes of Inactivity
+ *
+ * Key features:
+ *   - Listens to mousemove, keydown, click, scroll, and touchstart to detect activity
+ *   - Resets a 30-minute countdown timer on every activity event
+ *   - On timeout: clears the master key from CryptoProvider, calls sign-out API,
+ *     then redirects to /sign-in?reason=inactivity
+ *   - Skipped on auth/public pages (sign-in, sign-up, landing page, /api/* paths)
+ *   - Uses passive event listeners for scroll/touch to avoid blocking rendering
+ *
+ * This is a security control (NIST CSF "Protect") to limit exposure if a user
+ * walks away from an open session. The E2EE master key is wiped along with the session.
+ */
 'use client';
 
 import { useEffect, useRef } from 'react';

@@ -1,3 +1,17 @@
+/**
+ * AppointmentCalendar — react-big-calendar Wrapper
+ *
+ * Key features:
+ *   - Uses dayjsLocalizer for date handling (consistent with the rest of the app)
+ *   - Custom EventComponent: shows patient name + service name inside each event block
+ *   - eventPropGetter: applies status-based background + left-border color from STATUS_COLORS
+ *   - toolbar={false}: the calendar has no built-in toolbar — AppointmentsPage renders
+ *     its own custom navigation controls above
+ *   - All react-big-calendar default styles are overridden via MUI sx '& .rbc-*' selectors
+ *     to avoid global CSS conflicts with the rest of the MUI-based UI
+ *   - Supports day, week, and month views (passed in as `view` prop from parent)
+ *   - onSelectSlot fires when the user clicks an empty time slot → opens CreateAppointmentModal
+ */
 'use client'
 
 import 'react-big-calendar/lib/css/react-big-calendar.css'

@@ -1,3 +1,18 @@
+/**
+ * AppointmentsPage — RECEPTIONIST + ADMIN
+ *
+ * Key features:
+ *   - Four views: Day / Week / Month (react-big-calendar) + List (MUI table)
+ *   - Calendar views fetch from GET /api/appointments/calendar (date range, no pagination)
+ *   - List view fetches from GET /api/appointments (paginated, sortable)
+ *   - Filters: status dropdown, dentist dropdown, service dropdown + search by name / appt code
+ *   - "Booking Requests" button quick-filters to PENDING and switches to List view —
+ *     driven by the pendingCount badge on the sidebar
+ *   - Clicking a calendar slot opens CreateAppointmentModal pre-filled with that date/time
+ *     via the defaultScheduledAt prop
+ *   - Clicking an event opens AppointmentDetailModal (status transitions + history timeline)
+ *   - Status chips use the design system colors defined in STATUS_CHIP constant
+ */
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'

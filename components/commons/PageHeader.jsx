@@ -1,3 +1,12 @@
+/**
+ * PageHeader — Shared Authenticated Page Header
+ *
+ * Used at the top of every authenticated page module via <PageHeader title="..." />.
+ * Renders: [SidebarTrigger] | [divider] | [page title] | [NotificationBell]
+ *
+ * Do NOT add a custom <header> in page modules — always use this component.
+ * Despite being a client component, Next.js App Router allows server components to import it.
+ */
 'use client'
 
 import { SidebarTrigger } from '@/components/ui/sidebar'

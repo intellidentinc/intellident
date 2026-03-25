@@ -1,3 +1,20 @@
+/**
+ * BookAppointmentModal — 6-Step Patient Self-Booking Wizard
+ *
+ * Progressive disclosure — each step unlocks the next:
+ *   Step 1: Service selection (visual cards from GET /api/appointments/services)
+ *   Step 2: Dentist preference chips — "Any Available" or a specific dentist
+ *           (fetched from GET /api/appointments/dentists?serviceId=...)
+ *   Step 3: DatePicker — disables non-working days and closure dates
+ *           (schedule + closures fetched from GET /api/clinics/schedule and /api/clinics/closures)
+ *   Step 4: Time slot chips grouped by Morning / Afternoon
+ *           (fetched from GET /api/schedules/slots — filtered by conflict for specific dentist)
+ *   Step 5: Optional notes textarea
+ *   Step 6: Booking summary card before final submit
+ *
+ * Submit → POST /api/schedules → creates appointment as PENDING → staff notified.
+ * The LocalizationProvider (AdapterDayjs) is wrapped inside this modal, not at app root.
+ */
 'use client'
 
 import { useState, useEffect } from 'react'

@@ -1,3 +1,18 @@
+/**
+ * ToastProvider — Global Snackbar Notification System
+ *
+ * Provides the useToast() hook to any component in the tree.
+ * Renders a single MUI Snackbar/Alert anchored to the top-right corner.
+ *
+ * Usage:
+ *   const { showToast } = useToast()
+ *   showToast('Saved!', 'success')
+ *   showToast('Something went wrong', 'error', 'Optional description')
+ *
+ * Severities: 'success' | 'error' | 'info' | 'warning'
+ * Auto-hides after 4 seconds. Clickaway is intentionally disabled so the user
+ * must read the message before it disappears on its own.
+ */
 'use client'
 
 import { createContext, useContext, useState, useCallback } from 'react'

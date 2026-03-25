@@ -1,3 +1,16 @@
+/**
+ * NotificationDrawer — Slide-in Notification Panel
+ *
+ * Key features:
+ *   - Framer Motion AnimatePresence: drawer slides in from x: 100% → 0 with a spring
+ *     transition; backdrop fades in behind it. Both are unmounted when closed (not hidden).
+ *   - TYPE_CONFIG maps every NotificationType enum value to an icon, color, and label.
+ *   - Unread notifications have a blue dot indicator and bold title; clicking marks them read.
+ *   - "Mark all read" button (DoneAll icon) calls PATCH /api/notifications in bulk.
+ *   - Relative timestamps via dayjs.fromNow() (e.g. "3 minutes ago").
+ *   - Fetches the full notification list (last 50) on open; does not poll while open.
+ *   - Clicking the backdrop closes the drawer (same as the close button).
+ */
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'

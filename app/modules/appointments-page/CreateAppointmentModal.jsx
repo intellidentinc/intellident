@@ -1,3 +1,20 @@
+/**
+ * CreateAppointmentModal — Receptionist/Admin Appointment Creation Form
+ *
+ * Key features:
+ *   - Patient field uses MUI Autocomplete with filterOptions={(x) => x} (server-side search)
+ *     — client-side filtering is disabled because results come from GET /api/appointments/patients
+ *   - Dentist dropdown is populated by GET /api/appointments/dentists?serviceId=... so only
+ *     dentists assigned to the selected service are shown. Includes "Any Available" option.
+ *   - DatePicker disables past dates, non-working days (ClinicSchedule.workingDays), and
+ *     closure dates (ClinicClosure) fetched on mount
+ *   - TimePicker constrains selection to clinic openTime / closeTime
+ *   - Real-time conflict check via GET /api/appointments/slots/check — shows an inline
+ *     warning Alert if the selected dentist is double-booked at that time
+ *   - defaultScheduledAt prop: pre-fills date + time when opened from a calendar slot click
+ *   - Status can be set to PENDING or CONFIRMED at creation time; if CONFIRMED, the
+ *     patient receives an immediate notification (handled server-side)
+ */
 'use client'
 
 import { useState, useEffect } from 'react'

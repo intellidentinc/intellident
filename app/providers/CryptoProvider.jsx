@@ -1,3 +1,21 @@
+/**
+ * CryptoProvider — E2EE Master Key Memory Store
+ *
+ * Holds the AES-GCM-256 master key in React state (browser memory only).
+ * This is the client-side half of the E2EE architecture:
+ *
+ *   Sign-in flow:
+ *     1. Server returns wrappedKey + keySalt
+ *     2. Browser derives KEK from password + keySalt via PBKDF2 (lib/crypto.js)
+ *     3. Browser unwraps the master key using the KEK
+ *     4. masterKey is stored here via setMasterKey()
+ *
+ *   Usage: import { useCrypto } then call encryptData / decryptData (lib/crypto.js)
+ *   Cleared: on sign-out, on inactivity timeout (InactivityProvider), and on
+ *            role-change or account deletion that triggers a forced redirect.
+ *
+ * The server never sees the plaintext master key — only the wrapped (encrypted) blob.
+ */
 'use client'
 
 import { createContext, useContext, useState } from 'react'

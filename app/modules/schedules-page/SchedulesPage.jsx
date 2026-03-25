@@ -1,3 +1,15 @@
+/**
+ * SchedulesPage — PATIENT role only (My Schedules)
+ *
+ * Key features:
+ *   - Two tabs: Upcoming (PENDING | CONFIRMED | RESCHEDULED, future) and Past (COMPLETED | CANCELLED | NO_SHOW)
+ *   - "Book Appointment" button opens BookAppointmentModal (6-step progressive disclosure)
+ *   - Appointment cards show service name, dentist, date/time, and a status chip
+ *   - Cancel button is only shown for PENDING appointments — patients cannot cancel CONFIRMED ones
+ *   - Cancellation goes through CancelScheduleModal for confirmation before calling
+ *     PATCH /api/schedules/[id] with { status: 'CANCELLED' }
+ *   - Page re-fetches after booking or cancellation to reflect the latest state
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
