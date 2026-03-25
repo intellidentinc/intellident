@@ -15,6 +15,9 @@ function validate(form) {
   if (!form.lastName.trim()) errs.lastName = 'Last name is required'
   if (!form.email.trim()) errs.email = 'Email is required'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Invalid email format'
+  if (form.phone.trim() && !/^\+63\d{10}$/.test(form.phone.trim())) {
+    errs.phone = 'Mobile must be +63XXXXXXXXXX (10 digits after +63)'
+  }
   return errs
 }
 
@@ -23,7 +26,7 @@ export default function ProfilePage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '' })
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '+63', address: '', dateOfBirth: '' })
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
@@ -33,7 +36,10 @@ export default function ProfilePage() {
         setForm({
           firstName: data.firstName ?? '',
           lastName: data.lastName ?? '',
-          email: data.email ?? ''
+          email: data.email ?? '',
+          phone: data.phone ?? '+63',
+          address: data.address ?? '',
+          dateOfBirth: data.dateOfBirth ?? ''
         })
       })
       .catch(() => showToast('Failed to load profile', 'error'))
@@ -42,7 +48,10 @@ export default function ProfilePage() {
 
   function handleChange(field) {
     return (e) => {
-      setForm((prev) => ({ ...prev, [field]: e.target.value }))
+      let value = e.target.value
+      // Prevent removing the +63 prefix on phone
+      if (field === 'phone' && !value.startsWith('+63')) value = '+63' + value.replace(/^\+63/, '')
+      setForm((prev) => ({ ...prev, [field]: value }))
       setErrors((prev) => ({ ...prev, [field]: '' }))
     }
   }
@@ -132,6 +141,30 @@ export default function ProfilePage() {
               error={!!errors.email}
               helperText={errors.email}
               required
+            />
+            <Input
+              id='phone'
+              label='Mobile Number'
+              value={form.phone}
+              onChange={handleChange('phone')}
+              placeholder='+639XXXXXXXXX'
+              error={!!errors.phone}
+              helperText={errors.phone}
+            />
+            <Input
+              id='address'
+              label='Address'
+              value={form.address}
+              onChange={handleChange('address')}
+              placeholder='e.g. 123 Rizal St, Manila'
+            />
+            <Input
+              id='date-of-birth'
+              label='Birthdate'
+              type='date'
+              value={form.dateOfBirth}
+              onChange={handleChange('dateOfBirth')}
+              slotProps={{ htmlInput: { max: new Date().toISOString().split('T')[0] } }}
             />
             <Box sx={{ pt: 1 }}>
               <Button variant='contained' loading={saving} onClick={handleSave}>

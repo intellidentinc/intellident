@@ -156,9 +156,11 @@ model EmailVerification {
 model User {
   id         String    @id @default(cuid())
   email      String    @unique
-  firstName  String?
-  lastName   String?
-  phone      String?
+  firstName   String?
+  lastName    String?
+  phone       String?
+  address     String?
+  dateOfBirth DateTime?
   password        String
   passwordHistory String[] @default([])
   role            UserRole  @default(PATIENT)
