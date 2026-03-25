@@ -46,7 +46,7 @@ function FieldLabel({ children, required }) {
   )
 }
 
-export default function CreateAppointmentModal({ open, onClose, onSuccess }) {
+export default function CreateAppointmentModal({ open, defaultScheduledAt, onClose, onSuccess }) {
   const { showToast } = useToast()
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
@@ -64,7 +64,12 @@ export default function CreateAppointmentModal({ open, onClose, onSuccess }) {
 
   useEffect(() => {
     if (!open) return
-    setForm(EMPTY_FORM)
+    const defaultDayjs = defaultScheduledAt ? dayjs(defaultScheduledAt) : null
+    setForm({
+      ...EMPTY_FORM,
+      date: defaultDayjs,
+      time: defaultDayjs,
+    })
     setErrors({})
     setConflict(null)
     setPatientQuery('')

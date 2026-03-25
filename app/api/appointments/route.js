@@ -18,11 +18,14 @@ export async function GET(request) {
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
-  const page     = parseInt(searchParams.get('page') ?? '0', 10)
-  const pageSize = parseInt(searchParams.get('pageSize') ?? '10', 10)
+  const page      = parseInt(searchParams.get('page') ?? '0', 10)
+  const pageSize  = parseInt(searchParams.get('pageSize') ?? '10', 10)
   const sortField = searchParams.get('sortField') ?? 'scheduledAt'
   const sortOrder = searchParams.get('sortOrder') ?? 'desc'
   const status    = searchParams.get('status')
+  const dentistId = searchParams.get('dentistId')
+  const serviceId = searchParams.get('serviceId')
+  const search    = searchParams.get('search')?.trim()
 
   const VALID_SORT = ['scheduledAt', 'createdAt']
   const field = VALID_SORT.includes(sortField) ? sortField : 'scheduledAt'
@@ -31,7 +34,18 @@ export async function GET(request) {
   const where = {
     clinicId: caller.clinicId,
     isDeleted: false,
-    ...(status ? { status } : {}),
+    ...(status    ? { status }              : {}),
+    ...(dentistId ? { dentistId }           : {}),
+    ...(serviceId ? { serviceId }           : {}),
+    ...(search
+      ? {
+          OR: [
+            { appointmentCode: { contains: search, mode: 'insensitive' } },
+            { patient: { firstName: { contains: search, mode: 'insensitive' } } },
+            { patient: { lastName:  { contains: search, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
   }
 
   const [appointments, total] = await Promise.all([
