@@ -56,6 +56,9 @@ enum NotificationType {
   APPOINTMENT_CANCELLED
   APPOINTMENT_COMPLETED
   APPOINTMENT_NO_SHOW
+  APPOINTMENT_RESCHEDULED
+  REMINDER_24H
+  REMINDER_2H
 }
 
 enum AuditAction {
@@ -294,6 +297,8 @@ model Appointment {
   status          AppointmentStatus @default(PENDING)
   notes           String?
   aiSuggested     Boolean           @default(false)
+  reminderSent24h Boolean           @default(false)
+  reminderSent2h  Boolean           @default(false)
   isDeleted       Boolean           @default(false)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt

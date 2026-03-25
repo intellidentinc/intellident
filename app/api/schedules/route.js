@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { notifyStaff } from '@/lib/notifications'
+import { notifyStaffBooking } from '@/lib/notifications'
 
 async function getPatientCaller() {
   const session = await getSession()
@@ -170,13 +170,13 @@ export async function POST(request) {
     select: { firstName: true, lastName: true },
   })
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'A patient'
-  const scheduledStr = apptDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
-  await notifyStaff({
+  await notifyStaffBooking({
     clinicId: caller.clinicId,
-    type: 'BOOKING_REQUEST',
-    title: 'New Booking Request',
-    body: `${patientName} requested a ${service.name} on ${scheduledStr}.`,
     appointmentId: appointment.id,
+    patientName,
+    serviceName: service.name,
+    scheduledAt: apptDate,
+    appointmentCode,
   })
 
   return NextResponse.json({ appointment }, { status: 201 })

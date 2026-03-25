@@ -10,7 +10,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import CloseIcon from '@mui/icons-material/Close'
 import DoneAllIcon from '@mui/icons-material/DoneAll'
 import {
-  CalendarDays, CheckCircle, XCircle, CheckCircle2, AlertCircle, Bell,
+  CalendarDays, CheckCircle, XCircle, CheckCircle2, AlertCircle, Bell, Clock, RefreshCw,
 } from 'lucide-react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -47,6 +47,24 @@ const TYPE_CONFIG = {
     color: '#475569',
     bg: '#f1f5f9',
     label: 'Patient No-show',
+  },
+  APPOINTMENT_RESCHEDULED: {
+    icon: RefreshCw,
+    color: '#7c3aed',
+    bg: '#ede9fe',
+    label: 'Appointment Rescheduled',
+  },
+  REMINDER_24H: {
+    icon: Clock,
+    color: '#0891b2',
+    bg: '#e0f2fe',
+    label: 'Appointment Tomorrow',
+  },
+  REMINDER_2H: {
+    icon: Clock,
+    color: '#0891b2',
+    bg: '#e0f2fe',
+    label: 'Appointment in 2 Hours',
   },
 }
 

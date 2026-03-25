@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { notifyPatientStatusChange } from '@/lib/notifications'
 
 async function getCaller() {
   const session = await getSession()
@@ -173,10 +174,30 @@ export async function POST(request) {
       },
     },
     include: {
-      patient: { select: { firstName: true, lastName: true } },
+      patient: {
+        include: { user: { select: { id: true, email: true, firstName: true } } },
+      },
       service: { select: { name: true } },
     },
   })
+
+  // If created directly as CONFIRMED, notify the patient
+  if (initialStatus === 'CONFIRMED') {
+    const patientUser = appointment.patient?.user
+    if (patientUser?.id) {
+      await notifyPatientStatusChange({
+        userId: patientUser.id,
+        clinicId: caller.clinicId,
+        appointmentId: appointment.id,
+        status: 'CONFIRMED',
+        patientEmail: patientUser.email,
+        patientFirstName: patientUser.firstName,
+        serviceName: appointment.service?.name ?? 'your appointment',
+        scheduledAt: apptDate,
+        appointmentCode,
+      }).catch(() => {})
+    }
+  }
 
   return NextResponse.json({ appointment }, { status: 201 })
 }
