@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaffBooking } from '@/lib/notifications'
+import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
 
 async function getPatientCaller() {
   const session = await getSession()
@@ -93,11 +99,12 @@ export async function POST(request) {
     return NextResponse.json({ error: 'This date is a clinic closure' }, { status: 400 })
   }
 
-  // Validate operating hours
+  // Validate operating hours (PHT = Asia/Manila)
   if (schedule) {
     const [openH, openM]   = schedule.openTime.split(':').map(Number)
     const [closeH, closeM] = schedule.closeTime.split(':').map(Number)
-    const apptMin  = apptDate.getHours() * 60 + apptDate.getMinutes()
+    const apptPHT  = dayjs(apptDate).tz('Asia/Manila')
+    const apptMin  = apptPHT.hour() * 60 + apptPHT.minute()
     const openMin  = openH * 60 + openM
     const closeMin = closeH * 60 + closeM
     if (apptMin < openMin || apptMin >= closeMin) {
