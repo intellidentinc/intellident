@@ -72,6 +72,7 @@ enum ConsentStatus {
 model Clinic {
   id        String    @id @default(cuid())
   name      String
+  code      String?
   address   String?
   phone     String?
   landline  String?
@@ -175,11 +176,12 @@ model User {
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
 
-  clinic       Clinic?       @relation(fields: [clinicId], references: [id])
-  patient      Patient?
-  receptionist Receptionist?
-  dentist      Dentist?
-  auditLogs    AuditLog[]
+  clinic                  Clinic?                    @relation(fields: [clinicId], references: [id])
+  patient                 Patient?
+  receptionist            Receptionist?
+  dentist                 Dentist?
+  auditLogs               AuditLog[]
+  appointmentStatusChanges AppointmentStatusHistory[]
 
   @@index([email])
   @@index([clinicId])
@@ -190,6 +192,7 @@ model Patient {
   id              String        @id @default(cuid())
   userId          String        @unique
   clinicId        String
+  patientCode     String?       @unique
   firstName       String
   lastName        String
   dateOfBirth     DateTime?
@@ -271,33 +274,50 @@ model Service {
 }
 
 model Appointment {
-  id          String            @id @default(cuid())
-  clinicId    String
-  patientId   String
-  dentistId   String
-  serviceId   String
-  scheduledAt DateTime
-  endsAt      DateTime
-  status      AppointmentStatus @default(PENDING)
-  notes       String?
-  aiSuggested Boolean           @default(false)
-  isDeleted   Boolean           @default(false)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  deletedAt   DateTime?
+  id              String            @id @default(cuid())
+  clinicId        String
+  patientId       String
+  dentistId       String?
+  serviceId       String
+  appointmentCode String?           @unique
+  scheduledAt     DateTime
+  endsAt          DateTime
+  status          AppointmentStatus @default(PENDING)
+  notes           String?
+  aiSuggested     Boolean           @default(false)
+  isDeleted       Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
 
-  clinic        Clinic         @relation(fields: [clinicId], references: [id])
-  patient       Patient        @relation(fields: [patientId], references: [id])
-  dentist       Dentist        @relation(fields: [dentistId], references: [id])
-  service       Service        @relation(fields: [serviceId], references: [id])
+  clinic        Clinic                       @relation(fields: [clinicId], references: [id])
+  patient       Patient                      @relation(fields: [patientId], references: [id])
+  dentist       Dentist?                     @relation(fields: [dentistId], references: [id])
+  service       Service                      @relation(fields: [serviceId], references: [id])
   billing       Billing?
   notifications Notification[]
+  statusHistory AppointmentStatusHistory[]
 
   @@index([clinicId])
   @@index([patientId])
   @@index([dentistId])
   @@index([scheduledAt])
   @@map("appointments")
+}
+
+model AppointmentStatusHistory {
+  id            String            @id @default(cuid())
+  appointmentId String
+  status        AppointmentStatus
+  changedById   String?
+  changedAt     DateTime          @default(now())
+  note          String?
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  changedBy   User?       @relation(fields: [changedById], references: [id])
+
+  @@index([appointmentId])
+  @@map("appointment_status_history")
 }
 
 model PatientRecord {

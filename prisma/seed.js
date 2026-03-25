@@ -47,9 +47,9 @@ async function generateKeyMaterial(password) {
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 
 const clinics = [
-  { name: 'Maria Laura Cruz Dental Clinic', address: 'Quezon City' },
-  { name: 'KH Dental Aesthetics',           address: 'Makati City' },
-  { name: 'Cabasal Dental Clinic',          address: 'Pasig City' },
+  { name: 'Maria Laura Cruz Dental Clinic', address: 'Quezon City', code: 'MLC' },
+  { name: 'KH Dental Aesthetics',           address: 'Makati City', code: 'KH'  },
+  { name: 'Cabasal Dental Clinic',          address: 'Pasig City',  code: 'CAB' },
 ];
 
 const PASSWORD = '12345678';
@@ -76,7 +76,8 @@ async function main() {
       record = await prisma.clinic.create({ data: clinic });
       console.log(`Clinic created: ${record.name}`);
     } else {
-      console.log(`Clinic exists:  ${record.name}`);
+      record = await prisma.clinic.update({ where: { id: record.id }, data: { code: clinic.code } });
+      console.log(`Clinic exists:  ${record.name} (code: ${record.code})`);
     }
     clinicRecords.push(record);
   }
@@ -89,13 +90,35 @@ async function main() {
     for (const u of users) {
       const existing = await prisma.user.findUnique({ where: { email: u.email } });
       if (existing) {
+        // Backfill missing profile records for pre-existing seed users
+        if (u.role === 'PATIENT') {
+          const hasProfile = await prisma.patient.findUnique({ where: { userId: existing.id } });
+          if (!hasProfile) {
+            await prisma.patient.create({
+              data: { userId: existing.id, clinicId: clinic.id, firstName: existing.firstName ?? u.firstName, lastName: existing.lastName ?? u.lastName },
+            });
+            console.log(`  Backfilled Patient profile: ${u.email}`);
+          }
+        } else if (u.role === 'DENTIST') {
+          const hasProfile = await prisma.dentist.findUnique({ where: { userId: existing.id } });
+          if (!hasProfile) {
+            await prisma.dentist.create({ data: { userId: existing.id, clinicId: clinic.id } });
+            console.log(`  Backfilled Dentist profile: ${u.email}`);
+          }
+        } else if (u.role === 'RECEPTIONIST') {
+          const hasProfile = await prisma.receptionist.findUnique({ where: { userId: existing.id } });
+          if (!hasProfile) {
+            await prisma.receptionist.create({ data: { userId: existing.id, clinicId: clinic.id } });
+            console.log(`  Backfilled Receptionist profile: ${u.email}`);
+          }
+        }
         console.log(`  Skip (exists): ${u.email}`);
         continue;
       }
 
       const { wrappedKey, keySalt } = await generateKeyMaterial(PASSWORD);
 
-      await prisma.user.create({
+      const createdUser = await prisma.user.create({
         data: {
           email:      u.email,
           firstName:  u.firstName,
@@ -107,6 +130,32 @@ async function main() {
           keySalt,
         },
       });
+
+      // Create profile records for role-specific models
+      if (u.role === 'PATIENT') {
+        await prisma.patient.create({
+          data: {
+            userId:    createdUser.id,
+            clinicId:  clinic.id,
+            firstName: u.firstName,
+            lastName:  u.lastName,
+          },
+        });
+      } else if (u.role === 'DENTIST') {
+        await prisma.dentist.create({
+          data: {
+            userId:   createdUser.id,
+            clinicId: clinic.id,
+          },
+        });
+      } else if (u.role === 'RECEPTIONIST') {
+        await prisma.receptionist.create({
+          data: {
+            userId:   createdUser.id,
+            clinicId: clinic.id,
+          },
+        });
+      }
 
       console.log(`  Created [${u.role}]: ${u.email}`);
     }
