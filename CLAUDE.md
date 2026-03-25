@@ -18,6 +18,7 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | Language | JavaScript (JSX) |
 | UI Library | MUI v7 (system pages) + Tailwind CSS (landing page only) |
 | Date Picker | `@mui/x-date-pickers` v8 + `dayjs` adapter |
+| Calendar | `react-big-calendar` + `dayjsLocalizer` |
 | Database ORM | Prisma + PostgreSQL (Neon) |
 | Auth | Custom session-based (cookies via `lib/auth.js`) |
 | Encryption | Web Crypto API — AES-GCM E2EE, PBKDF2 key derivation |
@@ -35,9 +36,11 @@ app/
 │   ├── layout.jsx            # Mounts ThemeRegistry, CryptoProvider, ToastProvider, InactivityProvider
 │   ├── page.jsx              # Landing page (Tailwind only)
 │   ├── [clinicId]/           # Authenticated clinic-scoped routes
-│   │   ├── layout.jsx        # Session + clinic guard; fetches role + clinic name/logo for sidebar
+│   │   ├── layout.jsx        # Session + clinic guard; fetches role, clinic name/logo, pendingCount for sidebar
 │   │   ├── dashboard/page.jsx
-│   │   ├── appointments/page.jsx
+│   │   ├── appointments/page.jsx   # RECEPTIONIST + ADMIN
+│   │   ├── schedule/page.jsx       # DENTIST — their own calendar
+│   │   ├── schedules/page.jsx      # PATIENT — book + view own appointments
 │   │   ├── patients/page.jsx
 │   │   ├── services/page.jsx
 │   │   ├── users/page.jsx
@@ -52,6 +55,8 @@ app/
 │   ├── services/             # GET + POST (ADMIN); [id]/ PATCH + DELETE; dentists/ GET
 │   ├── profile/              # GET + PATCH (any authenticated user)
 │   ├── appointments/         # See Appointments API section below
+│   ├── schedules/            # Patient-facing booking API (PATIENT role); [id]/ PATCH cancel; slots/ GET
+│   ├── schedule/             # Dentist's own schedule API (DENTIST role only)
 │   └── clinics/
 │       ├── schedule/         # GET session-based (any role) — for appointment form
 │       ├── closures/         # GET session-based (any role) — for appointment form
@@ -67,8 +72,10 @@ app/
 │   ├── forgot-password-page/
 │   ├── reset-password-page/
 │   ├── change-password-page/
-│   ├── dashboard-page/       # AppSidebar, DashboardPage, SignOutButton
-│   ├── appointments-page/    # AppointmentsPage, CreateAppointmentModal, AppointmentDetailModal, CancelAppointmentModal
+│   ├── dashboard-page/       # AppSidebar (with pendingCount badge), DashboardPage (role-aware), SignOutButton
+│   ├── appointments-page/    # AppointmentsPage, AppointmentCalendar, CreateAppointmentModal, AppointmentDetailModal, CancelAppointmentModal
+│   ├── schedules-page/       # SchedulesPage (patient), BookAppointmentModal, CancelScheduleModal
+│   ├── schedule-page/        # SchedulePage (dentist), ScheduleEventModal
 │   ├── patients-page/        # PatientsPage, AddPatientModal, EditPatientModal, DeletePatientModal
 │   ├── services-page/        # ServicesPage, ServiceFormModal, DeleteServiceModal
 │   ├── rbac-page/            # RbacPage, AddUserModal, EditRoleModal, DeleteUserModal
@@ -221,12 +228,13 @@ Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUn
 
 | Role | Sidebar Access |
 |---|---|
-| `PATIENT` | Dashboard, Appointments, Reminders, My Profile |
-| `RECEPTIONIST` | Dashboard, Appointments, Patients, Reminders, Billing |
-| `DENTIST` | Dashboard, Schedule, Patient Records |
-| `ADMIN` | Dashboard, Users, Services, Schedules, Billing, Settings, Audit Log |
+| `PATIENT` | Dashboard, My Schedules (`/schedules`), Reminders, My Profile |
+| `RECEPTIONIST` | Dashboard, Appointments (`/appointments`), Patients, Reminders, Billing |
+| `DENTIST` | Dashboard, Schedule (`/schedule`), Patient Records, My Profile |
+| `ADMIN` | Dashboard, Users, Services, Schedules (`/appointments`), Billing, Settings, Audit Log |
 
 - Sidebar nav is built per-role in `buildNavGroups()` inside `AppSidebar.jsx`
+- `AppSidebar` receives `pendingCount` prop from `layout.jsx` (server-fetched); renders a blue badge on Appointments/Schedules nav item for RECEPTIONIST and ADMIN when count > 0
 - Role changes and account deletions applied to the currently logged-in user immediately clear their session and redirect to sign-in
 
 ### Multi-Tenancy
@@ -255,9 +263,11 @@ All data is scoped to a `ClinicID`. Every DB query must include a clinic scope f
 RECEPTIONIST + ADMIN access.
 
 ### Workflow
-- **Receptionist/Admin creates appointments** for walk-ins and phone bookings
-- Patient self-booking (online requests) is **not yet built**
-- Status transitions are one-way — terminal statuses cannot be changed
+1. **Patient self-booking** — patient logs in → My Schedules → Book Appointment → selects service, dentist preference, date, time slot → submitted as `PENDING`
+2. **Receptionist/Admin** — sees all appointments in calendar or list view; PENDING bookings from patients show with a badge on the sidebar and a "Booking Requests" quick-filter button on the appointments page
+3. **Receptionist confirms** — opens appointment detail, transitions PENDING → CONFIRMED
+4. **Day of appointment** — CONFIRMED → COMPLETED (or NO_SHOW if patient doesn't show)
+5. **Cancellation** — any non-terminal status can be cancelled via the Cancel modal
 
 ### Status Transition Rules
 | From → To | Allowed |
@@ -275,17 +285,27 @@ Format: `APT-{clinic.code}-{YYYY/MM/DD}-{####}`
 - Sequential counter per clinic per date (zero-padded to 4 digits)
 - Requires `Clinic.code` to be set (MLC, KH, CAB — set via seed)
 
+### Calendar Views
+`AppointmentCalendar.jsx` wraps `react-big-calendar` with `dayjsLocalizer`:
+- Supported views: `day`, `week`, `month` (+ `list` as a separate MUI table)
+- `'& .rbc-*'` CSS overrides applied via MUI `sx` prop — no global CSS conflicts
+- Custom `EventComponent` shows patient name + service
+- `eventPropGetter` applies status-based `border-left` colors
+- `toolbar={false}` — AppointmentsPage has its own custom toolbar
+- Click empty slot → `onSelectSlot` → opens CreateAppointmentModal pre-filled with that date/time via `defaultScheduledAt` prop
+
 ### Appointments API Routes
 
 | Route | Method | Role | Purpose |
 |---|---|---|---|
-| `/api/appointments` | GET | RECEPTIONIST, ADMIN | Paginated list; params: `page`, `pageSize`, `sortField`, `sortOrder`, `status` |
+| `/api/appointments` | GET | RECEPTIONIST, ADMIN | Paginated list; params: `page`, `pageSize`, `sortField`, `sortOrder`, `status`, `dentistId`, `serviceId`, `search` |
 | `/api/appointments` | POST | RECEPTIONIST, ADMIN | Create appointment with full validation |
-| `/api/appointments/[id]` | GET | RECEPTIONIST, ADMIN | Detail + status history |
+| `/api/appointments/calendar` | GET | RECEPTIONIST, ADMIN | All appointments in a date range (no pagination); params: `from`, `to` (ISO) |
+| `/api/appointments/[id]` | GET | RECEPTIONIST, ADMIN | Detail + statusHistory with changedBy user |
 | `/api/appointments/[id]` | PATCH | RECEPTIONIST, ADMIN | Status transition; body: `{ status, note? }` |
 | `/api/appointments/patients` | GET | RECEPTIONIST, ADMIN | Patient search autocomplete; param: `q` |
-| `/api/appointments/services` | GET | RECEPTIONIST, ADMIN | Services list for form |
-| `/api/appointments/dentists` | GET | RECEPTIONIST, ADMIN | Dentists for a service; param: `serviceId` — only returns dentists assigned to that service |
+| `/api/appointments/services` | GET | RECEPTIONIST, ADMIN, **PATIENT** | Services list for appointment form |
+| `/api/appointments/dentists` | GET | RECEPTIONIST, ADMIN, **PATIENT** | Dentists for a service; param: `serviceId` |
 | `/api/appointments/slots/check` | GET | RECEPTIONIST, ADMIN | Real-time conflict check; params: `dentistId`, `scheduledAt`, `serviceId`, `excludeAppointmentId?` |
 
 ### Server-side Validation on POST
@@ -302,11 +322,107 @@ Format: `APT-{clinic.code}-{YYYY/MM/DD}-{####}`
 - **Time picker** restricts to clinic open/close hours
 - Conflict warning shows inline when a dentist is double-booked
 - DatePicker/TimePicker require `LocalizationProvider` + `AdapterDayjs` — wrapped inside the modal component itself
+- `defaultScheduledAt` prop on `CreateAppointmentModal` pre-fills date and time when clicking a calendar slot
+
+### Pending Bookings Badge
+- `[clinicId]/layout.jsx` (server component) counts PENDING appointments for RECEPTIONIST/ADMIN roles on every page load
+- Passed as `pendingCount` prop to `AppSidebar`
+- Sidebar renders a blue pill badge on the Appointments nav item when `pendingCount > 0`
+- On the Appointments page, a "Booking Requests" button under the title quick-filters to PENDING + switches to List view
 
 ### Session-based Clinic Endpoints (any authenticated role)
-- `GET /api/clinics/schedule` — returns current clinic's schedule (used by appointment form)
-- `GET /api/clinics/closures` — returns current clinic's closure dates (used by appointment form)
+- `GET /api/clinics/schedule` — returns current clinic's schedule (working days, open/close time)
+- `GET /api/clinics/closures` — returns current clinic's closure dates
 - These are separate from the ADMIN-only `GET /api/clinics/[id]/schedule` endpoints
+
+---
+
+## Patient Schedules Module (`/[clinicId]/schedules`)
+
+PATIENT role only.
+
+### Workflow
+1. Patient opens My Schedules — sees Upcoming / Past tabs with appointment cards
+2. Clicks "Book Appointment" → `BookAppointmentModal` progressive disclosure:
+   - Step 1: Service cards (visual selection)
+   - Step 2: Dentist preference chips (Any Available or specific)
+   - Step 3: `DatePicker` — disables non-working days and closure dates
+   - Step 4: Time slot chips grouped by Morning / Afternoon — fetched from `/api/schedules/slots`
+   - Step 5: Optional notes
+   - Step 6: Booking summary card before submit
+3. Submit → `POST /api/schedules` → creates appointment as `PENDING`
+4. Patient can cancel own PENDING appointments from the card
+5. Receptionist then sees it in their Appointments page (pending badge triggers)
+
+### Patient Schedules API Routes
+
+| Route | Method | Role | Purpose |
+|---|---|---|---|
+| `/api/schedules` | GET | PATIENT | Own appointments; param: `tab=upcoming\|past` |
+| `/api/schedules` | POST | PATIENT | Book appointment (always creates as PENDING) |
+| `/api/schedules/[id]` | PATCH | PATIENT | Cancel own PENDING appointment only |
+| `/api/schedules/slots` | GET | PATIENT | Available 30-min time slots for a date/service/dentist |
+
+### Slot Generation (`/api/schedules/slots`)
+- Params: `date`, `serviceId`, `dentistId` (or `ANY`)
+- Validates working day + not closure
+- Generates slots every 30 min: `openTime` to `closeTime - serviceDuration`
+- Filters past slots if date = today (30-min buffer from now)
+- Specific dentist: conflict-checks each slot against existing non-cancelled appointments
+- `ANY` dentist: returns all open slots (no conflict check — receptionist assigns on confirmation)
+
+### Zero Trust in Patient Routes
+- `getPatientCaller()` verifies `patient.clinicId === user.clinicId`
+- Appointment PATCH verifies `appointment.clinicId === caller.clinicId` AND `appointment.patientId === caller.patient.id`
+- POST verifies `dentistId` belongs to `caller.clinicId` before using it
+- All queries include `clinicId` scope
+
+---
+
+## Dentist Schedule Module (`/[clinicId]/schedule`)
+
+DENTIST role only.
+
+### Features
+- Day / Week calendar view (no month or list — not relevant for a dentist's daily workflow)
+- Today's stat chips: confirmed count + pending count for the current calendar view
+- Status color legend
+- Click any appointment event → `ScheduleEventModal` (read-only: patient, service, time, notes, status)
+- No create/edit capabilities — read-only view
+
+### Dentist Schedule API
+- `GET /api/schedule?from=&to=` — DENTIST role only
+- Looks up `Dentist` profile by `userId`, verifies `dentist.clinicId === user.clinicId`
+- Returns only appointments where `dentistId = dentist.id` for the given range
+- Includes patient name/patientCode + service name/duration
+
+---
+
+## Dashboard (Role-Aware)
+
+`DashboardPage.jsx` is a server component. All DB queries run server-side — no client-side fetch. Each role sees a different dashboard:
+
+| Role | Dashboard Content |
+|---|---|
+| `PATIENT` | Next appointment card + status chip, stat chips (Upcoming / Completed / Cancelled), "Book Appointment" CTA |
+| `RECEPTIONIST` | Stat cards (pending bookings, today's appointments, confirmed upcoming, total patients) + amber alert CTA if pending > 0 + recent appointments list |
+| `ADMIN` | Stat cards (total users, patients, services, appointments this month, pending bookings) + amber alert CTA if pending > 0 + recent appointments list |
+| `DENTIST` | Stat cards (today's appointments, upcoming this week, my patients) + next appointment card + quick links to Schedule and Records |
+
+All dashboard queries include `clinicId` scope (zero trust). StatCards with `href` are clickable and navigate to the relevant section.
+
+---
+
+## Dentist Patient Records (`/[clinicId]/records`)
+
+DENTIST role only.
+
+- Shows all patients who have at least one CONFIRMED or COMPLETED appointment with the logged-in dentist
+- Paginated table with search (name, patientCode)
+- Columns: Patient ID, Name, Last Service, Last Visit, Status, Total Visits
+- API: `GET /api/records?page=&pageSize=&search=`
+- Query: `Patient.findMany` filtered by `appointments.some { dentistId, status IN [CONFIRMED, COMPLETED] }`
+- Zero trust: looks up `Dentist` profile by `userId`, verifies `dentist.clinicId === user.clinicId`
 
 ---
 
@@ -352,18 +468,23 @@ Logo is stored in Supabase bucket `clinic-logos` at path `{clinicId}/{timestamp}
   - [x] Create / edit / delete dental services
   - [x] Duration, price, buffer time per service
   - [x] Assign dentists to services
-- [x] Appointment Scheduling — Receptionist/Admin side
-  - [x] Create appointment (patient, service, dentist or "Any Available", date/time, notes, status)
-  - [x] Paginated appointment list with status filter chips
-  - [x] Status transitions with full history timeline
-  - [x] Cancel appointment with optional reason
-  - [x] Conflict detection (double-booking prevention)
-  - [x] Operating hours + closure date enforcement
-  - [x] Auto-generated appointment reference codes (`APT-{CODE}-{DATE}-{####}`)
-  - [ ] Patient self-booking (patient logs in and requests appointment → PENDING)
-  - [ ] Receptionist pending-requests queue (for patient-submitted bookings)
+- [x] Appointment Scheduling
+  - [x] Receptionist/Admin: create appointment (patient, service, dentist or "Any Available", date/time, notes, status)
+  - [x] Receptionist/Admin: calendar views (Day / Week / Month) + List view
+  - [x] Receptionist/Admin: filters (dentist, service, status) + search (patient name, appt ID)
+  - [x] Receptionist/Admin: status transitions with full history timeline
+  - [x] Receptionist/Admin: cancel appointment with optional reason
+  - [x] Receptionist/Admin: conflict detection (double-booking prevention)
+  - [x] Receptionist/Admin: operating hours + closure date enforcement
+  - [x] Receptionist/Admin: auto-generated appointment reference codes (`APT-{CODE}-{DATE}-{####}`)
+  - [x] Receptionist/Admin: pending booking badge on sidebar + "Booking Requests" quick-filter
+  - [x] Patient: self-booking via My Schedules (service → dentist preference → date → time slots → notes → confirm)
+  - [x] Patient: view own upcoming + past appointments
+  - [x] Patient: cancel own PENDING appointments
+  - [x] Dentist: read-only calendar of own appointments (Day / Week view)
+  - [x] Dentist: patient records page (patients with CONFIRMED or COMPLETED appointment with them)
   - [ ] AI slot suggestions (GPT-5)
-  - [ ] Rescheduling flow
+  - [ ] Rescheduling flow (RESCHEDULED status exists but no UI yet)
 - [ ] Virtual Assistant / Chatbot
 - [ ] Patient Record Management
 - [ ] Billing & Payment Tracking
@@ -419,6 +540,20 @@ import dayjs from 'dayjs'
 </LocalizationProvider>
 ```
 
+### react-big-calendar
+```jsx
+import 'react-big-calendar/lib/css/react-big-calendar.css'
+import { Calendar, dayjsLocalizer } from 'react-big-calendar'
+import dayjs from 'dayjs'
+
+const localizer = dayjsLocalizer(dayjs)
+
+// Override default styles via MUI sx (no global CSS conflicts):
+<Box sx={{ '& .rbc-toolbar': { display: 'none' }, '& .rbc-header': { ... } }}>
+  <Calendar localizer={localizer} toolbar={false} ... />
+</Box>
+```
+
 ### Server-side Search Autocomplete (MUI)
 Always set `filterOptions={(x) => x}` when results come from a server-side search to disable MUI's client-side filtering:
 ```jsx
@@ -452,7 +587,7 @@ Email pattern: `{role}.{clinicSlug}@intellident.test` (e.g. `admin.maria@intelli
 
 **Important:** The seed also backfills missing profile records for pre-existing users on re-run — safe to run multiple times.
 
-**Dentist assignment:** Seed dentists are NOT automatically assigned to services. After seeding, go to Services (as Admin) → edit each service → assign the relevant dentist. The dentist will then appear in the appointment creation form.
+**Dentist assignment:** Seed dentists are NOT automatically assigned to services. After seeding, go to Services (as Admin) → edit each service → assign the relevant dentist. The dentist will then appear in the appointment creation form and the patient booking time slot picker.
 
 ---
 

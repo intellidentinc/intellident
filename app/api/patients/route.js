@@ -38,6 +38,7 @@ export async function GET(request) {
         phone: true,
         email: true,
         createdAt: true,
+        patient: { select: { patientCode: true } },
       },
       orderBy: { [safeSortField]: safeSortOrder },
       skip: page * pageSize,
@@ -53,6 +54,7 @@ export async function GET(request) {
     phone: u.phone,
     email: u.email,
     createdAt: u.createdAt,
+    patientCode: u.patient?.patientCode ?? null,
   }))
 
   return NextResponse.json({ patients: result, total })
@@ -101,6 +103,14 @@ export async function POST(request) {
       },
     })
 
+    // Generate patientCode: PAT-{CLINICCODE}-{YYYY}-{#####}
+    const clinic = await tx.clinic.findUnique({ where: { id: caller.clinicId }, select: { code: true } })
+    const year = new Date().getFullYear()
+    const existingCount = await tx.patient.count({
+      where: { clinicId: caller.clinicId },
+    })
+    const patientCode = `PAT-${clinic?.code ?? 'CLN'}-${year}-${String(existingCount + 1).padStart(5, '0')}`
+
     const patient = await tx.patient.create({
       data: {
         userId: user.id,
@@ -108,6 +118,7 @@ export async function POST(request) {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone.trim(),
+        patientCode,
       },
     })
 

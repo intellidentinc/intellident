@@ -94,10 +94,20 @@ async function main() {
         if (u.role === 'PATIENT') {
           const hasProfile = await prisma.patient.findUnique({ where: { userId: existing.id } });
           if (!hasProfile) {
+            const year = new Date().getFullYear();
+            const count = await prisma.patient.count({ where: { clinicId: clinic.id } });
+            const patientCode = `PAT-${clinic.code ?? 'CLN'}-${year}-${String(count + 1).padStart(5, '0')}`;
             await prisma.patient.create({
-              data: { userId: existing.id, clinicId: clinic.id, firstName: existing.firstName ?? u.firstName, lastName: existing.lastName ?? u.lastName },
+              data: { userId: existing.id, clinicId: clinic.id, firstName: existing.firstName ?? u.firstName, lastName: existing.lastName ?? u.lastName, patientCode },
             });
-            console.log(`  Backfilled Patient profile: ${u.email}`);
+            console.log(`  Backfilled Patient profile: ${u.email} (${patientCode})`);
+          } else if (hasProfile && !hasProfile.patientCode) {
+            // Backfill missing patientCode on existing profile
+            const year = new Date().getFullYear();
+            const count = await prisma.patient.count({ where: { clinicId: clinic.id, patientCode: { not: null } } });
+            const patientCode = `PAT-${clinic.code ?? 'CLN'}-${year}-${String(count + 1).padStart(5, '0')}`;
+            await prisma.patient.update({ where: { id: hasProfile.id }, data: { patientCode } });
+            console.log(`  Backfilled patientCode: ${u.email} → ${patientCode}`);
           }
         } else if (u.role === 'DENTIST') {
           const hasProfile = await prisma.dentist.findUnique({ where: { userId: existing.id } });
@@ -133,14 +143,19 @@ async function main() {
 
       // Create profile records for role-specific models
       if (u.role === 'PATIENT') {
+        const year = new Date().getFullYear();
+        const count = await prisma.patient.count({ where: { clinicId: clinic.id } });
+        const patientCode = `PAT-${clinic.code ?? 'CLN'}-${year}-${String(count + 1).padStart(5, '0')}`;
         await prisma.patient.create({
           data: {
-            userId:    createdUser.id,
-            clinicId:  clinic.id,
-            firstName: u.firstName,
-            lastName:  u.lastName,
+            userId:      createdUser.id,
+            clinicId:    clinic.id,
+            firstName:   u.firstName,
+            lastName:    u.lastName,
+            patientCode,
           },
         });
+        console.log(`    patientCode: ${patientCode}`);
       } else if (u.role === 'DENTIST') {
         await prisma.dentist.create({
           data: {
