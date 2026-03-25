@@ -31,16 +31,31 @@ export async function GET(request) {
     }
 
     // Create the account now
-    const user = await prisma.user.create({
-      data: {
-        email: pending.email,
-        password: pending.password,
-        firstName: pending.firstName,
-        lastName: pending.lastName,
-        wrappedKey: pending.wrappedKey,
-        keySalt: pending.keySalt,
-        clinicId: pending.clinicId || null,
-      },
+    const user = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: pending.email,
+          password: pending.password,
+          firstName: pending.firstName,
+          lastName: pending.lastName,
+          wrappedKey: pending.wrappedKey,
+          keySalt: pending.keySalt,
+          clinicId: pending.clinicId || null,
+        },
+      });
+
+      if (newUser.clinicId) {
+        await tx.patient.create({
+          data: {
+            userId: newUser.id,
+            clinicId: newUser.clinicId,
+            firstName: newUser.firstName || '',
+            lastName: newUser.lastName || '',
+          },
+        });
+      }
+
+      return newUser;
     });
 
     // Clean up the pending record

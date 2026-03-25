@@ -45,6 +45,7 @@ export default function SignUpPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [clinicId, setClinicId] = useState('');
+  const [clinicError, setClinicError] = useState('');
   const [clinicOptions, setClinicOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -74,6 +75,12 @@ export default function SignUpPage() {
       return;
     }
 
+    if (!clinicId) {
+      setClinicError('Please select a clinic');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Generate key material client-side before sending anything to the server
       const salt = generateSalt();
@@ -85,7 +92,7 @@ export default function SignUpPage() {
       const response = await fetch('/api/auth/sign-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, firstName, lastName, wrappedKey, keySalt, clinicId: clinicId || null }),
+        body: JSON.stringify({ email, password, firstName, lastName, wrappedKey, keySalt, clinicId }),
       });
 
       const data = await response.json();
@@ -269,9 +276,11 @@ export default function SignUpPage() {
               id="clinicId"
               label="Clinic"
               value={clinicId}
-              onChange={(e) => setClinicId(e.target.value)}
+              onChange={(e) => { setClinicId(e.target.value); setClinicError(''); }}
               options={clinicOptions}
               placeholder="Select your clinic"
+              error={!!clinicError}
+              helperText={clinicError}
               required
             />
 

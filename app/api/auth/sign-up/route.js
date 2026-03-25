@@ -8,9 +8,9 @@ export async function POST(request) {
   try {
     const { email, password, firstName, lastName, wrappedKey, keySalt, clinicId } = await request.json();
 
-    if (!email || !password) {
+    if (!email || !password || !clinicId) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: 'Email, password, and clinic are required' },
         { status: 400 }
       );
     }
