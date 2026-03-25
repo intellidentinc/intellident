@@ -71,6 +71,12 @@ function buildNavGroups(role, clinicId) {
             { label: 'Patient Records', icon: FileText, href: p('/records') },
           ],
         },
+        {
+          label: 'Account',
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
+          ],
+        },
       ];
 
     case 'RECEPTIONIST':
@@ -88,6 +94,12 @@ function buildNavGroups(role, clinicId) {
           label: 'Billing',
           items: [
             { label: 'Billing', icon: CreditCard, href: p('/billing') },
+          ],
+        },
+        {
+          label: 'Account',
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
           ],
         },
       ];
@@ -114,6 +126,12 @@ function buildNavGroups(role, clinicId) {
           label: 'System',
           items: [
             { label: 'Audit Log', icon: ShieldCheck, href: p('/audit-log') },
+          ],
+        },
+        {
+          label: 'Account',
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
           ],
         },
       ];
