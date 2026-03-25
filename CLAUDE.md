@@ -54,6 +54,7 @@ app/
 │   └── sign-up/page.jsx
 ├── api/
 │   ├── auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password)
+│   │                         # Note: sign-up creates EmailVerification (not User); verify creates the User + profile
 │   ├── users/                # User list + PATCH role / DELETE (ADMIN only)
 │   ├── patients/             # GET (paginated) + POST (RECEPTIONIST); [id]/ PATCH + DELETE
 │   ├── services/             # GET + POST (ADMIN); [id]/ PATCH + DELETE; dentists/ GET
@@ -66,6 +67,7 @@ app/
 │   ├── cron/
 │   │   └── reminders/        # GET — Vercel cron job; sends 24h + 2h appointment reminders
 │   └── clinics/
+│       ├── route.js          # GET — public (unauthenticated); lists all clinics for sign-in/sign-up selector
 │       ├── schedule/         # GET session-based (any role) — for appointment form
 │       ├── closures/         # GET session-based (any role) — for appointment form
 │       └── [id]/
@@ -97,18 +99,23 @@ app/
 │   ├── CryptoProvider.jsx    # Holds master key in memory (useCrypto hook)
 │   └── InactivityProvider.jsx # Auto logout after 30 min inactivity
 components/
-└── commons/                  # Reusable MUI-based UI primitives
-    ├── theme.js              # Design tokens + MUI component overrides
-    ├── Button.jsx            # Custom button with loading state
-    ├── Input.jsx             # Label-above input field (no floating label); supports error + helperText
-    └── PageHeader.jsx        # Shared page header — SidebarTrigger + page title + NotificationBell
+├── commons/                  # Reusable MUI-based UI primitives
+│   ├── theme.js              # Design tokens + MUI component overrides
+│   ├── Button.jsx            # Custom button with loading state
+│   ├── Input.jsx             # Label-above input field (no floating label); supports error + helperText
+│   ├── Select.jsx            # Custom MUI select wrapper
+│   └── PageHeader.jsx        # Shared page header — SidebarTrigger + page title + NotificationBell
+└── ui/                       # shadcn/ui primitives (used by sidebar + layout)
+    ├── button.jsx, input.jsx, separator.jsx
+    ├── sheet.jsx, sidebar.jsx, skeleton.jsx, tooltip.jsx
 lib/
 ├── auth.js                   # Session helpers (getSession, setSession, clearSession)
 ├── prisma.js                 # Prisma client singleton
 ├── crypto.js                 # Web Crypto API helpers (E2EE)
 ├── supabase.js               # Supabase client (service role — server-side only)
 ├── notifications.js          # In-app + email notification helpers (see Notification System section)
-└── email.js                  # Mailjet email helpers (auth emails + all appointment notification emails)
+├── email.js                  # Mailjet email helpers (auth emails + all appointment notification emails)
+└── utils.js                  # cn() — clsx + tailwind-merge class name helper
 prisma/
 ├── schema.prisma
 └── seed.js                   # Seeds 3 clinics + 4 users per clinic (all roles) + profile records
@@ -235,6 +242,12 @@ Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUn
 - Configurable via env vars: `LOCKOUT_MAX_ATTEMPTS`, `LOCKOUT_WINDOW_MINUTES`, `LOCKOUT_DURATION_MINUTES`
 - Resets on successful login
 
+### Email Verification on Sign-Up
+- `POST /api/auth/sign-up` → validates input, generates E2EE key material client-side, stores everything in `EmailVerification` record (24h expiry). **Does NOT create a `User` yet.**
+- A verification email with a tokenized link is sent via Mailjet.
+- `POST /api/auth/verify` → validates token, creates `User` + profile record (`Patient` / `Dentist` / `Receptionist`). Token is single-use.
+- Model: `EmailVerification` (token, email, firstName, lastName, hashed password, wrappedKey, keySalt, clinicId, expiresAt)
+
 ### Password Reset & Change
 - **Forgot password:** `POST /api/auth/forgot-password` → generates one-time token (10 min expiry), sends reset link via email. Always returns 200 to prevent email enumeration.
 - **Reset password:** `POST /api/auth/reset-password` → validates token, enforces policy, checks history, generates fresh E2EE key material (old encrypted data is intentionally inaccessible), sends confirmation email.
@@ -264,18 +277,54 @@ All data is scoped to a `ClinicID`. Every DB query must include a clinic scope f
 
 ## Data Models (key)
 
-- `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`). Also holds `passwordHistory String[]`, `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`
-- `PasswordResetToken` — one-time reset tokens (email, token, expiresAt, usedAt)
+### Soft Delete Pattern
+All major models (`User`, `Patient`, `Dentist`, `Receptionist`, `Clinic`, `Service`, `Appointment`, `PatientRecord`, `Attachment`, `Billing`, `Payment`) have `isDeleted Boolean` + `deletedAt DateTime?` for audit-trail-preserving soft deletes. All queries filter `isDeleted: false`.
+
+### Auth & Pre-Registration
+- `EmailVerification` — pre-registration holding record created by sign-up; `User` is not created until email is verified. Fields: `token` (unique), `email`, `firstName`, `lastName`, `password` (hashed), `wrappedKey`, `keySalt`, `clinicId?`, `expiresAt` (24h), `createdAt`
+- `PasswordResetToken` — one-time reset tokens; fields: `token` (unique), `email`, `expiresAt` (10 min), `usedAt?`, `createdAt`
+- `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`). Also holds `passwordHistory String[]`, `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`, `address?`, `dateOfBirth?`
+
+### Clinic & Schedule
 - `Clinic` — multi-tenant root. Holds `name`, `code` (e.g. `MLC`, `KH`, `CAB`), `address`, `email`, `phone`, `landline`, `logoUrl`
 - `ClinicSchedule` — one per clinic; `workingDays String[]` (e.g. `["MON","TUE"]`), `openTime`, `closeTime` (HH:mm strings). Upserted via PATCH.
 - `ClinicClosure` — many per clinic; `date DateTime`, `reason String?` for holidays/maintenance
+
+### User Profiles
 - `Receptionist` — profile extension for `RECEPTIONIST` users (linked via `userId`)
 - `Dentist` — profile extension for `DENTIST` users; has `specialty`; linked to `Appointment` via `dentistId`; assigned to services via `ServiceDentists` join table
-- `Patient` — profile extension for `PATIENT` users; has `patientCode String?` for display reference IDs (format: `PAT-{CLINICCODE}-{YYYY}-{#####}`)
-- `Service` — dental services with `duration`, `price`, `bufferTime`; many-to-many with `Dentist` via `ServiceDentists`
-- `Appointment` — scheduling record; `appointmentCode String?` (e.g. `APT-MLC-2026/03/25-0001`); `dentistId` is **nullable** (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`; `reminderSent24h Boolean` + `reminderSent2h Boolean` (prevent duplicate cron reminders)
+- `Patient` — profile extension for `PATIENT` users; fields: `patientCode` (format: `PAT-{CLINICCODE}-{YYYY}-{#####}`), `dateOfBirth?`, `gender?` (Gender enum), `phone?`, `address?`, `consentStatus` (ConsentStatus enum, default `PENDING`), `consentGivenAt?`
+
+### Services & Appointments
+- `Service` — dental services; fields: `name`, `description?`, `duration`, `price?`, `bufferTime`; many-to-many with `Dentist` via `ServiceDentists`
+- `Appointment` — scheduling record; `appointmentCode` (e.g. `APT-MLC-2026/03/25-0001`); `dentistId` is **nullable** (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`; `reminderSent24h Boolean` + `reminderSent2h Boolean` (prevent duplicate cron reminders); `aiSuggested Boolean` (default false — reserved for future GPT-5 integration)
 - `AppointmentStatusHistory` — audit trail of every status transition; fields: `appointmentId`, `status`, `changedById`, `changedAt`, `note`
-- `InAppNotification` — in-app notifications; fields: `userId`, `clinicId`, `type` (`NotificationType`), `title`, `body`, `appointmentId?`, `isRead`, `createdAt`
+
+### Patient Records (schema built; CRUD API not yet implemented)
+- `PatientRecord` — E2EE encrypted clinical notes per patient; fields: `patientId`, `clinicId`, `title`, `encryptedData?`, `dataIv?`, `contentHash?` (SHA-256 hash for tamper detection — not yet wired to API), `status` (RecordStatus enum: `ACTIVE | ARCHIVED`)
+- `Attachment` — file references linked to a `PatientRecord`; fields: `recordId`, `fileName`, `fileUrl`, `mimeType`
+
+### Billing (schema built; API/UI not yet implemented)
+- `Billing` — invoice per appointment; fields: `clinicId`, `patientId`, `appointmentId` (unique), `amount`, `amountPaid`, `balance`, `status` (PaymentStatus enum: `UNPAID | PARTIAL | PAID | REFUNDED`), `receiptNumber` (unique)
+- `Payment` — individual payment entries linked to a `Billing`; fields: `billingId`, `amount`, `method?`, `notes?`, `paidAt`
+
+### Audit & Notifications
+- `AuditLog` — system-wide audit trail (schema built; query API/UI not yet implemented); fields: `userId?`, `clinicId?`, `action` (AuditAction enum), `entity`, `entityId?`, `ipAddress?`, `userAgent?`, `metadata` (Json)
+- `InAppNotification` — in-app bell notifications; fields: `userId`, `clinicId`, `type` (NotificationType), `title`, `body`, `appointmentId?`, `isRead`, `createdAt`
+- `Notification` — **legacy email queue model; not actively used.** System uses `InAppNotification` for bell + Mailjet fire-and-forget for email.
+
+### Enums
+
+```
+UserRole:         PATIENT | RECEPTIONIST | DENTIST | ADMIN
+Gender:           MALE | FEMALE | OTHER | PREFER_NOT_TO_SAY
+AppointmentStatus: PENDING | CONFIRMED | RESCHEDULED | CANCELLED | COMPLETED | NO_SHOW
+RecordStatus:     ACTIVE | ARCHIVED
+PaymentStatus:    UNPAID | PARTIAL | PAID | REFUNDED
+ConsentStatus:    PENDING | GIVEN | REVOKED
+NotificationStatus: PENDING | SENT | FAILED  (legacy Notification model only)
+AuditAction:      LOGIN | LOGOUT | CREATE | UPDATE | DELETE | VIEW | EXPORT | VERIFY
+```
 
 ### NotificationType Enum
 ```
@@ -426,6 +475,9 @@ Format: `APT-{clinic.code}-{YYYY/MM/DD}-{####}`
 - Passed as `pendingCount` prop to `AppSidebar`
 - Sidebar renders a blue pill badge on the Appointments nav item when `pendingCount > 0`
 - On the Appointments page, a "Booking Requests" button under the title quick-filters to PENDING + switches to List view
+
+### Public Clinic Endpoint (unauthenticated)
+- `GET /api/clinics` — returns list of all clinics (id, name, code); used by sign-in and sign-up pages to populate the clinic selector dropdown. No session required.
 
 ### Session-based Clinic Endpoints (any authenticated role)
 - `GET /api/clinics/schedule` — returns current clinic's schedule (working days, open/close time)
@@ -591,9 +643,19 @@ Logo is stored in Supabase bucket `clinic-logos` at path `{clinicId}/{timestamp}
   - [x] Mark-read (single + all) functionality
 - [ ] Virtual Assistant / Chatbot
 - [ ] Patient Record Management
+  - [x] DB schema complete (`PatientRecord`, `Attachment` with E2EE fields + `contentHash`)
+  - [x] `GET /api/records` — dentist's patient list (paginated, searchable — patients with ≥1 CONFIRMED or COMPLETED appt)
+  - [ ] View individual patient record (encrypted notes)
+  - [ ] Create / edit / delete patient records via API + UI
 - [ ] Billing & Payment Tracking
+  - [x] DB schema complete (`Billing`, `Payment` models with PaymentStatus enum)
+  - [ ] API routes + UI for billing creation, payment recording, receipt tracking
 - [ ] Audit Logging
+  - [x] DB schema complete (`AuditLog` model with AuditAction enum, ip/userAgent/metadata fields)
+  - [ ] API routes + UI to query/display audit log (ADMIN only)
 - [ ] Integrity Verification (tamper detection via encrypted hashes)
+  - [x] `PatientRecord.contentHash` field for SHA-256 tamper detection exists in schema
+  - [ ] Wire contentHash computation + verification to API routes
 - [ ] Reporting & Exports
 
 ---
@@ -683,6 +745,14 @@ await notifyPatientStatusChange({
   userId, clinicId, appointmentId, status,          // status: 'CONFIRMED' | 'CANCELLED' | etc.
   patientEmail, patientFirstName, serviceName, scheduledAt, appointmentCode,
 })
+```
+
+### Class Name Merging (Tailwind)
+```js
+import { cn } from '@/lib/utils';
+
+// Merges Tailwind classes safely (clsx + tailwind-merge)
+<div className={cn('base-class', condition && 'conditional-class', props.className)} />
 ```
 
 ### Supabase File Upload (server-side)
