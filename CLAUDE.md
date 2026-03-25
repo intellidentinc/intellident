@@ -17,11 +17,12 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | Framework | Next.js 16 (App Router) |
 | Language | JavaScript (JSX) |
 | UI Library | MUI v7 (system pages) + Tailwind CSS (landing page only) |
+| Date Picker | `@mui/x-date-pickers` v8 + `dayjs` adapter |
 | Database ORM | Prisma + PostgreSQL (Neon) |
 | Auth | Custom session-based (cookies via `lib/auth.js`) |
 | Encryption | Web Crypto API — AES-GCM E2EE, PBKDF2 key derivation |
 | File Storage | Supabase Storage (`clinic-logos` bucket) |
-| AI | GPT-5 (for appointment scheduling suggestions) |
+| AI | GPT-5 (for appointment scheduling suggestions — not yet implemented) |
 | Analytics | Vercel Analytics |
 
 ---
@@ -36,17 +37,29 @@ app/
 │   ├── [clinicId]/           # Authenticated clinic-scoped routes
 │   │   ├── layout.jsx        # Session + clinic guard; fetches role + clinic name/logo for sidebar
 │   │   ├── dashboard/page.jsx
+│   │   ├── appointments/page.jsx
+│   │   ├── patients/page.jsx
+│   │   ├── services/page.jsx
+│   │   ├── users/page.jsx
+│   │   ├── profile/page.jsx
 │   │   └── settings/page.jsx
 │   ├── sign-in/page.jsx
 │   └── sign-up/page.jsx
 ├── api/
 │   ├── auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password)
 │   ├── users/                # User list + PATCH role / DELETE (ADMIN only)
-│   └── clinics/[id]/
-│       ├── profile/          # GET + PATCH clinic profile fields
-│       ├── logo/             # POST logo upload → Supabase Storage
-│       ├── schedule/         # GET + PATCH operating hours (working days + open/close time)
-│       └── closures/         # GET + POST closure dates; [closureId]/ DELETE
+│   ├── patients/             # GET (paginated) + POST (RECEPTIONIST); [id]/ PATCH + DELETE
+│   ├── services/             # GET + POST (ADMIN); [id]/ PATCH + DELETE; dentists/ GET
+│   ├── profile/              # GET + PATCH (any authenticated user)
+│   ├── appointments/         # See Appointments API section below
+│   └── clinics/
+│       ├── schedule/         # GET session-based (any role) — for appointment form
+│       ├── closures/         # GET session-based (any role) — for appointment form
+│       └── [id]/
+│           ├── profile/      # GET + PATCH clinic profile fields (ADMIN)
+│           ├── logo/         # POST logo upload → Supabase Storage (ADMIN)
+│           ├── schedule/     # GET + PATCH operating hours (ADMIN)
+│           └── closures/     # GET + POST closure dates; [closureId]/ DELETE (ADMIN)
 ├── modules/                  # Page-level components (one folder per route)
 │   ├── landing-page/         # Tailwind — public facing
 │   ├── sign-in-page/
@@ -55,6 +68,11 @@ app/
 │   ├── reset-password-page/
 │   ├── change-password-page/
 │   ├── dashboard-page/       # AppSidebar, DashboardPage, SignOutButton
+│   ├── appointments-page/    # AppointmentsPage, CreateAppointmentModal, AppointmentDetailModal, CancelAppointmentModal
+│   ├── patients-page/        # PatientsPage, AddPatientModal, EditPatientModal, DeletePatientModal
+│   ├── services-page/        # ServicesPage, ServiceFormModal, DeleteServiceModal
+│   ├── rbac-page/            # RbacPage, AddUserModal, EditRoleModal, DeleteUserModal
+│   ├── profile-page/         # ProfilePage
 │   └── settings-page/        # SettingsPage, ClinicLogoUpload, ClinicProfileForm, ClinicSchedule, ClinicClosures
 ├── providers/                # App-level React context providers
 │   ├── ThemeRegistry.jsx     # MUI + Emotion SSR setup
@@ -74,7 +92,7 @@ lib/
 └── email.js                  # Mailjet email helpers (sendPasswordResetEmail, sendPasswordChangedEmail)
 prisma/
 ├── schema.prisma
-└── seed.js                   # Seeds 3 clinics + 4 users per clinic (all roles)
+└── seed.js                   # Seeds 3 clinics + 4 users per clinic (all roles) + profile records
 ```
 
 ---
@@ -126,6 +144,16 @@ All tokens are defined in `components/commons/theme.js`.
 | White | `#ffffff` | Cards, modals, input fields |
 | Slate Text | `#334155` | Body text, labels, headings |
 | Error Red | `#E05C6A` | Required fields, validation errors |
+
+### Status Chip Colors (Appointments)
+```
+PENDING     → bg #fef9c3  color #854d0e   (amber)
+CONFIRMED   → bg #dbeafe  color #1d4ed8   (blue)
+COMPLETED   → bg #dcfce7  color #15803d   (green)
+CANCELLED   → bg #fee2e2  color #b91c1c   (red)
+NO_SHOW     → bg #f1f5f9  color #475569   (slate)
+RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
+```
 
 ---
 
@@ -210,12 +238,75 @@ All data is scoped to a `ClinicID`. Every DB query must include a clinic scope f
 
 - `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`). Also holds `passwordHistory String[]`, `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`
 - `PasswordResetToken` — one-time reset tokens (email, token, expiresAt, usedAt)
-- `Clinic` — multi-tenant root. Holds `name`, `address`, `email`, `phone`, `landline`, `logoUrl`
+- `Clinic` — multi-tenant root. Holds `name`, `code` (e.g. `MLC`, `KH`, `CAB`), `address`, `email`, `phone`, `landline`, `logoUrl`
 - `ClinicSchedule` — one per clinic; `workingDays String[]` (e.g. `["MON","TUE"]`), `openTime`, `closeTime` (HH:mm strings). Upserted via PATCH.
 - `ClinicClosure` — many per clinic; `date DateTime`, `reason String?` for holidays/maintenance
 - `Receptionist` — profile extension for `RECEPTIONIST` users (linked via `userId`)
-- `Dentist` — profile extension for `DENTIST` users; has `specialty`; linked to `Appointment` via `dentistId`
-- `Patient` — profile extension for `PATIENT` users
+- `Dentist` — profile extension for `DENTIST` users; has `specialty`; linked to `Appointment` via `dentistId`; assigned to services via `ServiceDentists` join table
+- `Patient` — profile extension for `PATIENT` users; has `patientCode String?` for display reference IDs
+- `Service` — dental services with `duration`, `price`, `bufferTime`; many-to-many with `Dentist` via `ServiceDentists`
+- `Appointment` — scheduling record; has `appointmentCode String?` (e.g. `APT-MLC-2026/03/25-0001`); `dentistId` is **nullable** (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`
+- `AppointmentStatusHistory` — audit trail of every status transition on an appointment; fields: `appointmentId`, `status`, `changedById`, `changedAt`, `note`
+
+---
+
+## Appointments Module (`/[clinicId]/appointments`)
+
+RECEPTIONIST + ADMIN access.
+
+### Workflow
+- **Receptionist/Admin creates appointments** for walk-ins and phone bookings
+- Patient self-booking (online requests) is **not yet built**
+- Status transitions are one-way — terminal statuses cannot be changed
+
+### Status Transition Rules
+| From → To | Allowed |
+|---|---|
+| PENDING → CONFIRMED | ✅ |
+| PENDING → CANCELLED | ✅ |
+| CONFIRMED → COMPLETED | ✅ |
+| CONFIRMED → CANCELLED | ✅ |
+| CONFIRMED → NO_SHOW | ✅ |
+| COMPLETED / CANCELLED / NO_SHOW → any | ❌ terminal |
+
+### appointmentCode Generation
+Format: `APT-{clinic.code}-{YYYY/MM/DD}-{####}`
+- Generated server-side on `POST /api/appointments`
+- Sequential counter per clinic per date (zero-padded to 4 digits)
+- Requires `Clinic.code` to be set (MLC, KH, CAB — set via seed)
+
+### Appointments API Routes
+
+| Route | Method | Role | Purpose |
+|---|---|---|---|
+| `/api/appointments` | GET | RECEPTIONIST, ADMIN | Paginated list; params: `page`, `pageSize`, `sortField`, `sortOrder`, `status` |
+| `/api/appointments` | POST | RECEPTIONIST, ADMIN | Create appointment with full validation |
+| `/api/appointments/[id]` | GET | RECEPTIONIST, ADMIN | Detail + status history |
+| `/api/appointments/[id]` | PATCH | RECEPTIONIST, ADMIN | Status transition; body: `{ status, note? }` |
+| `/api/appointments/patients` | GET | RECEPTIONIST, ADMIN | Patient search autocomplete; param: `q` |
+| `/api/appointments/services` | GET | RECEPTIONIST, ADMIN | Services list for form |
+| `/api/appointments/dentists` | GET | RECEPTIONIST, ADMIN | Dentists for a service; param: `serviceId` — only returns dentists assigned to that service |
+| `/api/appointments/slots/check` | GET | RECEPTIONIST, ADMIN | Real-time conflict check; params: `dentistId`, `scheduledAt`, `serviceId`, `excludeAppointmentId?` |
+
+### Server-side Validation on POST
+1. Date is a working day (`ClinicSchedule.workingDays`)
+2. Date is not a closure (`ClinicClosure`)
+3. Time within `openTime ≤ scheduledAt < closeTime`
+4. Dentist has no overlapping appointment (if specific dentist chosen)
+5. `endsAt = scheduledAt + service.duration + service.bufferTime`
+
+### Appointment Form Notes
+- **Patient field** uses MUI `Autocomplete` with `filterOptions={(x) => x}` — client-side filtering is disabled because results come from server-side search
+- **Dentist dropdown** only shows dentists assigned to the selected service — assign dentists to services in the Services page first
+- **Date picker** disables past dates, non-working days, and closure dates
+- **Time picker** restricts to clinic open/close hours
+- Conflict warning shows inline when a dentist is double-booked
+- DatePicker/TimePicker require `LocalizationProvider` + `AdapterDayjs` — wrapped inside the modal component itself
+
+### Session-based Clinic Endpoints (any authenticated role)
+- `GET /api/clinics/schedule` — returns current clinic's schedule (used by appointment form)
+- `GET /api/clinics/closures` — returns current clinic's closure dates (used by appointment form)
+- These are separate from the ADMIN-only `GET /api/clinics/[id]/schedule` endpoints
 
 ---
 
@@ -261,7 +352,18 @@ Logo is stored in Supabase bucket `clinic-logos` at path `{clinicId}/{timestamp}
   - [x] Create / edit / delete dental services
   - [x] Duration, price, buffer time per service
   - [x] Assign dentists to services
-- [ ] Appointment Scheduling + AI slot suggestions (GPT-5)
+- [x] Appointment Scheduling — Receptionist/Admin side
+  - [x] Create appointment (patient, service, dentist or "Any Available", date/time, notes, status)
+  - [x] Paginated appointment list with status filter chips
+  - [x] Status transitions with full history timeline
+  - [x] Cancel appointment with optional reason
+  - [x] Conflict detection (double-booking prevention)
+  - [x] Operating hours + closure date enforcement
+  - [x] Auto-generated appointment reference codes (`APT-{CODE}-{DATE}-{####}`)
+  - [ ] Patient self-booking (patient logs in and requests appointment → PENDING)
+  - [ ] Receptionist pending-requests queue (for patient-submitted bookings)
+  - [ ] AI slot suggestions (GPT-5)
+  - [ ] Rescheduling flow
 - [ ] Virtual Assistant / Chatbot
 - [ ] Patient Record Management
 - [ ] Billing & Payment Tracking
@@ -302,6 +404,33 @@ import Input from '@/components/commons/Input';
 <Input id="field" label="Label" error={!!err} helperText={err} required />
 ```
 
+### MUI Date/Time Pickers
+```jsx
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { TimePicker } from '@mui/x-date-pickers/TimePicker'
+import dayjs from 'dayjs'
+
+// Wrap usage in LocalizationProvider (can be inside the component/modal, not required at app root)
+<LocalizationProvider dateAdapter={AdapterDayjs}>
+  <DatePicker value={date} onChange={setDate} shouldDisableDate={fn} slotProps={{ textField: { size: 'small', fullWidth: true } }} />
+  <TimePicker value={time} onChange={setTime} minTime={dayjs('2000-01-01T08:00')} slotProps={{ textField: { size: 'small' } }} />
+</LocalizationProvider>
+```
+
+### Server-side Search Autocomplete (MUI)
+Always set `filterOptions={(x) => x}` when results come from a server-side search to disable MUI's client-side filtering:
+```jsx
+<Autocomplete
+  options={results}
+  filterOptions={(x) => x}   // disable client-side filtering
+  inputValue={query}
+  onInputChange={(_, val) => setQuery(val)}
+  ...
+/>
+```
+
 ### Supabase File Upload (server-side)
 ```js
 import { supabase } from '@/lib/supabase';
@@ -318,8 +447,12 @@ const { data: { publicUrl } } = supabase.storage.from('clinic-logos').getPublicU
 npx prisma db seed
 ```
 
-Creates 3 clinics + 4 users per clinic (one per role). Password for all: `12345678`.
+Creates 3 clinics (with `code`: MLC, KH, CAB) + 4 users per clinic (one per role) + profile records (`Patient`, `Dentist`, `Receptionist`) for each user. Password for all: `12345678`.
 Email pattern: `{role}.{clinicSlug}@intellident.test` (e.g. `admin.maria@intellident.test`)
+
+**Important:** The seed also backfills missing profile records for pre-existing users on re-run — safe to run multiple times.
+
+**Dentist assignment:** Seed dentists are NOT automatically assigned to services. After seeding, go to Services (as Admin) → edit each service → assign the relevant dentist. The dentist will then appear in the appointment creation form.
 
 ---
 
