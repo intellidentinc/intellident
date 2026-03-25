@@ -62,7 +62,7 @@ function buildNavGroups(role, clinicId) {
           label: 'Navigation',
           items: [
             { label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard') },
-            { label: 'Schedule',  icon: CalendarDays,    href: p('/appointments') },
+            { label: 'Schedule',  icon: CalendarDays,    href: p('/schedule') },
           ],
         },
         {
@@ -84,8 +84,8 @@ function buildNavGroups(role, clinicId) {
         {
           label: 'Navigation',
           items: [
-            { label: 'Dashboard',    icon: LayoutDashboard, href: p('/dashboard') },
-            { label: 'Appointments', icon: CalendarDays,    href: p('/appointments') },
+            { label: 'Dashboard',    icon: LayoutDashboard, href: p('/dashboard'), badgeKey: null },
+            { label: 'Appointments', icon: CalendarDays,    href: p('/appointments'), badgeKey: 'pending' },
             { label: 'Patients',     icon: Users,           href: p('/patients') },
             { label: 'Reminders',    icon: Bell,            href: p('/reminders') },
           ],
@@ -117,7 +117,7 @@ function buildNavGroups(role, clinicId) {
           items: [
             { label: 'Users',        icon: UserCog,       href: p('/users') },
             { label: 'Services',     icon: Stethoscope,   href: p('/services') },
-            { label: 'Schedules',    icon: CalendarDays,  href: p('/appointments') },
+            { label: 'Schedules',    icon: CalendarDays,  href: p('/appointments'), badgeKey: 'pending' },
             { label: 'Billing',      icon: CreditCard,    href: p('/billing') },
             { label: 'Settings',     icon: Settings,      href: p('/settings') },
           ],
@@ -141,9 +141,10 @@ function buildNavGroups(role, clinicId) {
   }
 }
 
-export default function AppSidebar({ session, role = 'PATIENT', clinicName, clinicLogo }) {
+export default function AppSidebar({ session, role = 'PATIENT', clinicName, clinicLogo, pendingCount = 0 }) {
   const clinicId = session?.clinicId;
   const navGroups = buildNavGroups(role, clinicId);
+  const badges = { pending: pendingCount };
 
   return (
     <Sidebar>
@@ -169,18 +170,26 @@ export default function AppSidebar({ session, role = 'PATIENT', clinicName, clin
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1 px-3">
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton
-                      size="lg"
-                      render={<a href={item.href} />}
-                      className="cursor-pointer pl-4"
-                    >
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {group.items.map((item) => {
+                  const badgeCount = item.badgeKey ? (badges[item.badgeKey] ?? 0) : 0;
+                  return (
+                    <SidebarMenuItem key={item.label}>
+                      <SidebarMenuButton
+                        size="lg"
+                        render={<a href={item.href} />}
+                        className="cursor-pointer pl-4"
+                      >
+                        <item.icon />
+                        <span className="flex-1">{item.label}</span>
+                        {badgeCount > 0 && (
+                          <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2563eb] px-1.5 text-[10px] font-bold text-white">
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                          </span>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

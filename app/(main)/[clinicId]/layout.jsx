@@ -22,9 +22,16 @@ export default async function ClinicLayout({ children, params }) {
     prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true, logoUrl: true } }),
   ]);
 
+  let pendingCount = 0
+  if (user && ['RECEPTIONIST', 'ADMIN'].includes(user.role)) {
+    pendingCount = await prisma.appointment.count({
+      where: { clinicId, isDeleted: false, status: 'PENDING' },
+    })
+  }
+
   return (
     <SidebarProvider>
-      <AppSidebar session={session} role={user?.role ?? 'PATIENT'} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} />
+      <AppSidebar session={session} role={user?.role ?? 'PATIENT'} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} pendingCount={pendingCount} />
       {children}
     </SidebarProvider>
   );

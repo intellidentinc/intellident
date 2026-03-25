@@ -249,6 +249,36 @@ export default function AppointmentsPage() {
             <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
               Schedule and manage patient appointments
             </Typography>
+            {/* Booking Requests quick-filter */}
+            <Box
+              onClick={() => { setStatusFilter('PENDING'); handleViewChange('list') }}
+              sx={{
+                mt: 1, display: 'inline-flex', alignItems: 'center', gap: 0.75,
+                px: 1.5, py: 0.5, borderRadius: 2, cursor: 'pointer', userSelect: 'none',
+                bgcolor: statusFilter === 'PENDING' ? '#fef9c3' : '#f8fafc',
+                border: '1px solid',
+                borderColor: statusFilter === 'PENDING' ? '#d97706' : 'divider',
+                '&:hover': { bgcolor: statusFilter === 'PENDING' ? '#fef3c7' : '#f1f5f9' },
+                transition: 'all 0.15s',
+              }}
+            >
+              <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#d97706', flexShrink: 0 }} />
+              <Typography variant='caption' fontWeight={600} sx={{ color: '#854d0e' }}>
+                Booking Requests
+              </Typography>
+              {statusFilter !== 'PENDING' && (
+                <Typography variant='caption' sx={{ color: '#94a3b8', ml: 0.25 }}>— click to filter</Typography>
+              )}
+              {statusFilter === 'PENDING' && (
+                <Box
+                  component='span'
+                  onClick={(e) => { e.stopPropagation(); setStatusFilter('') }}
+                  sx={{ ml: 0.5, color: '#d97706', fontWeight: 700, fontSize: '0.75rem', lineHeight: 1, cursor: 'pointer' }}
+                >
+                  ✕
+                </Box>
+              )}
+            </Box>
           </Box>
           <Tooltip title='Create appointment'>
             <Box
