@@ -3,9 +3,26 @@ import { prisma } from '@/lib/prisma'
 import { sendAppointmentReminder } from '@/lib/notifications'
 
 /**
- * Cron: runs every 15 minutes via Vercel Cron.
- * Sends 24h and 2h reminders for upcoming CONFIRMED appointments.
- * Uses reminderSent24h / reminderSent2h flags to prevent duplicates.
+ * GET /api/cron/reminders — Vercel Cron Job (every 15 minutes)
+ *
+ * Key features implemented here:
+ *
+ * 1. Bearer Token Auth
+ *    Protected by CRON_SECRET env var. Only Vercel's cron runner (or a request
+ *    with the correct Authorization header) can trigger this endpoint.
+ *
+ * 2. Idempotent Reminder Delivery
+ *    Uses reminderSent24h / reminderSent2h boolean flags on the Appointment model.
+ *    Each appointment only receives each reminder once, even if the cron fires
+ *    multiple times within the ±30-minute detection window.
+ *
+ * 3. Dual-Channel Notification
+ *    Each reminder sends both an in-app notification (bell) and a Mailjet email
+ *    via sendAppointmentReminder in lib/notifications.js.
+ *
+ * Detection windows (±30 min around each threshold):
+ *   - 24h reminder: scheduledAt between (now + 23.5h) and (now + 24.5h)
+ *   - 2h  reminder: scheduledAt between (now + 1.5h)  and (now + 2.5h)
  */
 export async function GET(request) {
   // Protect the endpoint — only Vercel cron or requests with the correct secret

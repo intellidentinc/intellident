@@ -1,3 +1,23 @@
+/**
+ * /api/appointments — RECEPTIONIST + ADMIN only
+ *
+ * Key features implemented here:
+ *
+ * GET  — Paginated appointment list with filters (status, dentistId, serviceId)
+ *         and full-text search on patient name + appointment code.
+ *         All queries are scoped to caller.clinicId (multi-tenancy zero trust).
+ *
+ * POST — Create appointment with 5-step server-side validation:
+ *   1. Working day check  (ClinicSchedule.workingDays)
+ *   2. Closure check      (ClinicClosure dates)
+ *   3. Operating hours    (openTime ≤ scheduledAt < closeTime)
+ *   4. Dentist conflict   (overlap detection against existing non-cancelled appointments)
+ *   5. endsAt calculation (scheduledAt + service.duration + service.bufferTime)
+ *
+ *   Also generates the appointmentCode: APT-{CLINICCODE}-{YYYY/MM/DD}-{####}
+ *   If the appointment is created directly as CONFIRMED, the patient is notified
+ *   via in-app notification + email (same as the PENDING→CONFIRMED transition).
+ */
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'

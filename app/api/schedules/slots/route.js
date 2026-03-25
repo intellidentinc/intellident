@@ -1,3 +1,20 @@
+/**
+ * GET /api/schedules/slots — PATIENT role only
+ *
+ * Key feature: Available time slot generation for the patient booking wizard.
+ *
+ * Algorithm:
+ *   1. Validate date is a working day and not a clinic closure
+ *   2. Generate candidate slots every 30 minutes from openTime to (closeTime - totalDuration)
+ *      where totalDuration = service.duration + service.bufferTime
+ *   3. If date is today, filter out slots within 30 minutes of now (same-day buffer)
+ *   4. If dentistId is a specific ID: cross-check each slot against the dentist's
+ *      existing non-cancelled appointments and remove conflicting ones
+ *   5. If dentistId is 'ANY': return all future slots without conflict filtering —
+ *      the receptionist assigns the dentist when confirming the PENDING booking
+ *
+ * Params: serviceId, dentistId ('ANY' or specific ID), date (YYYY-MM-DD)
+ */
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'

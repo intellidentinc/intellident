@@ -1,3 +1,21 @@
+/**
+ * POST /api/auth/sign-in
+ *
+ * Key features implemented here:
+ *
+ * 1. Account Lockout (Brute-Force Protection)
+ *    Tracks failed attempts on the User record. After MAX_ATTEMPTS failures within
+ *    WINDOW_MS, the account is locked for LOCK_DURATION_MS. Configurable via env vars.
+ *    Resets on successful login.
+ *
+ * 2. E2EE Key Material Handoff
+ *    On success, the server returns `wrappedKey` and `keySalt` to the client.
+ *    The browser re-derives the KEK from the user's password + keySalt (PBKDF2),
+ *    then unwraps the master key locally. The server never sees the plaintext key.
+ *
+ * 3. Remember Me
+ *    Passes `rememberMe` to setSession — extends cookie maxAge from 10 min to 3 days.
+ */
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';

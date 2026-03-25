@@ -1,3 +1,23 @@
+/**
+ * POST /api/auth/sign-up
+ *
+ * Key features implemented here:
+ *
+ * 1. Two-Phase Registration (Email Verification Gate)
+ *    This route does NOT create a User. It creates an EmailVerification record
+ *    (24h expiry) and sends a tokenized link via Mailjet. The actual User +
+ *    Patient profile are only created when the link is clicked (see /api/auth/verify).
+ *    This prevents unverified email addresses from accessing the system.
+ *
+ * 2. Server-Side Password Policy Enforcement
+ *    Minimum 8 chars, uppercase, lowercase, digit, special character.
+ *    Enforced here even if the client already validated — defense in depth.
+ *
+ * 3. E2EE Key Material Acceptance
+ *    The client generates the master key + KEK client-side and sends only
+ *    `wrappedKey` and `keySalt` here. The server stores the wrapped (encrypted)
+ *    key blob — it has no way to decrypt user data without the user's password.
+ */
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';

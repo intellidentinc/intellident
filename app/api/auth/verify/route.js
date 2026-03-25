@@ -1,3 +1,23 @@
+/**
+ * GET /api/auth/verify?token=...
+ *
+ * Key features implemented here:
+ *
+ * 1. Single-Use Token Verification
+ *    Looks up the EmailVerification record by token. Tokens expire after 24 hours
+ *    and are deleted immediately after use — they cannot be replayed.
+ *
+ * 2. Atomic User + Patient Profile Creation (Prisma Transaction)
+ *    Both the User record and the Patient profile are created in a single
+ *    $transaction. If either fails, neither is persisted — no orphaned records.
+ *
+ * 3. Double-Click / Race Condition Guard
+ *    Checks for an existing User with the same email before creating, preventing
+ *    duplicate accounts if the verification link is clicked multiple times.
+ *
+ * 4. Auto Sign-In After Verification
+ *    Sets the session immediately so the user is logged in on redirect.
+ */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setSession } from '@/lib/auth';

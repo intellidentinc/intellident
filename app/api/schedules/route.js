@@ -1,3 +1,21 @@
+/**
+ * /api/schedules — PATIENT role only
+ *
+ * Key features implemented here:
+ *
+ * GET  — Returns the patient's own appointments split into 'upcoming' and 'past' tabs.
+ *         Upcoming: PENDING | CONFIRMED | RESCHEDULED with scheduledAt ≥ now
+ *         Past:     COMPLETED | CANCELLED | NO_SHOW, or any with scheduledAt < now
+ *
+ * POST — Patient self-booking. Always creates the appointment as PENDING.
+ *   - Zero trust: getPatientCaller() verifies patient.clinicId === user.clinicId
+ *   - Runs the same 5-step validation as the receptionist route (working day,
+ *     closure, operating hours, dentist ownership, dentist conflict)
+ *   - Operating hours are validated in PHT (Asia/Manila timezone) via dayjs-timezone
+ *   - Generates the appointmentCode the same way as the receptionist route
+ *   - On success, notifies all RECEPTIONIST + ADMIN users (in-app + email)
+ *     via notifyStaffBooking — the pending badge in the sidebar increments
+ */
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'

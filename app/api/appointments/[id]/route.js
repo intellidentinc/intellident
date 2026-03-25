@@ -1,3 +1,22 @@
+/**
+ * /api/appointments/[id] — RECEPTIONIST + ADMIN only
+ *
+ * Key features implemented here:
+ *
+ * GET  — Appointment detail including full status history timeline with
+ *         the name of whoever made each transition (changedBy).
+ *
+ * PATCH — Status transition state machine enforced server-side via ALLOWED_TRANSITIONS.
+ *   Valid transitions:
+ *     PENDING   → CONFIRMED | CANCELLED
+ *     CONFIRMED → COMPLETED | CANCELLED | NO_SHOW | RESCHEDULED
+ *   Terminal states (COMPLETED, CANCELLED, NO_SHOW, RESCHEDULED) reject all transitions.
+ *
+ *   Every transition:
+ *     - Records an AppointmentStatusHistory entry with changedById + optional note
+ *     - Sends in-app + email notification to the patient via notifyPatientStatusChange
+ *     - On CANCELLED: additionally notifies all staff in-app via notifyStaff
+ */
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
