@@ -13,15 +13,21 @@ import TablePagination from '@mui/material/TablePagination'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
+import IconButton from '@mui/material/IconButton'
 import AddIcon from '@mui/icons-material/Add'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { useToast } from '@/app/providers/ToastProvider'
 import AddPatientModal from './AddPatientModal'
+import EditPatientModal from './EditPatientModal'
+import DeletePatientModal from './DeletePatientModal'
 
 const HEAD_CELLS = [
   { id: 'firstName', label: 'Name', sortable: true },
   { id: 'email', label: 'Email', sortable: false },
   { id: 'phone', label: 'Mobile Number', sortable: false },
+  { id: 'actions', label: 'Actions', sortable: false, align: 'center' },
 ]
 
 export default function PatientsPage() {
@@ -34,6 +40,8 @@ export default function PatientsPage() {
   const [sortField, setSortField] = useState('firstName')
   const [sortOrder, setSortOrder] = useState('asc')
   const [addOpen, setAddOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   const fetchPatients = useCallback(async () => {
     setLoading(true)
@@ -153,7 +161,7 @@ export default function PatientsPage() {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={3} align='center' sx={{ py: 6 }}>
+                    <TableCell colSpan={4} align='center' sx={{ py: 6 }}>
                       <CircularProgress size={28} sx={{ color: '#2563eb' }} />
                     </TableCell>
                   </TableRow>
@@ -161,7 +169,7 @@ export default function PatientsPage() {
 
                 {!loading && rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3} align='center' sx={{ py: 6 }}>
+                    <TableCell colSpan={4} align='center' sx={{ py: 6 }}>
                       <Typography variant='body2' color='text.disabled'>
                         No patients found
                       </Typography>
@@ -186,6 +194,21 @@ export default function PatientsPage() {
                     <TableCell sx={{ color: '#334155' }}>
                       {row.phone || '—'}
                     </TableCell>
+
+                    <TableCell align='center'>
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                        <Tooltip title='Edit patient'>
+                          <IconButton size='small' onClick={() => setEditTarget(row)} sx={{ cursor: 'pointer' }}>
+                            <EditOutlinedIcon fontSize='small' />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title='Delete patient'>
+                          <IconButton size='small' onClick={() => setDeleteTarget(row)} sx={{ cursor: 'pointer' }}>
+                            <DeleteOutlinedIcon fontSize='small' />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -209,6 +232,18 @@ export default function PatientsPage() {
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onSuccess={() => { setAddOpen(false); fetchPatients() }}
+      />
+      <EditPatientModal
+        open={!!editTarget}
+        patient={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSuccess={() => { setEditTarget(null); fetchPatients() }}
+      />
+      <DeletePatientModal
+        open={!!deleteTarget}
+        patient={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onSuccess={() => { setDeleteTarget(null); fetchPatients() }}
       />
     </SidebarInset>
   )
