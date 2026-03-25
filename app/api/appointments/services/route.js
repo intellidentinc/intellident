@@ -10,7 +10,7 @@ export async function GET() {
     where: { id: session.userId },
     select: { role: true, clinicId: true },
   })
-  if (!caller || !['RECEPTIONIST', 'ADMIN'].includes(caller.role)) {
+  if (!caller || !['RECEPTIONIST', 'ADMIN', 'PATIENT'].includes(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

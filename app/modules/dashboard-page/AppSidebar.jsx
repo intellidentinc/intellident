@@ -43,9 +43,9 @@ function buildNavGroups(role, clinicId) {
         {
           label: 'Navigation',
           items: [
-            { label: 'Dashboard',     icon: LayoutDashboard, href: p('/dashboard') },
-            { label: 'Appointments',  icon: CalendarDays,    href: p('/appointments') },
-            { label: 'Reminders',     icon: Bell,            href: p('/reminders') },
+            { label: 'Dashboard',    icon: LayoutDashboard, href: p('/dashboard') },
+            { label: 'My Schedules', icon: CalendarDays,    href: p('/schedules') },
+            { label: 'Reminders',    icon: Bell,            href: p('/reminders') },
           ],
         },
         {
