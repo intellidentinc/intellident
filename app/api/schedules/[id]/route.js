@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaff } from '@/lib/notifications'
+import { ROLES } from '@/lib/roles'
 
 export async function PATCH(request, { params }) {
   const session = await getSession()
@@ -11,7 +12,7 @@ export async function PATCH(request, { params }) {
     where: { id: session.userId },
     select: { role: true, clinicId: true },
   })
-  if (!user || user.role !== 'PATIENT') {
+  if (!user || user.role !== ROLES.PATIENT) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

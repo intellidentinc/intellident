@@ -4,6 +4,7 @@ import Chip from '@mui/material/Chip'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
 import {
   CalendarDays, CheckCircle, Clock, XCircle,
   Users, Stethoscope, UserCog, CalendarCheck,
@@ -454,10 +455,10 @@ export default async function DashboardPage({ session }) {
   const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } })
   const role = user?.role ?? 'PATIENT'
 
-  const content = role === 'PATIENT'       ? <PatientDashboard session={session} />
-                : role === 'RECEPTIONIST'  ? <ReceptionistDashboard session={session} />
-                : role === 'ADMIN'         ? <AdminDashboard session={session} />
-                : role === 'DENTIST'       ? <DentistDashboard session={session} />
+  const content = role === ROLES.PATIENT       ? <PatientDashboard session={session} />
+                : role === ROLES.RECEPTIONIST  ? <ReceptionistDashboard session={session} />
+                : role === ROLES.ADMIN         ? <AdminDashboard session={session} />
+                : role === ROLES.DENTIST       ? <DentistDashboard session={session} />
                 : null
 
   return (

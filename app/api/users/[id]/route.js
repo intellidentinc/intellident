@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, clearSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES, ROLE_LABELS } from '@/lib/roles'
 
 async function getAdminCaller() {
   const session = await getSession()
@@ -11,7 +12,7 @@ async function getAdminCaller() {
     select: { role: true, clinicId: true }
   })
 
-  if (!caller || caller.role !== 'ADMIN') return null
+  if (!caller || caller.role !== ROLES.ADMIN) return null
   return caller
 }
 
@@ -32,7 +33,7 @@ export async function PATCH(request, { params }) {
   const { id } = await params
   const { role } = await request.json()
 
-  const validRoles = ['PATIENT', 'RECEPTIONIST', 'DENTIST', 'ADMIN']
+  const validRoles = Object.values(ROLES)
   if (!validRoles.includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }

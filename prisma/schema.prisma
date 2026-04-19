@@ -9,12 +9,7 @@ datasource db {
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-enum UserRole {
-  PATIENT
-  RECEPTIONIST
-  ADMIN
-  DENTIST
-}
+// UserRole is stored as Int: 1=ADMIN, 2=DENTIST, 3=RECEPTIONIST, 4=PATIENT
 
 enum Gender {
   MALE
@@ -175,7 +170,7 @@ model User {
   dateOfBirth DateTime?
   password        String
   passwordHistory String[] @default([])
-  role            UserRole  @default(PATIENT)
+  role            Int       @default(4)
   wrappedKey String?
   keySalt    String?
   clinicId            String?

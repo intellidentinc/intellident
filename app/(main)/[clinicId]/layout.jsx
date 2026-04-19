@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/app/modules/dashboard-page/AppSidebar';
+import { ROLES } from '@/lib/roles';
 
 export default async function ClinicLayout({ children, params }) {
   const session = await getSession();
@@ -23,7 +24,7 @@ export default async function ClinicLayout({ children, params }) {
   ]);
 
   let pendingCount = 0
-  if (user && ['RECEPTIONIST', 'ADMIN'].includes(user.role)) {
+  if (user && [ROLES.RECEPTIONIST, ROLES.ADMIN].includes(user.role)) {
     pendingCount = await prisma.appointment.count({
       where: { clinicId, isDeleted: false, status: 'PENDING' },
     })
@@ -31,7 +32,7 @@ export default async function ClinicLayout({ children, params }) {
 
   return (
     <SidebarProvider>
-      <AppSidebar session={session} role={user?.role ?? 'PATIENT'} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} pendingCount={pendingCount} />
+      <AppSidebar session={session} role={user?.role ?? ROLES.PATIENT} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} pendingCount={pendingCount} />
       {children}
     </SidebarProvider>
   );

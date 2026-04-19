@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
+import { ROLES } from '@/lib/roles';
 
 async function getAdminForClinic(clinicId) {
   const session = await getSession();
@@ -12,7 +13,7 @@ async function getAdminForClinic(clinicId) {
     select: { role: true, clinicId: true },
   });
 
-  if (!caller || caller.role !== 'ADMIN' || caller.clinicId !== clinicId) return null;
+  if (!caller || caller.role !== ROLES.ADMIN || caller.clinicId !== clinicId) return null;
   return caller;
 }
 

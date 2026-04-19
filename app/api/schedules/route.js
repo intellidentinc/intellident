@@ -20,6 +20,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaffBooking } from '@/lib/notifications'
+import { ROLES } from '@/lib/roles'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -34,7 +35,7 @@ async function getPatientCaller() {
     where: { id: session.userId },
     select: { role: true, clinicId: true },
   })
-  if (!user || user.role !== 'PATIENT') return null
+  if (!user || user.role !== ROLES.PATIENT) return null
   const patient = await prisma.patient.findUnique({
     where: { userId: session.userId },
   })

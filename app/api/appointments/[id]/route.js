@@ -21,6 +21,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyPatientStatusChange, notifyStaff } from '@/lib/notifications'
+import { ROLES } from '@/lib/roles'
 
 async function getCaller() {
   const session = await getSession()
@@ -29,7 +30,7 @@ async function getCaller() {
     where: { id: session.userId },
     select: { role: true, clinicId: true, id: true, firstName: true, lastName: true },
   })
-  if (!caller || !['RECEPTIONIST', 'ADMIN'].includes(caller.role)) return null
+  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN].includes(caller.role)) return null
   return caller
 }
 

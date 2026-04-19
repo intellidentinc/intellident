@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
 
 export async function GET(request) {
   const session = await getSession()
@@ -10,7 +11,7 @@ export async function GET(request) {
     where: { id: session.userId },
     select: { role: true, clinicId: true },
   })
-  if (!caller || !['RECEPTIONIST', 'ADMIN', 'PATIENT'].includes(caller.role)) {
+  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.PATIENT].includes(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

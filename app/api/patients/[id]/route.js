@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
 
 export async function PATCH(request, { params }) {
   const session = await getSession()
@@ -11,7 +12,7 @@ export async function PATCH(request, { params }) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== 'RECEPTIONIST') {
+  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -73,7 +74,7 @@ export async function DELETE(request, { params }) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== 'RECEPTIONIST') {
+  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

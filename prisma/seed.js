@@ -1,6 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 
+// Role hierarchy: 1=ADMIN, 2=DENTIST, 3=RECEPTIONIST, 4=PATIENT
+const ROLES = { ADMIN: 1, DENTIST: 2, RECEPTIONIST: 3, PATIENT: 4 };
+
 const prisma = new PrismaClient();
 
 // ─── Helpers (mirrors lib/crypto.js using Node 18+ Web Crypto) ────────────────
@@ -56,10 +59,10 @@ const PASSWORD = '12345678';
 
 function usersForClinic(slug) {
   return [
-    { firstName: 'Admin',        lastName: slug, email: `admin.${slug}@intellident.test`,        role: 'ADMIN' },
-    { firstName: 'Receptionist', lastName: slug, email: `receptionist.${slug}@intellident.test`, role: 'RECEPTIONIST' },
-    { firstName: 'Dentist',      lastName: slug, email: `dentist.${slug}@intellident.test`,      role: 'DENTIST' },
-    { firstName: 'Patient',      lastName: slug, email: `patient.${slug}@intellident.test`,      role: 'PATIENT' },
+    { firstName: 'Admin',        lastName: slug, email: `admin.${slug}@intellident.test`,        role: ROLES.ADMIN },
+    { firstName: 'Receptionist', lastName: slug, email: `receptionist.${slug}@intellident.test`, role: ROLES.RECEPTIONIST },
+    { firstName: 'Dentist',      lastName: slug, email: `dentist.${slug}@intellident.test`,      role: ROLES.DENTIST },
+    { firstName: 'Patient',      lastName: slug, email: `patient.${slug}@intellident.test`,      role: ROLES.PATIENT },
   ];
 }
 
@@ -91,7 +94,7 @@ async function main() {
       const existing = await prisma.user.findUnique({ where: { email: u.email } });
       if (existing) {
         // Backfill missing profile records for pre-existing seed users
-        if (u.role === 'PATIENT') {
+        if (u.role === ROLES.PATIENT) {
           const hasProfile = await prisma.patient.findUnique({ where: { userId: existing.id } });
           if (!hasProfile) {
             const year = new Date().getFullYear();
@@ -109,13 +112,13 @@ async function main() {
             await prisma.patient.update({ where: { id: hasProfile.id }, data: { patientCode } });
             console.log(`  Backfilled patientCode: ${u.email} → ${patientCode}`);
           }
-        } else if (u.role === 'DENTIST') {
+        } else if (u.role === ROLES.DENTIST) {
           const hasProfile = await prisma.dentist.findUnique({ where: { userId: existing.id } });
           if (!hasProfile) {
             await prisma.dentist.create({ data: { userId: existing.id, clinicId: clinic.id } });
             console.log(`  Backfilled Dentist profile: ${u.email}`);
           }
-        } else if (u.role === 'RECEPTIONIST') {
+        } else if (u.role === ROLES.RECEPTIONIST) {
           const hasProfile = await prisma.receptionist.findUnique({ where: { userId: existing.id } });
           if (!hasProfile) {
             await prisma.receptionist.create({ data: { userId: existing.id, clinicId: clinic.id } });
@@ -142,7 +145,7 @@ async function main() {
       });
 
       // Create profile records for role-specific models
-      if (u.role === 'PATIENT') {
+      if (u.role === ROLES.PATIENT) {
         const year = new Date().getFullYear();
         const count = await prisma.patient.count({ where: { clinicId: clinic.id } });
         const patientCode = `PAT-${clinic.code ?? 'CLN'}-${year}-${String(count + 1).padStart(5, '0')}`;
@@ -156,14 +159,14 @@ async function main() {
           },
         });
         console.log(`    patientCode: ${patientCode}`);
-      } else if (u.role === 'DENTIST') {
+      } else if (u.role === ROLES.DENTIST) {
         await prisma.dentist.create({
           data: {
             userId:   createdUser.id,
             clinicId: clinic.id,
           },
         });
-      } else if (u.role === 'RECEPTIONIST') {
+      } else if (u.role === ROLES.RECEPTIONIST) {
         await prisma.receptionist.create({
           data: {
             userId:   createdUser.id,

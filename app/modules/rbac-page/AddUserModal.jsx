@@ -18,10 +18,11 @@ import {
   wrapMasterKey,
   toBase64,
 } from '@/lib/crypto'
+import { ROLES } from '@/lib/roles'
 
 const ROLE_OPTIONS = [
-  { value: 'DENTIST', label: 'Dentist' },
-  { value: 'RECEPTIONIST', label: 'Receptionist' },
+  { value: ROLES.DENTIST,      label: 'Dentist' },
+  { value: ROLES.RECEPTIONIST, label: 'Receptionist' },
 ]
 
 const DEFAULT_PASSWORD = 'Intellident2026#'

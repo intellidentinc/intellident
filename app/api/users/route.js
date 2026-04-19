@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcrypt'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
 
 export async function GET(request) {
   const session = await getSession()
@@ -12,7 +13,7 @@ export async function GET(request) {
     select: { role: true, clinicId: true }
   })
 
-  if (!caller || caller.role !== 'ADMIN') {
+  if (!caller || caller.role !== ROLES.ADMIN) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -65,7 +66,7 @@ export async function POST(request) {
     select: { role: true, clinicId: true }
   })
 
-  if (!caller || caller.role !== 'ADMIN') {
+  if (!caller || caller.role !== ROLES.ADMIN) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -75,7 +76,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  if (!['DENTIST', 'RECEPTIONIST'].includes(role)) {
+  if (![ROLES.DENTIST, ROLES.RECEPTIONIST].includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 
@@ -103,7 +104,7 @@ export async function POST(request) {
       }
     })
 
-    if (role === 'DENTIST') {
+    if (role === ROLES.DENTIST) {
       await tx.dentist.create({ data: { userId: user.id, clinicId: caller.clinicId } })
     } else {
       await tx.receptionist.create({ data: { userId: user.id, clinicId: caller.clinicId } })

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcrypt'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
 
 export async function GET(request) {
   const session = await getSession()
@@ -12,7 +13,7 @@ export async function GET(request) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== 'RECEPTIONIST') {
+  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -26,7 +27,7 @@ export async function GET(request) {
   const safeSortField = validSortFields.includes(sortField) ? sortField : 'firstName'
   const safeSortOrder = sortOrder === 'desc' ? 'desc' : 'asc'
 
-  const where = { clinicId: caller.clinicId, isDeleted: false, role: 'PATIENT' }
+  const where = { clinicId: caller.clinicId, isDeleted: false, role: ROLES.PATIENT }
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
@@ -69,7 +70,7 @@ export async function POST(request) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== 'RECEPTIONIST') {
+  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -96,7 +97,7 @@ export async function POST(request) {
         phone: phone.trim(),
         password: hashedPassword,
         passwordHistory: [hashedPassword],
-        role: 'PATIENT',
+        role: ROLES.PATIENT,
         wrappedKey,
         keySalt,
         clinicId: caller.clinicId,

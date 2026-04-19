@@ -9,12 +9,13 @@ import Button from '@/components/commons/Button'
 import Select from '@/components/commons/Select'
 import { useToast } from '@/app/providers/ToastProvider'
 import { ManageAccountsOutlined } from '@mui/icons-material'
+import { ROLES } from '@/lib/roles'
 
 const ROLE_OPTIONS = [
-  { value: 'PATIENT', label: 'Patient' },
-  { value: 'RECEPTIONIST', label: 'Receptionist' },
-  { value: 'DENTIST', label: 'Dentist' },
-  { value: 'ADMIN', label: 'Admin' }
+  { value: ROLES.ADMIN,        label: 'Admin' },
+  { value: ROLES.DENTIST,      label: 'Dentist' },
+  { value: ROLES.RECEPTIONIST, label: 'Receptionist' },
+  { value: ROLES.PATIENT,      label: 'Patient' },
 ]
 
 export default function EditRoleModal({ open, user, onClose, onSuccess }) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
 
 async function getAdminCaller() {
   const session = await getSession()
@@ -9,7 +10,7 @@ async function getAdminCaller() {
     where: { id: session.userId },
     select: { role: true, clinicId: true }
   })
-  if (!caller || caller.role !== 'ADMIN') return null
+  if (!caller || caller.role !== ROLES.ADMIN) return null
   return caller
 }
 
