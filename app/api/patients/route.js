@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
 export async function GET(request) {
   const session = await getSession()
@@ -74,6 +75,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { firstName, lastName, email, phone, wrappedKey, keySalt } = await request.json()
 
   if (!firstName || !lastName || !email || !phone || !wrappedKey || !keySalt) {
@@ -125,6 +127,8 @@ export async function POST(request) {
 
     return patient
   })
+
+  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'Patient', entityId: newPatient.id, ipAddress: ip, userAgent, metadata: { patientCode: newPatient.patientCode } })
 
   return NextResponse.json({ id: newPatient.id }, { status: 201 })
 }

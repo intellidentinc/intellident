@@ -21,6 +21,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaffBooking } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -84,6 +85,7 @@ export async function POST(request) {
   const caller = await getPatientCaller()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { serviceId, dentistId, scheduledAt, notes } = await request.json()
 
   if (!serviceId || !scheduledAt) {
@@ -204,6 +206,8 @@ export async function POST(request) {
     scheduledAt: apptDate,
     appointmentCode,
   })
+
+  logAudit({ userId: caller.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'Appointment', entityId: appointment.id, ipAddress: ip, userAgent, metadata: { appointmentCode, source: 'patient-booking' } })
 
   return NextResponse.json({ appointment }, { status: 201 })
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
 async function getAdminCaller() {
   const session = await getSession()
@@ -11,13 +12,14 @@ async function getAdminCaller() {
     select: { role: true, clinicId: true }
   })
   if (!caller || caller.role !== ROLES.ADMIN) return null
-  return caller
+  return { ...caller, id: session.userId }
 }
 
 export async function PATCH(request, { params }) {
   const caller = await getAdminCaller()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
   const { name, duration, price, bufferTime, dentistIds } = await request.json()
 
@@ -58,6 +60,8 @@ export async function PATCH(request, { params }) {
     }
   })
 
+  logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'UPDATE', entity: 'Service', entityId: id, ipAddress: ip, userAgent, metadata: { name: service.name } })
+
   return NextResponse.json({ service })
 }
 
@@ -65,6 +69,7 @@ export async function DELETE(request, { params }) {
   const caller = await getAdminCaller()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
 
   const existing = await prisma.service.findUnique({
@@ -75,10 +80,13 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  const svc = await prisma.service.findUnique({ where: { id }, select: { name: true } })
   await prisma.service.update({
     where: { id },
     data: { isDeleted: true, deletedAt: new Date() }
   })
+
+  logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'DELETE', entity: 'Service', entityId: id, ipAddress: ip, userAgent, metadata: { name: svc?.name } })
 
   return NextResponse.json({ success: true })
 }

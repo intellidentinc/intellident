@@ -23,6 +23,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyPatientStatusChange } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
 async function getCaller() {
   const session = await getSession()
@@ -92,6 +93,7 @@ export async function POST(request) {
   const caller = await getCaller()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { patientId, serviceId, dentistId, scheduledAt, notes, status } = await request.json()
 
   if (!patientId || !serviceId || !scheduledAt) {
@@ -219,6 +221,8 @@ export async function POST(request) {
       }).catch(() => {})
     }
   }
+
+  logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'CREATE', entity: 'Appointment', entityId: appointment.id, ipAddress: ip, userAgent, metadata: { appointmentCode, status: initialStatus } })
 
   return NextResponse.json({ appointment }, { status: 201 })
 }

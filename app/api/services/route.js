@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
 async function getAdminCaller() {
   const session = await getSession()
@@ -11,7 +12,7 @@ async function getAdminCaller() {
     select: { role: true, clinicId: true }
   })
   if (!caller || caller.role !== ROLES.ADMIN) return null
-  return caller
+  return { ...caller, id: session.userId }
 }
 
 export async function GET() {
@@ -36,6 +37,7 @@ export async function POST(request) {
   const caller = await getAdminCaller()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { name, duration, price, bufferTime, dentistIds } = await request.json()
 
   if (!name?.trim()) {
@@ -66,6 +68,8 @@ export async function POST(request) {
       }
     }
   })
+
+  logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'CREATE', entity: 'Service', entityId: service.id, ipAddress: ip, userAgent, metadata: { name: service.name } })
 
   return NextResponse.json({ service }, { status: 201 })
 }

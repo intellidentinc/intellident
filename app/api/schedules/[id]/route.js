@@ -3,11 +3,13 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaff } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
 export async function PATCH(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { ip, userAgent } = getRequestMeta(request)
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     select: { role: true, clinicId: true },
@@ -58,6 +60,8 @@ export async function PATCH(request, { params }) {
     body: `${patient.firstName} ${patient.lastName} cancelled their ${updated.service?.name ?? 'appointment'} on ${scheduledStr}.`,
     appointmentId: id,
   })
+
+  logAudit({ userId: session.userId, clinicId: user.clinicId, action: 'UPDATE', entity: 'Appointment', entityId: id, ipAddress: ip, userAgent, metadata: { to: 'CANCELLED', source: 'patient-cancel' } })
 
   return NextResponse.json({ success: true })
 }

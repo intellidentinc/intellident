@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
 export async function PATCH(request, { params }) {
   const session = await getSession()
@@ -16,6 +17,7 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
   const { firstName, lastName, email, phone } = await request.json()
 
@@ -62,6 +64,8 @@ export async function PATCH(request, { params }) {
     })
   })
 
+  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'UPDATE', entity: 'Patient', entityId: id, ipAddress: ip, userAgent })
+
   return NextResponse.json({ success: true })
 }
 
@@ -78,6 +82,7 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const { ip: deleteIp, userAgent: deleteUa } = getRequestMeta(request)
   const { id } = await params
 
   const target = await prisma.user.findUnique({
@@ -102,6 +107,8 @@ export async function DELETE(request, { params }) {
       data: { isDeleted: true, deletedAt: now },
     })
   })
+
+  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'DELETE', entity: 'Patient', entityId: id, ipAddress: deleteIp, userAgent: deleteUa })
 
   return NextResponse.json({ success: true })
 }
