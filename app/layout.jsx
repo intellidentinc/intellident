@@ -14,8 +14,8 @@ const inter = Inter({
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body className={`${inter.variable} antialiased`}>
-        {children}
+      <body className={`${inter.variable} antialiased`}> 
+        {children} 
         <Analytics />
       </body>
     </html>
