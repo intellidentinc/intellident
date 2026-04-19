@@ -165,7 +165,7 @@ async function ReceptionistDashboard({ session }) {
     prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, scheduledAt: { gte: todayStart, lt: todayEnd } } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'CONFIRMED', scheduledAt: { gte: now } } }),
-    prisma.patient.count({ where: { clinicId } }),
+    prisma.patient.count({ where: { clinicId, isDeleted: false } }),
     prisma.appointment.findMany({
       where: { clinicId, isDeleted: false },
       include: {
@@ -259,7 +259,7 @@ async function AdminDashboard({ session }) {
   const [totalUsers, totalServices, totalPatients, apptThisMonth, pending, recentAppts] = await Promise.all([
     prisma.user.count({ where: { clinicId, isDeleted: false } }),
     prisma.service.count({ where: { clinicId, isDeleted: false } }),
-    prisma.patient.count({ where: { clinicId } }),
+    prisma.patient.count({ where: { clinicId, isDeleted: false } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, scheduledAt: { gte: monthStart } } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
     prisma.appointment.findMany({
