@@ -22,11 +22,13 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import Collapse from '@mui/material/Collapse'
 import IconButton from '@mui/material/IconButton'
+import Menu from '@mui/material/Menu'
 import SearchIcon from '@mui/icons-material/Search'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { SidebarInset } from '@/components/ui/sidebar'
@@ -301,6 +303,113 @@ export default function AuditLogPage() {
 
   const hasFilters = search || actionFilter || entityFilter || dateFrom || dateTo
 
+  // ─── Export ───────────────────────────────────────────────────────────────
+  const [exportAnchor, setExportAnchor] = useState(null)
+  const [exporting, setExporting] = useState(false)
+
+  function buildExportParams() {
+    return new URLSearchParams({
+      ...(actionFilter    ? { action:   actionFilter    } : {}),
+      ...(entityFilter    ? { entity:   entityFilter    } : {}),
+      ...(debouncedSearch ? { search:   debouncedSearch } : {}),
+      ...(dateFrom        ? { dateFrom                  } : {}),
+      ...(dateTo          ? { dateTo                    } : {}),
+    })
+  }
+
+  async function fetchAllForExport() {
+    const res = await fetch(`/api/audit-log/export?${buildExportParams()}`)
+    if (!res.ok) throw new Error('Export failed')
+    const data = await res.json()
+    return data.logs
+  }
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleExportCSV() {
+    setExportAnchor(null)
+    setExporting(true)
+    try {
+      const logs = await fetchAllForExport()
+      const header = ['Timestamp', 'User', 'Email', 'Role', 'Action', 'Entity', 'Record ID', 'IP Address']
+      const escapeCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+      const rows = logs.map((l) => [
+        dayjs(l.createdAt).format('YYYY-MM-DD HH:mm:ss'),
+        l.user ? `${l.user.firstName ?? ''} ${l.user.lastName ?? ''}`.trim() : 'System',
+        l.user?.email ?? '',
+        l.user ? (ROLE_LABELS[l.user.role] ?? l.user.role) : '',
+        l.action,
+        l.entity ?? '',
+        l.entityId ?? '',
+        l.ipAddress ?? '',
+      ].map(escapeCell).join(','))
+      const csv = [header.join(','), ...rows].join('\r\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      triggerDownload(blob, `audit-log-${dayjs().format('YYYY-MM-DD')}.csv`)
+    } catch {
+      showToast('Export failed', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleExportPDF() {
+    setExportAnchor(null)
+    setExporting(true)
+    try {
+      const logs = await fetchAllForExport()
+      const { default: jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Audit Log', 14, 16)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(100)
+      doc.text(`Exported ${dayjs().format('MMMM D, YYYY HH:mm')} · ${logs.length} entries`, 14, 22)
+
+      autoTable(doc, {
+        startY: 27,
+        head: [['Timestamp', 'User', 'Email', 'Role', 'Action', 'Entity', 'Record ID', 'IP']],
+        body: logs.map((l) => [
+          dayjs(l.createdAt).format('YYYY-MM-DD HH:mm:ss'),
+          l.user ? `${l.user.firstName ?? ''} ${l.user.lastName ?? ''}`.trim() : 'System',
+          l.user?.email ?? '',
+          l.user ? (ROLE_LABELS[l.user.role] ?? l.user.role) : '',
+          l.action,
+          l.entity ?? '',
+          l.entityId ?? '',
+          l.ipAddress ?? '',
+        ]),
+        styles: { fontSize: 7.5, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: 38 },
+          4: { cellWidth: 20, halign: 'center' },
+          6: { cellWidth: 40, font: 'courier' },
+          7: { cellWidth: 28 },
+        },
+      })
+
+      doc.save(`audit-log-${dayjs().format('YYYY-MM-DD')}.pdf`)
+    } catch {
+      showToast('Export failed', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <SidebarInset>
       <PageHeader title='Audit Log' />
@@ -316,11 +425,57 @@ export default function AuditLogPage() {
               Track all system activity and access events for this clinic
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FilterListIcon sx={{ fontSize: 18, color: '#94a3b8' }} />
-            <Typography variant='caption' sx={{ color: '#94a3b8' }}>
-              {rowCount.toLocaleString()} {rowCount === 1 ? 'entry' : 'entries'}
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <FilterListIcon sx={{ fontSize: 18, color: '#94a3b8' }} />
+              <Typography variant='caption' sx={{ color: '#94a3b8' }}>
+                {rowCount.toLocaleString()} {rowCount === 1 ? 'entry' : 'entries'}
+              </Typography>
+            </Box>
+
+            <Box
+              component='button'
+              onClick={(e) => setExportAnchor(e.currentTarget)}
+              disabled={exporting || rowCount === 0}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 0.75,
+                px: 1.5, py: 0.75, border: '1px solid', borderColor: 'divider',
+                borderRadius: 1.5, bgcolor: '#fff', cursor: 'pointer',
+                color: '#334155', fontSize: '0.8rem', fontWeight: 600,
+                transition: 'all 0.15s',
+                '&:hover:not(:disabled)': { bgcolor: '#f1f5f9', borderColor: '#cbd5e1' },
+                '&:disabled': { opacity: 0.45, cursor: 'not-allowed' },
+              }}
+            >
+              {exporting
+                ? <CircularProgress size={14} sx={{ color: '#2563eb' }} />
+                : <FileDownloadOutlinedIcon sx={{ fontSize: 16 }} />
+              }
+              {exporting ? 'Exporting…' : 'Export'}
+              <KeyboardArrowDownIcon sx={{ fontSize: 15, color: '#94a3b8' }} />
+            </Box>
+
+            <Menu
+              anchorEl={exportAnchor}
+              open={!!exportAnchor}
+              onClose={() => setExportAnchor(null)}
+              slotProps={{ paper: { sx: { borderRadius: 2, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', minWidth: 160 } } }}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            >
+              <MenuItem onClick={handleExportCSV} sx={{ gap: 1.5, fontSize: '0.85rem', py: 1.25 }}>
+                <Box sx={{ width: 28, height: 28, borderRadius: 1, bgcolor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Typography sx={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803d' }}>CSV</Typography>
+                </Box>
+                Export as CSV
+              </MenuItem>
+              <MenuItem onClick={handleExportPDF} sx={{ gap: 1.5, fontSize: '0.85rem', py: 1.25 }}>
+                <Box sx={{ width: 28, height: 28, borderRadius: 1, bgcolor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Typography sx={{ fontSize: '0.65rem', fontWeight: 800, color: '#b91c1c' }}>PDF</Typography>
+                </Box>
+                Export as PDF
+              </MenuItem>
+            </Menu>
           </Box>
         </Box>
 
