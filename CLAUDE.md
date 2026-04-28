@@ -38,8 +38,11 @@ app/
 ├── (main)/                   # Route group — wraps all authenticated + auth pages
 │   ├── layout.jsx            # Mounts ThemeRegistry, CryptoProvider, ToastProvider, InactivityProvider
 │   ├── page.jsx              # Landing page (Tailwind only)
+│   ├── super/                # Super admin portal (role 0 only)
+│   │   ├── layout.jsx        # Guards: role must be SUPERADMIN
+│   │   └── page.jsx          # Clinic picker — server-fetches all clinics
 │   ├── [clinicId]/           # Authenticated clinic-scoped routes
-│   │   ├── layout.jsx        # Session + clinic guard; fetches role, clinic name/logo, pendingCount for sidebar
+│   │   ├── layout.jsx        # Session + clinic guard; fetches role, clinic name/logo, pendingCount for sidebar; super admin enters with effectiveRole=ADMIN
 │   │   ├── dashboard/page.jsx
 │   │   ├── appointments/page.jsx   # RECEPTIONIST + ADMIN
 │   │   ├── schedule/page.jsx       # DENTIST — their own calendar
@@ -92,6 +95,7 @@ app/
 │   ├── rbac-page/            # RbacPage, AddUserModal, EditRoleModal, DeleteUserModal
 │   ├── profile-page/         # ProfilePage
 │   ├── settings-page/        # SettingsPage, ClinicLogoUpload, ClinicProfileForm, ClinicSchedule, ClinicClosures
+│   ├── super-page/           # SuperPage.jsx — clinic cards + Enter as Admin
 │   └── notifications/        # NotificationBell.jsx, NotificationDrawer.jsx
 ├── providers/                # App-level React context providers
 │   ├── ThemeRegistry.jsx     # MUI + Emotion SSR setup
@@ -206,15 +210,25 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 
 **RBAC:**
 
-| Role | Sidebar Access |
-|---|---|
-| `PATIENT` | Dashboard, My Schedules, My Profile |
-| `RECEPTIONIST` | Dashboard, Appointments, Patients, Billing |
-| `DENTIST` | Dashboard, Schedule, Patient Records, My Profile |
-| `ADMIN` | Dashboard, Users, Services, Appointments, Billing, Settings, Audit Log |
+| Role | Value | Sidebar Access |
+|---|---|---|
+| `SUPERADMIN` | 0 | `/super` portal — clinic picker, enters any clinic as ADMIN |
+| `PATIENT` | 4 | Dashboard, My Schedules, My Profile |
+| `RECEPTIONIST` | 3 | Dashboard, Appointments, Patients, Billing |
+| `DENTIST` | 2 | Dashboard, Schedule, Patient Records, My Profile |
+| `ADMIN` | 1 | Dashboard, Users, Services, Appointments, Billing, Settings, Audit Log |
 
 - Multi-tenancy: every DB query must include `clinicId` scope — no cross-clinic access
 - Role/account changes on current user immediately clear session + redirect to sign-in
+
+**Super Admin (role 0):**
+- No `clinicId` in DB — not bound to any clinic
+- Login redirects to `/super` (clinic picker portal)
+- "Enter as Admin" → `POST /api/super/enter` → sets `session.clinicId` + `session.superAdmin = true` → redirect to `/{clinicId}/dashboard`
+- `[clinicId]/layout.jsx` detects `superAdmin` flag and maps role 0 → effectiveRole ADMIN
+- AppSidebar shows "Back to Super Admin" button when `isSuperAdmin=true`
+- "Back to Super Admin" → `POST /api/super/exit` → clears `clinicId` from session → redirect to `/super`
+- Seed: `node prisma/seed-super.js` — credentials: `superadmin@intellident.app` / `12345678`
 
 ---
 

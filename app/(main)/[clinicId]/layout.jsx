@@ -23,8 +23,11 @@ export default async function ClinicLayout({ children, params }) {
     prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true, logoUrl: true } }),
   ]);
 
+  // Super admin enters a clinic with full ADMIN privileges
+  const effectiveRole = user?.role === ROLES.SUPERADMIN ? ROLES.ADMIN : (user?.role ?? ROLES.PATIENT)
+
   let pendingCount = 0
-  if (user && [ROLES.RECEPTIONIST, ROLES.ADMIN].includes(user.role)) {
+  if (user && [ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(user.role)) {
     pendingCount = await prisma.appointment.count({
       where: { clinicId, isDeleted: false, status: 'PENDING' },
     })
@@ -32,7 +35,7 @@ export default async function ClinicLayout({ children, params }) {
 
   return (
     <SidebarProvider>
-      <AppSidebar session={session} role={user?.role ?? ROLES.PATIENT} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} pendingCount={pendingCount} />
+      <AppSidebar session={session} role={effectiveRole} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} pendingCount={pendingCount} isSuperAdmin={session.superAdmin === true} />
       {children}
     </SidebarProvider>
   );

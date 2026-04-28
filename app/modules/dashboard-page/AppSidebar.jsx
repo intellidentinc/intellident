@@ -27,6 +27,7 @@ import {
   ClipboardList
 } from 'lucide-react'
 import SignOutButton from './SignOutButton'
+import ExitSuperAdminButton from './ExitSuperAdminButton'
 
 function getInitials(firstName, lastName) {
   const f = firstName?.[0] ?? ''
@@ -123,7 +124,7 @@ function buildNavGroups(role, clinicId) {
   }
 }
 
-export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, clinicLogo, pendingCount = 0 }) {
+export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, clinicLogo, pendingCount = 0, isSuperAdmin = false }) {
   const clinicId = session?.clinicId
   const navGroups = buildNavGroups(role, clinicId)
   const badges = { pending: pendingCount }
@@ -174,6 +175,11 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
 
       {/* Footer */}
       <SidebarFooter className='border-t border-sidebar-border p-4'>
+        {isSuperAdmin && (
+          <div className='mb-3'>
+            <ExitSuperAdminButton />
+          </div>
+        )}
         <div className='mb-3 flex items-center gap-3'>
           <div className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-sm font-bold text-white'>
             {getInitials(session?.firstName, session?.lastName)}
