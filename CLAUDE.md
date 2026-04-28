@@ -266,7 +266,7 @@ All appointment events → in-app bell + Mailjet email. No Reminders page — be
 
 **Patient Schedules** (PATIENT, `/schedules`):
 - Multi-step `BookAppointmentModal`: service → dentist → date → 30-min time slots → notes → confirm
-- Always creates as PENDING; notifies all staff; patient can cancel own PENDING
+- Always creates as PENDING; notifies all staff; patient can cancel own PENDING or CONFIRMED appointments
 - Slots API: `GET /api/schedules/slots?date&serviceId&dentistId` — filters closed days, past times, conflicts
 
 **Dentist Calendar** (DENTIST, `/schedule`): read-only Day/Week view via `GET /api/schedule?from&to`
@@ -318,7 +318,7 @@ All appointment events → in-app bell + Mailjet email. No Reminders page — be
   - [x] Receptionist/Admin: pending booking badge on sidebar + "Booking Requests" quick-filter
   - [x] Patient: self-booking via My Schedules (service → dentist preference → date → time slots → notes → confirm)
   - [x] Patient: view own upcoming + past appointments
-  - [x] Patient: cancel own PENDING appointments
+  - [x] Patient: cancel own PENDING or CONFIRMED appointments
   - [x] Dentist: read-only calendar of own appointments (Day / Week view)
   - [x] Dentist: patient records page (patients with CONFIRMED or COMPLETED appointment with them)
   - [ ] AI slot suggestions (GPT-5)
@@ -442,6 +442,20 @@ import { cn } from '@/lib/utils';
 
 // Merges Tailwind classes safely (clsx + tailwind-merge)
 <div className={cn('base-class', condition && 'conditional-class', props.className)} />
+```
+
+### Address Normalization
+All address fields are normalized server-side via `normalizeAddress()` from `lib/utils.js`:
+- Trims leading/trailing whitespace
+- Collapses internal multiple spaces into one
+- Title-cases each word (`"123 rizal street"` → `"123 Rizal Street"`)
+- Returns `null` for empty/nullish input
+
+Applied in: `app/api/profile/route.js` (user address) and `app/api/clinics/[id]/profile/route.js` (clinic address).
+
+```js
+import { normalizeAddress } from '@/lib/utils'
+address: normalizeAddress(address)
 ```
 
 ### Supabase File Upload (server-side)

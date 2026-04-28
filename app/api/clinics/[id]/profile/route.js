@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { normalizeAddress } from '@/lib/utils'
 
 async function getAdminForClinic(clinicId) {
   const session = await getSession()
@@ -59,7 +60,7 @@ export async function PATCH(request, { params }) {
     where: { id },
     data: {
       name: name.trim(),
-      address: address.trim(),
+      address: normalizeAddress(address),
       email: email.trim(),
       phone: phone.trim() || null,
       landline: landline?.trim() || null

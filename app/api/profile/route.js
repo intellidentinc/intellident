@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, setSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { normalizeAddress } from '@/lib/utils'
 
 export async function GET() {
   const session = await getSession()
@@ -51,7 +52,7 @@ export async function PATCH(request) {
       lastName: lastName.trim(),
       email: email.trim(), // email simple change for now
       phone: phone?.trim() || null,
-      address: address?.trim() || null,
+      address: normalizeAddress(address),
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
     },
     select: { firstName: true, lastName: true, email: true }
