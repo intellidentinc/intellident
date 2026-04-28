@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, isAdmin } from '@/lib/roles'
 
 const VALID_SORT_FIELDS = ['createdAt', 'action', 'entity']
 const VALID_ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE']
@@ -15,9 +15,11 @@ export async function GET(request) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== ROLES.ADMIN) {
+  if (!caller || !isAdmin(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
   const page     = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10))
@@ -33,7 +35,7 @@ export async function GET(request) {
   const sortField = VALID_SORT_FIELDS.includes(rawSort) ? rawSort : 'createdAt'
 
   const where = {
-    clinicId: caller.clinicId,
+    clinicId,
     ...(action && VALID_ACTIONS.includes(action) ? { action } : {}),
     ...(entity ? { entity: { contains: entity, mode: 'insensitive' } } : {}),
     ...(dateFrom || dateTo

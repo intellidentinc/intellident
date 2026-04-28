@@ -11,9 +11,11 @@ export async function GET(request) {
     where: { id: session.userId },
     select: { role: true, clinicId: true },
   })
-  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.PATIENT].includes(caller.role)) {
+  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.PATIENT, ROLES.SUPERADMIN].includes(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
   const serviceId = searchParams.get('serviceId')
@@ -24,7 +26,7 @@ export async function GET(request) {
 
   const dentists = await prisma.dentist.findMany({
     where: {
-      clinicId: caller.clinicId,
+      clinicId,
       isDeleted: false,
       services: { some: { id: serviceId, isDeleted: false } },
     },

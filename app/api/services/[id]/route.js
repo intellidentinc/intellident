@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 
 async function getAdminCaller() {
@@ -11,8 +11,9 @@ async function getAdminCaller() {
     where: { id: session.userId },
     select: { role: true, clinicId: true }
   })
-  if (!caller || caller.role !== ROLES.ADMIN) return null
-  return { ...caller, id: session.userId }
+  if (!caller || !isAdmin(caller.role)) return null
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  return { ...caller, clinicId, id: session.userId }
 }
 
 export async function PATCH(request, { params }) {

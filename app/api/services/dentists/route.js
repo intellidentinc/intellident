@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, isAdmin } from '@/lib/roles'
 
 export async function GET() {
   const session = await getSession()
@@ -11,12 +11,14 @@ export async function GET() {
     where: { id: session.userId },
     select: { role: true, clinicId: true }
   })
-  if (!caller || caller.role !== ROLES.ADMIN) {
+  if (!caller || !isAdmin(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+
   const dentists = await prisma.dentist.findMany({
-    where: { clinicId: caller.clinicId, isDeleted: false },
+    where: { clinicId, isDeleted: false },
     include: { user: { select: { firstName: true, lastName: true } } },
     orderBy: { user: { firstName: 'asc' } }
   })

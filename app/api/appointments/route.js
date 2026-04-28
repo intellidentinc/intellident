@@ -32,8 +32,9 @@ async function getCaller() {
     where: { id: session.userId },
     select: { role: true, clinicId: true, id: true },
   })
-  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN].includes(caller.role)) return null
-  return caller
+  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(caller.role)) return null
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  return { ...caller, clinicId }
 }
 
 export async function GET(request) {

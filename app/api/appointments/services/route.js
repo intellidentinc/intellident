@@ -11,12 +11,14 @@ export async function GET() {
     where: { id: session.userId },
     select: { role: true, clinicId: true },
   })
-  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.PATIENT].includes(caller.role)) {
+  if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.PATIENT, ROLES.SUPERADMIN].includes(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+
   const services = await prisma.service.findMany({
-    where: { clinicId: caller.clinicId, isDeleted: false },
+    where: { clinicId, isDeleted: false },
     select: { id: true, name: true, duration: true, bufferTime: true, price: true },
     orderBy: { name: 'asc' },
   })

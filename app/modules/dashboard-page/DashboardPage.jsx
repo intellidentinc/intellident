@@ -156,8 +156,8 @@ async function PatientDashboard({ session }) {
 // ─── Receptionist dashboard ───────────────────────────────────────────────────
 
 async function ReceptionistDashboard({ session }) {
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { clinicId: true } })
-  const clinicId = user?.clinicId
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true, clinicId: true } })
+  const clinicId = user?.role === ROLES.SUPERADMIN ? session.clinicId : user?.clinicId
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
@@ -252,8 +252,8 @@ async function ReceptionistDashboard({ session }) {
 // ─── Admin dashboard ──────────────────────────────────────────────────────────
 
 async function AdminDashboard({ session }) {
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { clinicId: true } })
-  const clinicId = user?.clinicId
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true, clinicId: true } })
+  const clinicId = user?.role === ROLES.SUPERADMIN ? session.clinicId : user?.clinicId
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
@@ -455,10 +455,10 @@ export default async function DashboardPage({ session }) {
   const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } })
   const role = user?.role ?? 'PATIENT'
 
-  const content = role === ROLES.PATIENT       ? <PatientDashboard session={session} />
-                : role === ROLES.RECEPTIONIST  ? <ReceptionistDashboard session={session} />
-                : role === ROLES.ADMIN         ? <AdminDashboard session={session} />
-                : role === ROLES.DENTIST       ? <DentistDashboard session={session} />
+  const content = role === ROLES.PATIENT                                    ? <PatientDashboard session={session} />
+                : role === ROLES.RECEPTIONIST                              ? <ReceptionistDashboard session={session} />
+                : (role === ROLES.ADMIN || role === ROLES.SUPERADMIN)     ? <AdminDashboard session={session} />
+                : role === ROLES.DENTIST                                   ? <DentistDashboard session={session} />
                 : null
 
   return (

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, clearSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES, ROLE_LABELS } from '@/lib/roles'
+import { ROLES, ROLE_LABELS, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 
 async function getAdminCaller() {
@@ -13,8 +13,9 @@ async function getAdminCaller() {
     select: { role: true, clinicId: true }
   })
 
-  if (!caller || caller.role !== ROLES.ADMIN) return null
-  return { ...caller, id: session.userId }
+  if (!caller || !isAdmin(caller.role)) return null
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  return { ...caller, clinicId, id: session.userId }
 }
 
 async function getTargetUser(id, clinicId) {

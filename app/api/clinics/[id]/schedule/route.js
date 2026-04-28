@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, isAdmin } from '@/lib/roles'
 
 const VALID_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -13,7 +13,9 @@ async function getAdminForClinic(clinicId) {
     where: { id: session.userId },
     select: { role: true, clinicId: true }
   })
-  if (!caller || caller.role !== ROLES.ADMIN || caller.clinicId !== clinicId) return null
+  if (!caller || !isAdmin(caller.role)) return null
+  const effectiveClinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  if (effectiveClinicId !== clinicId) return null
   return caller
 }
 

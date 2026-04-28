@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
-import { ROLES } from '@/lib/roles';
+import { ROLES, isAdmin } from '@/lib/roles';
 
 async function getAdminForClinic(clinicId) {
   const session = await getSession();
@@ -13,7 +13,9 @@ async function getAdminForClinic(clinicId) {
     select: { role: true, clinicId: true },
   });
 
-  if (!caller || caller.role !== ROLES.ADMIN || caller.clinicId !== clinicId) return null;
+  if (!caller || !isAdmin(caller.role)) return null;
+  const effectiveClinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId;
+  if (effectiveClinicId !== clinicId) return null;
   return caller;
 }
 

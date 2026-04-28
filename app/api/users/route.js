@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcrypt'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 
 export async function GET(request) {
@@ -14,9 +14,11 @@ export async function GET(request) {
     select: { role: true, clinicId: true }
   })
 
-  if (!caller || caller.role !== ROLES.ADMIN) {
+  if (!caller || !isAdmin(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
 
   const { searchParams } = new URL(request.url)
   const page = parseInt(searchParams.get('page') ?? '0', 10)
@@ -31,7 +33,7 @@ export async function GET(request) {
   const safeSortOrder = sortOrder === 'desc' ? 'desc' : 'asc'
 
   const where = {
-    clinicId: caller.clinicId,
+    clinicId,
     isDeleted: false,
     ...(search
       ? {
@@ -67,9 +69,11 @@ export async function POST(request) {
     select: { role: true, clinicId: true }
   })
 
-  if (!caller || caller.role !== ROLES.ADMIN) {
+  if (!caller || !isAdmin(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
 
   const { ip, userAgent } = getRequestMeta(request)
   const { firstName, lastName, email, phone, role, wrappedKey, keySalt } = await request.json()
@@ -102,20 +106,20 @@ export async function POST(request) {
         role,
         wrappedKey,
         keySalt,
-        clinicId: caller.clinicId,
+        clinicId: clinicId,
       }
     })
 
     if (role === ROLES.DENTIST) {
-      await tx.dentist.create({ data: { userId: user.id, clinicId: caller.clinicId } })
+      await tx.dentist.create({ data: { userId: user.id, clinicId: clinicId } })
     } else {
-      await tx.receptionist.create({ data: { userId: user.id, clinicId: caller.clinicId } })
+      await tx.receptionist.create({ data: { userId: user.id, clinicId: clinicId } })
     }
 
     return user
   })
 
-  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'User', entityId: newUser.id, ipAddress: ip, userAgent, metadata: { role, email: newUser.email } })
+  logAudit({ userId: session.userId, clinicId: clinicId, action: 'CREATE', entity: 'User', entityId: newUser.id, ipAddress: ip, userAgent, metadata: { role, email: newUser.email } })
 
   return NextResponse.json({ id: newUser.id }, { status: 201 })
 }
