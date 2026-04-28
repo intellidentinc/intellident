@@ -189,6 +189,7 @@ model User {
   auditLogs               AuditLog[]
   appointmentStatusChanges AppointmentStatusHistory[]
   inAppNotifications      InAppNotification[]
+  mfaOtps                 MfaOtp[]
 
   @@index([email])
   @@index([clinicId])
@@ -451,6 +452,24 @@ model InAppNotification {
   @@index([userId, isRead])
   @@index([clinicId])
   @@map("in_app_notifications")
+}
+
+model MfaOtp {
+  id           String    @id @default(cuid())
+  userId       String
+  pendingToken String    @unique
+  codeHash     String
+  rememberMe   Boolean   @default(false)
+  attempts     Int       @default(0)
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([pendingToken])
+  @@map("mfa_otps")
 }
 
 model AuditLog {

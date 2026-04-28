@@ -43,6 +43,96 @@ Enforced on both client and server (`app/api/auth/sign-up/route.js`):
 - **Remember Me:** extends session to 3 days (`maxAge: 60 * 60 * 24 * 3`) — checkbox on sign-in page
 - **Inactivity logout:** 30 minutes — tracked in `InactivityProvider`; clears master key and redirects to `/sign-in?reason=inactivity`
 
+## Multi-Factor Authentication (Email OTP)
+
+MFA is enforced for **all users** on every sign-in. After credentials are verified, a 6-digit OTP is emailed and the user must enter it before a session is created.
+
+### Flow
+
+```
+1. POST /api/auth/sign-in  (email + password)
+        │
+        ├─ credentials invalid  →  401 / 423 lockout (same as before)
+        │
+        └─ credentials valid
+              │
+              ├─ generates 6-digit OTP + secure pendingToken (32 random bytes)
+              ├─ bcrypt-hashes OTP (cost 8) → stored in MfaOtp table
+              ├─ deletes any previous unused OTPs for this user
+              ├─ emails OTP via Mailjet (fire-and-forget)
+              └─ returns { mfaPending: true, pendingToken, wrappedKey, keySalt }
+                    │
+                    └─ client stores { password, wrappedKey, keySalt } in sessionStorage
+                       redirects to /verify-otp?token={pendingToken}
+
+2. POST /api/auth/verify-otp  (pendingToken + code)
+        │
+        ├─ invalid/expired token    →  400  (redirect back to /sign-in)
+        ├─ already used             →  400
+        ├─ expired (> 10 min)       →  400
+        ├─ attempts ≥ 5             →  429  (redirect back to /sign-in)
+        ├─ wrong code               →  401  (increment attempts, show remaining)
+        │
+        └─ correct code
+              ├─ marks OTP as used (usedAt = now)
+              ├─ creates session via setSession()
+              ├─ logs LOGIN audit entry
+              └─ returns { clinicId }
+                    │
+                    └─ client reads { password, wrappedKey, keySalt } from sessionStorage
+                       derives KEK → unwraps master key → stores in CryptoProvider
+                       clears sessionStorage
+                       redirects to /{clinicId}/dashboard  or  /super
+```
+
+### Database Model
+
+```prisma
+model MfaOtp {
+  id           String    @id @default(cuid())
+  userId       String
+  pendingToken String    @unique   // 64-char hex, used as URL token
+  codeHash     String              // bcrypt hash of the 6-digit OTP
+  rememberMe   Boolean   @default(false)
+  attempts     Int       @default(0)
+  expiresAt    DateTime            // now + 10 minutes
+  usedAt       DateTime?           // set on successful verification
+  createdAt    DateTime  @default(now())
+
+  user User @relation(...)
+
+  @@map("mfa_otps")
+}
+```
+
+### Security Properties
+
+| Property | Detail |
+|---|---|
+| OTP format | 6 numeric digits (100000–999999) |
+| OTP storage | bcrypt hash only (cost 8) — plaintext never persisted |
+| `pendingToken` | `crypto.randomBytes(32).toString('hex')` — 256-bit entropy |
+| Expiry | 10 minutes from issue |
+| Attempt limit | 5 wrong codes → OTP invalidated, user redirected to sign-in |
+| Reuse prevention | `usedAt` timestamp; already-used tokens return 400 |
+| Cleanup | Previous unused OTPs for the user are deleted before issuing a new one |
+| Session timing | Session is **only** created after OTP is verified — not at credential check |
+| E2EE continuity | `wrappedKey` + `keySalt` are returned at credential check (they're non-sensitive without the password); master key is unwrapped client-side after OTP success using the password stored in `sessionStorage` |
+| `sessionStorage` | Cleared immediately after master key is unwrapped; never written to `localStorage` |
+
+### Files
+
+| File | Purpose |
+|---|---|
+| `app/api/auth/sign-in/route.js` | Issues OTP instead of session after valid credentials |
+| `app/api/auth/verify-otp/route.js` | Validates OTP, creates session |
+| `app/(main)/verify-otp/page.jsx` | Page entry point |
+| `app/modules/verify-otp-page/VerifyOtpPage.jsx` | OTP entry UI (6 digit boxes, paste support) |
+| `lib/email.js` → `sendMfaOtpEmail()` | Sends styled OTP email via Mailjet |
+| `prisma/schema.prisma` → `MfaOtp` | OTP record model |
+
+---
+
 ## Account Lockout
 Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`.
 - **Threshold:** 5 failed attempts within 5 minutes

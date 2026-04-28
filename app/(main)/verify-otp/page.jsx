@@ -1,0 +1,7 @@
+import VerifyOtpPage from '@/app/modules/verify-otp-page/VerifyOtpPage'
+
+export const metadata = { title: 'Verify Sign-In | IntelliDent' }
+
+export default function Page() {
+  return <VerifyOtpPage />
+}

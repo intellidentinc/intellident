@@ -18,10 +18,11 @@
  */
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { setSession } from '@/lib/auth';
 import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
+import { sendMfaOtpEmail } from '@/lib/email';
 
 // Configurable lockout constants (override via env vars)
 const MAX_ATTEMPTS     = parseInt(process.env.LOCKOUT_MAX_ATTEMPTS      ?? '5');
@@ -106,21 +107,32 @@ export async function POST(request) {
       );
     }
 
-    // Successful login — reset lockout fields
+    // Successful credentials — reset lockout fields
     await prisma.user.update({
       where: { id: user.id },
       data: { failedLoginAttempts: 0, lastFailedAt: null, lockedUntil: null },
     });
 
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe);
+    // Generate 6-digit OTP + secure pending token
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const pendingToken = crypto.randomBytes(32).toString('hex');
+    const codeHash = await bcrypt.hash(otp, 8);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });
+    // Clean up any old unused OTPs for this user
+    await prisma.mfaOtp.deleteMany({ where: { userId: user.id, usedAt: null } });
+
+    await prisma.mfaOtp.create({
+      data: { userId: user.id, pendingToken, codeHash, rememberMe, expiresAt },
+    });
+
+    // Send OTP email (fire-and-forget — don't await to keep response fast)
+    sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp }).catch(() => {});
 
     return NextResponse.json(
       {
-        message: 'Signed in successfully',
-        userId: user.id,
-        clinicId: user.clinicId,
+        mfaPending: true,
+        pendingToken,
         wrappedKey: user.wrappedKey,
         keySalt: user.keySalt,
       },

@@ -56,7 +56,7 @@ app/
 │   ├── sign-in/page.jsx
 │   └── sign-up/page.jsx
 ├── api/
-│   ├── auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password)
+│   ├── auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password, verify-otp)
 │   │                         # Note: sign-up creates EmailVerification (not User); verify creates the User + profile
 │   ├── users/                # User list + PATCH role / DELETE (ADMIN only)
 │   ├── patients/             # GET (paginated) + POST (RECEPTIONIST); [id]/ PATCH + DELETE
@@ -300,6 +300,7 @@ All appointment events → in-app bell + Mailjet email. No Reminders page — be
 - [x] User Access & Authentication
   - [x] Sign up / email verification
   - [x] Sign in / sign out
+  - [x] Multi-factor authentication — email OTP (6-digit, 10 min expiry, 5-attempt limit, bcrypt-hashed); enforced for all users on every sign-in; see `docs/security.md#multi-factor-authentication-email-otp`
   - [x] Password policy enforcement
   - [x] Account lockout
   - [x] Session expiry + inactivity logout
