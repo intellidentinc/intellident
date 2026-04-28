@@ -52,10 +52,17 @@ export async function POST(request) {
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user) {
+    if (!user || user.isDeleted) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
+      );
+    }
+
+    if (!user.isActive) {
+      return NextResponse.json(
+        { error: 'Your account has been deactivated. Please contact your administrator.' },
+        { status: 403 }
       );
     }
 

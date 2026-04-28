@@ -178,6 +178,7 @@ model User {
   lastFailedAt        DateTime?
   lockedUntil         DateTime?
   isDeleted           Boolean   @default(false)
+  isActive            Boolean   @default(true)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?

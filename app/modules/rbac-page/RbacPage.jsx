@@ -18,6 +18,8 @@ import Tooltip from '@mui/material/Tooltip'
 import AddIcon from '@mui/icons-material/Add'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined'
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -30,6 +32,7 @@ const HEAD_CELLS = [
   { id: 'firstName', label: 'Name', sortable: true },
   { id: 'email', label: 'Email', sortable: true },
   { id: 'role', label: 'Role', sortable: false, align: 'center' },
+  { id: 'status', label: 'Status', sortable: false, align: 'center' },
   { id: 'actions', label: 'Actions', sortable: false, align: 'center' },
 ]
 
@@ -51,6 +54,21 @@ function RoleChip({ role }) {
   )
 }
 
+function StatusChip({ isActive }) {
+  return (
+    <Chip
+      label={isActive ? 'Active' : 'Inactive'}
+      size='small'
+      sx={{
+        bgcolor: isActive ? '#dcfce7' : '#f1f5f9',
+        color: isActive ? '#15803d' : '#64748b',
+        fontWeight: 600,
+        fontSize: '0.75rem',
+      }}
+    />
+  )
+}
+
 export default function RbacPage() {
   const { showToast } = useToast()
   const [rows, setRows] = useState([])
@@ -63,6 +81,7 @@ export default function RbacPage() {
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -88,6 +107,32 @@ export default function RbacPage() {
   useEffect(() => {
     fetchUsers()
   }, [fetchUsers])
+
+  async function handleToggleStatus(row) {
+    setTogglingId(row.id)
+    try {
+      const res = await fetch(`/api/users/${row.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !row.isActive }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(data.error ?? 'Failed to update status', 'error')
+        return
+      }
+      if (data.loggedOut) {
+        window.location.href = '/sign-in'
+        return
+      }
+      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, isActive: !row.isActive } : r))
+      showToast(`User ${!row.isActive ? 'activated' : 'deactivated'}`, 'success')
+    } catch {
+      showToast('Something went wrong', 'error')
+    } finally {
+      setTogglingId(null)
+    }
+  }
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -178,7 +223,7 @@ export default function RbacPage() {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={4} align='center' sx={{ py: 6 }}>
+                    <TableCell colSpan={5} align='center' sx={{ py: 6 }}>
                       <CircularProgress size={28} sx={{ color: '#2563eb' }} />
                     </TableCell>
                   </TableRow>
@@ -186,7 +231,7 @@ export default function RbacPage() {
 
                 {!loading && rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} align='center' sx={{ py: 6 }}>
+                    <TableCell colSpan={5} align='center' sx={{ py: 6 }}>
                       <Typography variant='body2' color='text.disabled'>
                         No users found
                       </Typography>
@@ -198,7 +243,11 @@ export default function RbacPage() {
                   <TableRow
                     key={row.id}
                     hover
-                    sx={{ '&:last-child td': { border: 0 }, '&:hover': { bgcolor: '#f8fafc' } }}
+                    sx={{
+                      '&:last-child td': { border: 0 },
+                      '&:hover': { bgcolor: '#f8fafc' },
+                      opacity: row.isActive ? 1 : 0.6,
+                    }}
                   >
                     <TableCell sx={{ fontWeight: 500, color: '#334155' }}>
                       {`${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || '—'}
@@ -213,10 +262,29 @@ export default function RbacPage() {
                     </TableCell>
 
                     <TableCell align='center'>
+                      <StatusChip isActive={row.isActive} />
+                    </TableCell>
+
+                    <TableCell align='center'>
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                         <Tooltip title='Edit role'>
                           <IconButton size='small' onClick={() => setEditTarget(row)} sx={{ cursor: 'pointer' }}>
                             <EditOutlinedIcon fontSize='small' />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={row.isActive ? 'Deactivate user' : 'Activate user'}>
+                          <IconButton
+                            size='small'
+                            disabled={togglingId === row.id}
+                            onClick={() => handleToggleStatus(row)}
+                            sx={{ cursor: 'pointer', color: row.isActive ? '#64748b' : '#15803d' }}
+                          >
+                            {togglingId === row.id
+                              ? <CircularProgress size={16} />
+                              : row.isActive
+                                ? <BlockOutlinedIcon fontSize='small' />
+                                : <CheckCircleOutlineIcon fontSize='small' />
+                            }
                           </IconButton>
                         </Tooltip>
                         <Tooltip title='Delete user'>

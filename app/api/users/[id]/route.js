@@ -34,15 +34,34 @@ export async function PATCH(request, { params }) {
 
   const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
-  const { role } = await request.json()
+  const body = await request.json()
 
+  const target = await getTargetUser(id, caller.clinicId)
+  if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Toggle active status
+  if (typeof body.isActive === 'boolean') {
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { isActive: body.isActive },
+      select: { id: true, isActive: true }
+    })
+
+    const session = await getSession()
+    const isSelf = session?.userId === id
+    if (isSelf && !body.isActive) await clearSession()
+
+    logAudit({ userId: caller.id, clinicId: caller.clinicId, action: body.isActive ? 'ACTIVATE' : 'DEACTIVATE', entity: 'User', entityId: id, ipAddress: ip, userAgent })
+
+    return NextResponse.json({ ...updated, loggedOut: isSelf && !body.isActive })
+  }
+
+  // Role update
+  const { role } = body
   const validRoles = Object.values(ROLES)
   if (!validRoles.includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
-
-  const target = await getTargetUser(id, caller.clinicId)
-  if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const updated = await prisma.user.update({
     where: { id },

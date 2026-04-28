@@ -240,6 +240,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 
 **Key patterns:**
 - Soft delete on all major models (`isDeleted Boolean` + `deletedAt`) — all queries filter `isDeleted: false`
+- `User` has `isActive Boolean @default(true)` — deactivated users remain visible in the users table but are blocked at sign-in (403); `isActive` is toggled via `PATCH /api/users/[id]` with `{ isActive: boolean }`
 - `User` is not created on sign-up; `EmailVerification` record holds pending data until email verified
 - `Appointment.dentistId` is nullable (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`
 - `patientCode` format: `PAT-{CLINICCODE}-{YYYY}-{#####}`; `appointmentCode`: `APT-{CODE}-{YYYY/MM/DD}-{####}`
@@ -313,6 +314,7 @@ All appointment events → in-app bell + Mailjet email. No Reminders page — be
   - [x] View + paginate + sort users
   - [x] Edit user role
   - [x] Delete user (soft delete; auto-logout if self)
+  - [x] Activate / deactivate user — `isActive Boolean @default(true)` on `User`; deactivated users are shown in the table (with a Status chip) but blocked at sign-in with a 403; PATCH `/api/users/[id]` handles both role updates and `isActive` toggle; deactivating self clears session
   - [x] Create user (admin-set, default password `Intellident2026#`, E2EE key generated client-side, creates Dentist/Receptionist profile)
 - [x] Clinic Settings (ADMIN)
   - [x] Clinic profile (name, address, email, phone, landline)
