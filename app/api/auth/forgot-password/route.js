@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { parseJsonBody, sanitizeEmail } from '@/lib/validate';
 
 export async function POST(request) {
   try {
-    const { email } = await request.json();
+    const parsed = await parseJsonBody(request);
+    if (parsed.error) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+
+    const email = sanitizeEmail(parsed.body.email);
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });

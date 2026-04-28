@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { sendPasswordChangedEmail } from '@/lib/email';
+import { parseJsonBody, secret } from '@/lib/validate';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -13,7 +14,16 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { currentPassword, newPassword, wrappedKey, keySalt } = await request.json();
+    const parsed = await parseJsonBody(request);
+    if (parsed.error) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { body } = parsed;
+
+    const currentPassword = secret(body.currentPassword, 128);
+    const newPassword = secret(body.newPassword, 128);
+    const wrappedKey = secret(body.wrappedKey, 128);
+    const keySalt = secret(body.keySalt, 64);
 
     if (!currentPassword || !newPassword || !wrappedKey || !keySalt) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });

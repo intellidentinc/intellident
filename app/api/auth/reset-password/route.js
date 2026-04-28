@@ -2,12 +2,22 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { sendPasswordChangedEmail } from '@/lib/email';
+import { parseJsonBody, hexToken, secret } from '@/lib/validate';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
 export async function POST(request) {
   try {
-    const { token, newPassword, wrappedKey, keySalt } = await request.json();
+    const parsed = await parseJsonBody(request);
+    if (parsed.error) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { body } = parsed;
+
+    const token = hexToken(body.token);
+    const newPassword = secret(body.newPassword, 128);
+    const wrappedKey = secret(body.wrappedKey, 128);
+    const keySalt = secret(body.keySalt, 64);
 
     if (!token || !newPassword || !wrappedKey || !keySalt) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });

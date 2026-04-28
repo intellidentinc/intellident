@@ -119,6 +119,7 @@ lib/
 ├── supabase.js               # Supabase client (service role — server-side only)
 ├── notifications.js          # In-app + email notification helpers (see Notification System section)
 ├── email.js                  # Mailjet email helpers (auth emails + all appointment notification emails)
+├── validate.js               # Input sanitization helpers (parseJsonBody, sanitizeEmail, str, secret, bool, hexToken)
 └── utils.js                  # cn() — clsx + tailwind-merge class name helper
 prisma/
 ├── schema.prisma
@@ -200,6 +201,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 
 **Key rules:**
 - Zero trust on every request: session → role → clinicId → permission → log
+- Input sanitization on all auth routes via `lib/validate.js`: 16 KB payload cap, type checking, field length limits, email normalization, hex token validation — applied before any DB call
 - E2EE via Web Crypto API (AES-GCM-256 + PBKDF2) — server never sees plaintext; `lib/crypto.js`
 - Password policy: 8+ chars, upper, lower, digit, special — enforced client + server
 - Session: 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`)
@@ -457,6 +459,34 @@ import { cn } from '@/lib/utils';
 // Merges Tailwind classes safely (clsx + tailwind-merge)
 <div className={cn('base-class', condition && 'conditional-class', props.className)} />
 ```
+
+### Input Sanitization (API Routes)
+All auth API routes use `lib/validate.js` helpers before touching the DB:
+
+```js
+import { parseJsonBody, sanitizeEmail, str, secret, bool, hexToken } from '@/lib/validate';
+
+// In any POST handler:
+const parsed = await parseJsonBody(request); // rejects if body > 16 KB or not a JSON object
+if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+const { body } = parsed;
+
+const email    = sanitizeEmail(body.email);        // trim, lowercase, format check, ≤ 254 chars
+const password = secret(body.password, 128);       // no trim, ≤ 128 chars (passwords may have spaces)
+const name     = str(body.firstName, 100);         // trim, ≤ 100 chars
+const flag     = bool(body.rememberMe);            // only literal true → true
+const token    = hexToken(body.token);             // exactly 64 lowercase hex chars
+```
+
+| Helper | Trims | Max length | Extra validation |
+|---|---|---|---|
+| `sanitizeEmail` | yes | 254 | RFC format, lowercased |
+| `str` | yes | caller-defined | — |
+| `secret` | **no** | caller-defined | passwords/key material |
+| `bool` | — | — | literal `true` only |
+| `hexToken` | yes | 64 | `/^[a-f0-9]{64}$/` |
+
+Applied to: `sign-in`, `sign-up`, `forgot-password`, `reset-password`, `change-password`, `verify` (query param).
 
 ### Address Normalization
 All address fields are normalized server-side via `normalizeAddress()` from `lib/utils.js`:

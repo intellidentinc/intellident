@@ -23,10 +23,23 @@ import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendVerificationEmail } from '@/lib/email';
+import { parseJsonBody, sanitizeEmail, secret, str } from '@/lib/validate';
 
 export async function POST(request) {
   try {
-    const { email, password, firstName, lastName, wrappedKey, keySalt, clinicId } = await request.json();
+    const parsed = await parseJsonBody(request);
+    if (parsed.error) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { body } = parsed;
+
+    const email = sanitizeEmail(body.email);
+    const password = secret(body.password, 128);
+    const firstName = str(body.firstName, 100) ?? null;
+    const lastName = str(body.lastName, 100) ?? null;
+    const wrappedKey = secret(body.wrappedKey, 128);
+    const keySalt = secret(body.keySalt, 64);
+    const clinicId = str(body.clinicId, 50) ?? null;
 
     if (!email || !password || !clinicId) {
       return NextResponse.json(

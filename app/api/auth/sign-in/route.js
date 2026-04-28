@@ -21,6 +21,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { setSession } from '@/lib/auth';
 import { getRequestMeta, logAudit } from '@/lib/audit';
+import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 
 // Configurable lockout constants (override via env vars)
 const MAX_ATTEMPTS     = parseInt(process.env.LOCKOUT_MAX_ATTEMPTS      ?? '5');
@@ -30,7 +31,16 @@ const LOCK_DURATION_MS = parseInt(process.env.LOCKOUT_DURATION_MINUTES  ?? '15')
 export async function POST(request) {
   try {
     const { ip, userAgent } = getRequestMeta(request);
-    const { email, password, rememberMe = false } = await request.json();
+
+    const parsed = await parseJsonBody(request);
+    if (parsed.error) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { body } = parsed;
+
+    const email = sanitizeEmail(body.email);
+    const password = secret(body.password, 128);
+    const rememberMe = bool(body.rememberMe);
 
     if (!email || !password) {
       return NextResponse.json(

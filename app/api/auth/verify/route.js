@@ -21,11 +21,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setSession } from '@/lib/auth';
+import { hexToken } from '@/lib/validate';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const token = searchParams.get('token');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  const token = hexToken(searchParams.get('token'));
 
   if (!token) {
     return NextResponse.redirect(`${appUrl}/sign-in?verified=invalid`);
