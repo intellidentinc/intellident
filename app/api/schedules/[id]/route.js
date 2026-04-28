@@ -33,9 +33,9 @@ export async function PATCH(request, { params }) {
   })
   if (!appointment) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  if (appointment.status !== 'PENDING') {
+  if (!['PENDING', 'CONFIRMED'].includes(appointment.status)) {
     return NextResponse.json(
-      { error: 'Only pending appointments can be cancelled by patients' },
+      { error: 'Only pending or confirmed appointments can be cancelled' },
       { status: 400 }
     )
   }

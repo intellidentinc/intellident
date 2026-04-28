@@ -5,7 +5,7 @@
  *   - Two tabs: Upcoming (PENDING | CONFIRMED | RESCHEDULED, future) and Past (COMPLETED | CANCELLED | NO_SHOW)
  *   - "Book Appointment" button opens BookAppointmentModal (6-step progressive disclosure)
  *   - Appointment cards show service name, dentist, date/time, and a status chip
- *   - Cancel button is only shown for PENDING appointments — patients cannot cancel CONFIRMED ones
+ *   - Cancel button is shown for PENDING and CONFIRMED appointments
  *   - Cancellation goes through CancelScheduleModal for confirmation before calling
  *     PATCH /api/schedules/[id] with { status: 'CANCELLED' }
  *   - Page re-fetches after booking or cancellation to reflect the latest state
@@ -181,7 +181,7 @@ export default function SchedulesPage() {
 
 function AppointmentCard({ appointment, onCancel }) {
   const chip = STATUS_CHIP[appointment.status] ?? { bg: '#f1f5f9', color: '#475569', label: appointment.status }
-  const isPending = appointment.status === 'PENDING'
+  const isCancellable = appointment.status === 'PENDING' || appointment.status === 'CONFIRMED'
 
   return (
     <Box
@@ -248,7 +248,7 @@ function AppointmentCard({ appointment, onCancel }) {
         <Typography variant='caption' color='text.disabled' sx={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>
           {appointment.appointmentCode ?? '—'}
         </Typography>
-        {isPending && (
+        {isCancellable && (
           <Tooltip title='Cancel appointment'>
             <IconButton size='small' onClick={onCancel} sx={{ color: '#b91c1c', p: 0.5 }}>
               <CancelOutlinedIcon sx={{ fontSize: 18 }} />
