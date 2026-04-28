@@ -192,401 +192,90 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 
 ## Security Architecture
 
-### Zero Trust
-Every request is verified before data is accessed:
-1. Valid session?
-2. User role?
-3. Tenant/clinic match (ClinicID)?
-4. Role has permission for this action?
-5. Log the attempt either way
+> Full details: [`docs/security.md`](./docs/security.md)
 
-### E2EE (Client-Side Encryption)
-Using the Web Crypto API — **the server never sees plaintext user data.**
+**Key rules:**
+- Zero trust on every request: session → role → clinicId → permission → log
+- E2EE via Web Crypto API (AES-GCM-256 + PBKDF2) — server never sees plaintext; `lib/crypto.js`
+- Password policy: 8+ chars, upper, lower, digit, special — enforced client + server
+- Session: 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`)
+- Account lockout: 5 failed attempts / 5 min → locked 15 min
+- Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use
+- Password reset generates fresh E2EE keys (old data inaccessible); change-password re-wraps existing key
+- Password history: cannot reuse last 3
 
-**Registration:**
-- Browser generates AES-GCM-256 master key
-- PBKDF2 derives a Key Encryption Key (KEK) from the user's password + random salt
-- Master key is wrapped with KEK using AES-KW
-- Only `wrappedKey` + `keySalt` are sent to the server
-
-**Login:**
-- Server returns `wrappedKey` + `keySalt`
-- Browser re-derives KEK from password + salt
-- Master key is unwrapped locally → stored in `CryptoProvider` memory only
-- Cleared from memory on sign-out
-
-**Data:**
-- Encrypt with `encryptData(masterKey, plaintext)` → returns `{ ciphertext, iv }`
-- Decrypt with `decryptData(masterKey, ciphertext, iv)`
-- Server stores only encrypted blobs — unreadable without the user's password
-
-**Important:** Developers cannot read user data. There is no password recovery that restores access to existing encrypted data. This is intentional.
-
-### Password Policy
-Enforced on both client and server (`app/api/auth/sign-up/route.js`):
-- Minimum 8 characters
-- At least 1 uppercase letter
-- At least 1 lowercase letter
-- At least 1 digit
-- At least 1 special character
-
-### Session Policy
-- **Token expiry:** 10 minutes (`lib/auth.js` — `maxAge: 60 * 10`)
-- **Remember Me:** extends session to 3 days (`maxAge: 60 * 60 * 24 * 3`) — checkbox on sign-in page
-- **Inactivity logout:** 30 minutes — tracked in `InactivityProvider`; clears master key and redirects to `/sign-in?reason=inactivity`
-
-### Account Lockout
-Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`.
-- **Threshold:** 5 failed attempts within 5 minutes
-- **Lock duration:** 15 minutes
-- Configurable via env vars: `LOCKOUT_MAX_ATTEMPTS`, `LOCKOUT_WINDOW_MINUTES`, `LOCKOUT_DURATION_MINUTES`
-- Resets on successful login
-
-### Email Verification on Sign-Up
-- `POST /api/auth/sign-up` → validates input, generates E2EE key material client-side, stores everything in `EmailVerification` record (24h expiry). **Does NOT create a `User` yet.**
-- A verification email with a tokenized link is sent via Mailjet.
-- `POST /api/auth/verify` → validates token, creates `User` + profile record (`Patient` / `Dentist` / `Receptionist`). Token is single-use.
-- Model: `EmailVerification` (token, email, firstName, lastName, hashed password, wrappedKey, keySalt, clinicId, expiresAt)
-
-### Password Reset & Change
-- **Forgot password:** `POST /api/auth/forgot-password` → generates one-time token (10 min expiry), sends reset link via email. Always returns 200 to prevent email enumeration.
-- **Reset password:** `POST /api/auth/reset-password` → validates token, enforces policy, checks history, generates fresh E2EE key material (old encrypted data is intentionally inaccessible), sends confirmation email.
-- **Change password (authenticated):** `POST /api/auth/change-password` → requires current password verification, re-wraps existing master key with new KEK (encrypted data stays accessible), sends confirmation email.
-- **Password history:** last 3 hashed passwords stored in `User.passwordHistory String[]`; new password cannot match any of them.
-- Reset token model: `PasswordResetToken` (token, email, expiresAt, usedAt)
-- Email notifications sent via `sendPasswordResetEmail` and `sendPasswordChangedEmail` in `lib/email.js`
-
-### RBAC Roles
+**RBAC:**
 
 | Role | Sidebar Access |
 |---|---|
-| `PATIENT` | Dashboard, My Schedules (`/schedules`), My Profile |
-| `RECEPTIONIST` | Dashboard, Appointments (`/appointments`), Patients, Billing |
-| `DENTIST` | Dashboard, Schedule (`/schedule`), Patient Records (`/records`), My Profile |
-| `ADMIN` | Dashboard, Users, Services, Schedules (`/appointments`), Billing, Settings, Audit Log |
+| `PATIENT` | Dashboard, My Schedules, My Profile |
+| `RECEPTIONIST` | Dashboard, Appointments, Patients, Billing |
+| `DENTIST` | Dashboard, Schedule, Patient Records, My Profile |
+| `ADMIN` | Dashboard, Users, Services, Appointments, Billing, Settings, Audit Log |
 
-- Sidebar nav is built per-role in `buildNavGroups()` inside `AppSidebar.jsx`
-- `AppSidebar` receives `pendingCount` prop from `layout.jsx` (server-fetched); renders a blue badge on Appointments/Schedules nav items for RECEPTIONIST and ADMIN when count > 0
-- Role changes and account deletions applied to the currently logged-in user immediately clear their session and redirect to sign-in
-- There is no longer a "Reminders" nav item — notifications are delivered via the bell icon in `PageHeader`
-
-### Multi-Tenancy
-All data is scoped to a `ClinicID`. Every DB query must include a clinic scope filter. No cross-clinic data access is allowed regardless of role.
+- Multi-tenancy: every DB query must include `clinicId` scope — no cross-clinic access
+- Role/account changes on current user immediately clear session + redirect to sign-in
 
 ---
 
 ## Data Models (key)
 
-### Soft Delete Pattern
-All major models (`User`, `Patient`, `Dentist`, `Receptionist`, `Clinic`, `Service`, `Appointment`, `PatientRecord`, `Attachment`, `Billing`, `Payment`) have `isDeleted Boolean` + `deletedAt DateTime?` for audit-trail-preserving soft deletes. All queries filter `isDeleted: false`.
+> Full details: [`docs/data-models.md`](./docs/data-models.md)
 
-### Auth & Pre-Registration
-- `EmailVerification` — pre-registration holding record created by sign-up; `User` is not created until email is verified. Fields: `token` (unique), `email`, `firstName`, `lastName`, `password` (hashed), `wrappedKey`, `keySalt`, `clinicId?`, `expiresAt` (24h), `createdAt`
-- `PasswordResetToken` — one-time reset tokens; fields: `token` (unique), `email`, `expiresAt` (10 min), `usedAt?`, `createdAt`
-- `User` — auth + role. Source of truth for role (`PATIENT | RECEPTIONIST | DENTIST | ADMIN`). Also holds `passwordHistory String[]`, `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`, `address?`, `dateOfBirth?`
+**Key patterns:**
+- Soft delete on all major models (`isDeleted Boolean` + `deletedAt`) — all queries filter `isDeleted: false`
+- `User` is not created on sign-up; `EmailVerification` record holds pending data until email verified
+- `Appointment.dentistId` is nullable (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`
+- `patientCode` format: `PAT-{CLINICCODE}-{YYYY}-{#####}`; `appointmentCode`: `APT-{CODE}-{YYYY/MM/DD}-{####}`
+- `PatientRecord` has E2EE fields (`encryptedData`, `dataIv`, `contentHash` for tamper detection)
+- `Billing`/`Payment` schema complete; API/UI not yet built
+- `AuditLog` schema complete; query UI not yet built
+- `Notification` model is legacy — system uses `InAppNotification` + Mailjet fire-and-forget
 
-### Clinic & Schedule
-- `Clinic` — multi-tenant root. Holds `name`, `code` (e.g. `MLC`, `KH`, `CAB`), `address`, `email`, `phone`, `landline`, `logoUrl`
-- `ClinicSchedule` — one per clinic; `workingDays String[]` (e.g. `["MON","TUE"]`), `openTime`, `closeTime` (HH:mm strings). Upserted via PATCH.
-- `ClinicClosure` — many per clinic; `date DateTime`, `reason String?` for holidays/maintenance
-
-### User Profiles
-- `Receptionist` — profile extension for `RECEPTIONIST` users (linked via `userId`)
-- `Dentist` — profile extension for `DENTIST` users; has `specialty`; linked to `Appointment` via `dentistId`; assigned to services via `ServiceDentists` join table
-- `Patient` — profile extension for `PATIENT` users; fields: `patientCode` (format: `PAT-{CLINICCODE}-{YYYY}-{#####}`), `dateOfBirth?`, `gender?` (Gender enum), `phone?`, `address?`, `consentStatus` (ConsentStatus enum, default `PENDING`), `consentGivenAt?`
-
-### Services & Appointments
-- `Service` — dental services; fields: `name`, `description?`, `duration`, `price?`, `bufferTime`; many-to-many with `Dentist` via `ServiceDentists`
-- `Appointment` — scheduling record; `appointmentCode` (e.g. `APT-MLC-2026/03/25-0001`); `dentistId` is **nullable** (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`; `reminderSent24h Boolean` + `reminderSent2h Boolean` (prevent duplicate cron reminders); `aiSuggested Boolean` (default false — reserved for future GPT-5 integration)
-- `AppointmentStatusHistory` — audit trail of every status transition; fields: `appointmentId`, `status`, `changedById`, `changedAt`, `note`
-
-### Patient Records (schema built; CRUD API not yet implemented)
-- `PatientRecord` — E2EE encrypted clinical notes per patient; fields: `patientId`, `clinicId`, `title`, `encryptedData?`, `dataIv?`, `contentHash?` (SHA-256 hash for tamper detection — not yet wired to API), `status` (RecordStatus enum: `ACTIVE | ARCHIVED`)
-- `Attachment` — file references linked to a `PatientRecord`; fields: `recordId`, `fileName`, `fileUrl`, `mimeType`
-
-### Billing (schema built; API/UI not yet implemented)
-- `Billing` — invoice per appointment; fields: `clinicId`, `patientId`, `appointmentId` (unique), `amount`, `amountPaid`, `balance`, `status` (PaymentStatus enum: `UNPAID | PARTIAL | PAID | REFUNDED`), `receiptNumber` (unique)
-- `Payment` — individual payment entries linked to a `Billing`; fields: `billingId`, `amount`, `method?`, `notes?`, `paidAt`
-
-### Audit & Notifications
-- `AuditLog` — system-wide audit trail (schema built; query API/UI not yet implemented); fields: `userId?`, `clinicId?`, `action` (AuditAction enum), `entity`, `entityId?`, `ipAddress?`, `userAgent?`, `metadata` (Json)
-- `InAppNotification` — in-app bell notifications; fields: `userId`, `clinicId`, `type` (NotificationType), `title`, `body`, `appointmentId?`, `isRead`, `createdAt`
-- `Notification` — **legacy email queue model; not actively used.** System uses `InAppNotification` for bell + Mailjet fire-and-forget for email.
-
-### Enums
-
-```
-UserRole:         PATIENT | RECEPTIONIST | DENTIST | ADMIN
-Gender:           MALE | FEMALE | OTHER | PREFER_NOT_TO_SAY
-AppointmentStatus: PENDING | CONFIRMED | RESCHEDULED | CANCELLED | COMPLETED | NO_SHOW
-RecordStatus:     ACTIVE | ARCHIVED
-PaymentStatus:    UNPAID | PARTIAL | PAID | REFUNDED
-ConsentStatus:    PENDING | GIVEN | REVOKED
-NotificationStatus: PENDING | SENT | FAILED  (legacy Notification model only)
-AuditAction:      LOGIN | LOGOUT | CREATE | UPDATE | DELETE | VIEW | EXPORT | VERIFY
-```
-
-### NotificationType Enum
-```
-BOOKING_REQUEST         — new patient booking (→ staff)
-APPOINTMENT_CONFIRMED   — booking confirmed (→ patient)
-APPOINTMENT_CANCELLED   — booking cancelled (→ patient + staff)
-APPOINTMENT_COMPLETED   — visit completed (→ patient)
-APPOINTMENT_NO_SHOW     — patient no-show (→ patient)
-APPOINTMENT_RESCHEDULED — appointment rescheduled (→ patient)
-REMINDER_24H            — 24-hour reminder (→ patient, via cron)
-REMINDER_2H             — 2-hour reminder (→ patient, via cron)
-```
+**Key enums:** `UserRole`, `AppointmentStatus` (PENDING/CONFIRMED/RESCHEDULED/CANCELLED/COMPLETED/NO_SHOW), `NotificationType`, `AuditAction`, `PaymentStatus`, `RecordStatus`, `ConsentStatus`
 
 ---
 
 ## Notification System
 
-### Overview
-All appointment events generate both **in-app notifications** (bell icon) and **email notifications** (Mailjet). There is no separate Reminders page — the bell icon in `PageHeader` opens a Framer Motion slide-in drawer.
+> Full details: [`docs/notifications.md`](./docs/notifications.md)
 
-### `lib/notifications.js` Helpers
+All appointment events → in-app bell + Mailjet email. No Reminders page — bell opens Framer Motion drawer.
 
-| Function | Purpose |
-|---|---|
-| `createNotification({ userId, clinicId, type, title, body, appointmentId })` | Single in-app notification for one user |
-| `notifyStaff({ clinicId, type, title, body, appointmentId })` | In-app only to all RECEPTIONIST + ADMIN users in clinic |
-| `notifyStaffBooking({ clinicId, appointmentId, patientName, serviceName, scheduledAt, appointmentCode })` | In-app + email to staff on new patient booking |
-| `notifyPatientStatusChange({ userId, clinicId, appointmentId, status, patientEmail, patientFirstName, serviceName, scheduledAt, appointmentCode })` | In-app + email to patient on status transitions (CONFIRMED / CANCELLED / COMPLETED / NO_SHOW / RESCHEDULED) |
-| `sendAppointmentReminder({ appointment, hoursAhead })` | In-app + email reminder (hoursAhead: 24 or 2); called by cron job |
+**Helpers in `lib/notifications.js`:**
+- `notifyStaffBooking(...)` — new booking → all staff (in-app + email)
+- `notifyPatientStatusChange(...)` — status change → patient (in-app + email)
+- `sendAppointmentReminder({ appointment, hoursAhead })` — cron reminders (24h / 2h)
 
-### When Notifications Fire
+**Cron:** `app/api/cron/reminders/route.js` — every 15 min, Bearer `CRON_SECRET`, sets `reminderSent24h`/`reminderSent2h` to prevent duplicates.
 
-| Event | Who receives | Type |
-|---|---|---|
-| Patient books appointment | All staff (in-app + email) | `BOOKING_REQUEST` |
-| Receptionist confirms booking | Patient (in-app + email) | `APPOINTMENT_CONFIRMED` |
-| Receptionist creates appointment as CONFIRMED directly | Patient (in-app + email) | `APPOINTMENT_CONFIRMED` |
-| Appointment cancelled | Patient (in-app + email) + Staff (in-app) | `APPOINTMENT_CANCELLED` |
-| Appointment completed | Patient (in-app + email) | `APPOINTMENT_COMPLETED` |
-| Appointment no-show | Patient (in-app + email) | `APPOINTMENT_NO_SHOW` |
-| Appointment rescheduled | Patient (in-app + email) | `APPOINTMENT_RESCHEDULED` |
-| 24h before appointment | Patient (in-app + email) | `REMINDER_24H` |
-| 2h before appointment | Patient (in-app + email) | `REMINDER_2H` |
-
-### `lib/email.js` Appointment Functions
-- `sendAppointmentBookingEmail` — amber header, to staff
-- `sendAppointmentConfirmedEmail` — green header, to patient
-- `sendAppointmentCancelledEmail` — red header, to patient
-- `sendAppointmentCompletedEmail` — blue header, to patient
-- `sendAppointmentNoShowEmail` — slate header, to patient
-- `sendAppointmentRescheduledEmail` — purple header, to patient
-- `sendAppointmentReminderEmail` — cyan header, to patient; `hoursAhead` param (24 or 2)
-
-All email functions are fire-and-forget (`.catch(() => {})`) — email failures never block the primary operation.
-
-### Notification Bell (`components/commons/PageHeader.jsx`)
-- `NotificationBell` polls `/api/notifications` every 30s for unread count
-- Blue badge shows count; click opens `NotificationDrawer`
-- `NotificationDrawer` uses Framer Motion `AnimatePresence` + `motion.div` spring slide-in from right (x: 100% → 0)
-- Backdrop fades in behind drawer; click backdrop to close
-- Per-notification mark-read on click; "Mark all read" button; relative time via `dayjs.fromNow()`
-
-### Notification API Routes
-- `GET /api/notifications` — last 50 notifications + `unreadCount` for session user
-- `PATCH /api/notifications` — mark all as read for session user
-- `PATCH /api/notifications/[id]` — mark single notification as read (owner check)
-
-### Cron Job (Reminders)
-- **File:** `app/api/cron/reminders/route.js`
-- **Schedule:** every 15 minutes (`*/15 * * * *` in `vercel.json`)
-- **Auth:** `Authorization: Bearer {CRON_SECRET}` header — set `CRON_SECRET` env var in Vercel + `.env`
-- Finds CONFIRMED appointments in a ±30min window around 24h and 2h from now
-- Sends in-app + email reminders; sets `reminderSent24h` / `reminderSent2h` = true to prevent duplicates
-- Returns `{ sent24h, sent2h }` counts
+**API:** `GET/PATCH /api/notifications`, `PATCH /api/notifications/[id]`
 
 ---
 
-## Appointments Module (`/[clinicId]/appointments`)
+## Appointments, Schedules & Dentist Calendar
 
-RECEPTIONIST + ADMIN access.
+> Full details: [`docs/appointments.md`](./docs/appointments.md)
 
-### Workflow
-1. **Patient self-booking** — patient logs in → My Schedules → Book Appointment → selects service, dentist preference, date, time slot → submitted as `PENDING` → staff notified (in-app + email)
-2. **Receptionist/Admin** — sees all appointments in calendar or list view; PENDING bookings from patients show with a badge on the sidebar and a "Booking Requests" quick-filter button on the appointments page
-3. **Receptionist confirms** — opens appointment detail, transitions PENDING → CONFIRMED → patient notified (in-app + email)
-4. **Day of appointment** — CONFIRMED → COMPLETED (or NO_SHOW) → patient notified
-5. **Cancellation** — any non-terminal status can be cancelled → patient + staff notified
-6. **Rescheduling** — CONFIRMED → RESCHEDULED status transition → patient notified
+**Appointments** (RECEPTIONIST + ADMIN, `/appointments`):
+- Status flow: PENDING → CONFIRMED → COMPLETED/NO_SHOW/CANCELLED/RESCHEDULED (terminal states cannot transition)
+- Calendar: `react-big-calendar` Day/Week/Month + List view; click empty slot pre-fills `CreateAppointmentModal`
+- POST validates: working day, not closure, within open hours, no dentist overlap
+- `appointmentCode`: `APT-{CODE}-{YYYY/MM/DD}-{####}` generated server-side
+- Pending badge on sidebar via `pendingCount` prop from `layout.jsx`; "Booking Requests" quick-filter button
 
-### Status Transition Rules
-| From → To | Allowed |
-|---|---|
-| PENDING → CONFIRMED | ✅ |
-| PENDING → CANCELLED | ✅ |
-| CONFIRMED → COMPLETED | ✅ |
-| CONFIRMED → CANCELLED | ✅ |
-| CONFIRMED → NO_SHOW | ✅ |
-| CONFIRMED → RESCHEDULED | ✅ |
-| COMPLETED / CANCELLED / NO_SHOW / RESCHEDULED → any | ❌ terminal |
+**Patient Schedules** (PATIENT, `/schedules`):
+- Multi-step `BookAppointmentModal`: service → dentist → date → 30-min time slots → notes → confirm
+- Always creates as PENDING; notifies all staff; patient can cancel own PENDING
+- Slots API: `GET /api/schedules/slots?date&serviceId&dentistId` — filters closed days, past times, conflicts
 
-### appointmentCode Generation
-Format: `APT-{clinic.code}-{YYYY/MM/DD}-{####}`
-- Generated server-side on `POST /api/appointments`
-- Sequential counter per clinic per date (zero-padded to 4 digits)
-- Requires `Clinic.code` to be set (MLC, KH, CAB — set via seed)
+**Dentist Calendar** (DENTIST, `/schedule`): read-only Day/Week view via `GET /api/schedule?from&to`
 
-### Calendar Views
-`AppointmentCalendar.jsx` wraps `react-big-calendar` with `dayjsLocalizer`:
-- Supported views: `day`, `week`, `month` (+ `list` as a separate MUI table)
-- `'& .rbc-*'` CSS overrides applied via MUI `sx` prop — no global CSS conflicts
-- Custom `EventComponent` shows patient name + service
-- `eventPropGetter` applies status-based `border-left` colors
-- `toolbar={false}` — AppointmentsPage has its own custom toolbar
-- Click empty slot → `onSelectSlot` → opens CreateAppointmentModal pre-filled with that date/time via `defaultScheduledAt` prop
+**Dashboard** (`DashboardPage.jsx`, server component): role-aware stat cards + recent appointments, all queries scoped to `clinicId`
 
-### Appointments API Routes
+**Settings** (ADMIN, `/settings`): `ClinicLogoUpload` (Supabase), `ClinicProfileForm`, `ClinicSchedule` (working days/hours), `ClinicClosures`
 
-| Route | Method | Role | Purpose |
-|---|---|---|---|
-| `/api/appointments` | GET | RECEPTIONIST, ADMIN | Paginated list; params: `page`, `pageSize`, `sortField`, `sortOrder`, `status`, `dentistId`, `serviceId`, `search` |
-| `/api/appointments` | POST | RECEPTIONIST, ADMIN | Create appointment with full validation; notifies patient if CONFIRMED |
-| `/api/appointments/calendar` | GET | RECEPTIONIST, ADMIN | All appointments in a date range (no pagination); params: `from`, `to` (ISO) |
-| `/api/appointments/[id]` | GET | RECEPTIONIST, ADMIN | Detail + statusHistory with changedBy user |
-| `/api/appointments/[id]` | PATCH | RECEPTIONIST, ADMIN | Status transition; body: `{ status, note? }`; triggers notifications |
-| `/api/appointments/patients` | GET | RECEPTIONIST, ADMIN | Patient search autocomplete; param: `q` |
-| `/api/appointments/services` | GET | RECEPTIONIST, ADMIN, PATIENT | Services list for appointment form |
-| `/api/appointments/dentists` | GET | RECEPTIONIST, ADMIN, PATIENT | Dentists for a service; param: `serviceId` |
-| `/api/appointments/slots/check` | GET | RECEPTIONIST, ADMIN | Real-time conflict check; params: `dentistId`, `scheduledAt`, `serviceId`, `excludeAppointmentId?` |
-
-### Server-side Validation on POST
-1. Date is a working day (`ClinicSchedule.workingDays`)
-2. Date is not a closure (`ClinicClosure`)
-3. Time within `openTime ≤ scheduledAt < closeTime`
-4. Dentist has no overlapping appointment (if specific dentist chosen)
-5. `endsAt = scheduledAt + service.duration + service.bufferTime`
-
-### Appointment Form Notes
-- **Patient field** uses MUI `Autocomplete` with `filterOptions={(x) => x}` — client-side filtering is disabled because results come from server-side search
-- **Dentist dropdown** only shows dentists assigned to the selected service — assign dentists to services in the Services page first
-- **Date picker** disables past dates, non-working days, and closure dates
-- **Time picker** restricts to clinic open/close hours
-- Conflict warning shows inline when a dentist is double-booked
-- DatePicker/TimePicker require `LocalizationProvider` + `AdapterDayjs` — wrapped inside the modal component itself
-- `defaultScheduledAt` prop on `CreateAppointmentModal` pre-fills date and time when clicking a calendar slot
-
-### Pending Bookings Badge
-- `[clinicId]/layout.jsx` (server component) counts PENDING appointments for RECEPTIONIST/ADMIN roles on every page load
-- Passed as `pendingCount` prop to `AppSidebar`
-- Sidebar renders a blue pill badge on the Appointments nav item when `pendingCount > 0`
-- On the Appointments page, a "Booking Requests" button under the title quick-filters to PENDING + switches to List view
-
-### Public Clinic Endpoint (unauthenticated)
-- `GET /api/clinics` — returns list of all clinics (id, name, code); used by sign-in and sign-up pages to populate the clinic selector dropdown. No session required.
-
-### Session-based Clinic Endpoints (any authenticated role)
-- `GET /api/clinics/schedule` — returns current clinic's schedule (working days, open/close time)
-- `GET /api/clinics/closures` — returns current clinic's closure dates
-- These are separate from the ADMIN-only `GET /api/clinics/[id]/schedule` endpoints
-
----
-
-## Patient Schedules Module (`/[clinicId]/schedules`)
-
-PATIENT role only.
-
-### Workflow
-1. Patient opens My Schedules — sees Upcoming / Past tabs with appointment cards
-2. Clicks "Book Appointment" → `BookAppointmentModal` progressive disclosure:
-   - Step 1: Service cards (visual selection)
-   - Step 2: Dentist preference chips (Any Available or specific)
-   - Step 3: `DatePicker` — disables non-working days and closure dates
-   - Step 4: Time slot chips grouped by Morning / Afternoon — fetched from `/api/schedules/slots`
-   - Step 5: Optional notes
-   - Step 6: Booking summary card before submit
-3. Submit → `POST /api/schedules` → creates appointment as `PENDING` → all staff notified (in-app + email)
-4. Patient can cancel own PENDING appointments from the card
-5. Receptionist then sees it in their Appointments page (pending badge triggers)
-
-### Patient Schedules API Routes
-
-| Route | Method | Role | Purpose |
-|---|---|---|---|
-| `/api/schedules` | GET | PATIENT | Own appointments; param: `tab=upcoming\|past` |
-| `/api/schedules` | POST | PATIENT | Book appointment (always creates as PENDING); fires staff notifications |
-| `/api/schedules/[id]` | PATCH | PATIENT | Cancel own PENDING appointment only |
-| `/api/schedules/slots` | GET | PATIENT | Available 30-min time slots for a date/service/dentist |
-
-### Slot Generation (`/api/schedules/slots`)
-- Params: `date`, `serviceId`, `dentistId` (or `ANY`)
-- Validates working day + not closure
-- Generates slots every 30 min: `openTime` to `closeTime - serviceDuration`
-- Filters past slots if date = today (30-min buffer from now)
-- Specific dentist: conflict-checks each slot against existing non-cancelled appointments
-- `ANY` dentist: returns all open slots (no conflict check — receptionist assigns on confirmation)
-
-### Zero Trust in Patient Routes
-- `getPatientCaller()` verifies `patient.clinicId === user.clinicId`
-- Appointment PATCH verifies `appointment.clinicId === caller.clinicId` AND `appointment.patientId === caller.patient.id`
-- POST verifies `dentistId` belongs to `caller.clinicId` before using it
-- All queries include `clinicId` scope
-
----
-
-## Dentist Schedule Module (`/[clinicId]/schedule`)
-
-DENTIST role only.
-
-### Features
-- Day / Week calendar view (no month or list — not relevant for a dentist's daily workflow)
-- Today's stat chips: confirmed count + pending count for the current calendar view
-- Status color legend
-- Click any appointment event → `ScheduleEventModal` (read-only: patient, service, time, notes, status)
-- No create/edit capabilities — read-only view
-
-### Dentist Schedule API
-- `GET /api/schedule?from=&to=` — DENTIST role only
-- Looks up `Dentist` profile by `userId`, verifies `dentist.clinicId === user.clinicId`
-- Returns only appointments where `dentistId = dentist.id` for the given range
-- Includes patient name/patientCode + service name/duration
-
----
-
-## Dashboard (Role-Aware)
-
-`DashboardPage.jsx` is a server component. All DB queries run server-side — no client-side fetch. Each role sees a different dashboard:
-
-| Role | Dashboard Content |
-|---|---|
-| `PATIENT` | Next appointment card + status chip, stat chips (Upcoming / Completed / Cancelled), "Book Appointment" CTA |
-| `RECEPTIONIST` | Stat cards (pending bookings, today's appointments, confirmed upcoming, total patients) + amber alert CTA if pending > 0 + recent appointments list |
-| `ADMIN` | Stat cards (total users, patients, services, appointments this month, pending bookings) + amber alert CTA if pending > 0 + recent appointments list |
-| `DENTIST` | Stat cards (today's appointments, upcoming this week, my patients) + next appointment card + quick links to Schedule and Records |
-
-All dashboard queries include `clinicId` scope (zero trust). StatCards with `href` are clickable and navigate to the relevant section.
-
----
-
-## Dentist Patient Records (`/[clinicId]/records`)
-
-DENTIST role only.
-
-- Shows all patients who have at least one CONFIRMED or COMPLETED appointment with the logged-in dentist
-- Paginated table with search (name, patientCode)
-- Columns: Patient ID (patientCode), Name, Last Service, Last Visit, Status, Total Visits
-- API: `GET /api/records?page=&pageSize=&search=`
-- Query: `Patient.findMany` filtered by `appointments.some { dentistId, status IN [CONFIRMED, COMPLETED] }`
-- Zero trust: looks up `Dentist` profile by `userId`, verifies `dentist.clinicId === user.clinicId`
-
----
-
-## Settings Page (`/[clinicId]/settings`)
-
-ADMIN-only. Split into four sections, each its own component:
-
-| Component | Responsibility |
-|---|---|
-| `ClinicLogoUpload` | Avatar preview, file input (jpg/png ≤5MB), POST to `/api/clinics/[id]/logo` |
-| `ClinicProfileForm` | Name, address, email, mobile (optional), landline (optional) — PATCH profile |
-| `ClinicSchedule` | Toggle working days (MON–SUN), set open/close time — PATCH schedule |
-| `ClinicClosures` | Add/delete clinic closure dates with optional reason |
-
-Logo is stored in Supabase bucket `clinic-logos` at path `{clinicId}/{timestamp}.{ext}`. Old logo is deleted on upload. `logoUrl` is persisted to the `Clinic` record and rendered in the sidebar header (`AppSidebar.jsx`).
+**Dentist Records** (DENTIST, `/records`): patients with ≥1 CONFIRMED/COMPLETED appt with that dentist; paginated + searchable
 
 ---
 
