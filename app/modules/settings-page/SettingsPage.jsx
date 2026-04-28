@@ -13,10 +13,25 @@ import ClinicProfileForm from './ClinicProfileForm'
 import ClinicSchedule from './ClinicSchedule'
 import ClinicClosures from './ClinicClosures'
 
+function assembleAddress(form) {
+  return [
+    form.addressUnit,
+    form.addressStreet,
+    form.addressBarangay ? `Brgy. ${form.addressBarangay}` : '',
+    form.addressCity,
+    form.addressProvince,
+    form.addressPostal,
+  ]
+    .map((s) => s?.trim())
+    .filter(Boolean)
+    .join(', ')
+}
+
 function validate(form) {
   const errs = {}
   if (!form.name.trim()) errs.name = 'Clinic name is required'
-  if (!form.address.trim()) errs.address = 'Address is required'
+  if (!form.addressStreet.trim()) errs.addressStreet = 'Street is required'
+  if (!form.addressCity.trim()) errs.addressCity = 'City / Municipality is required'
   if (!form.email.trim()) errs.email = 'Email is required'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Invalid email format'
   if (form.phone.trim() && !/^\+639\d{9}$/.test(form.phone.trim())) errs.phone = 'Mobile must be +639XXXXXXXXX (10 digits after +63)'
@@ -31,7 +46,18 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
 
-  const [form, setForm] = useState({ name: '', address: '', email: '', phone: '', landline: '' })
+  const [form, setForm] = useState({
+    name: '',
+    addressUnit: '',
+    addressStreet: '',
+    addressBarangay: '',
+    addressCity: '',
+    addressProvince: '',
+    addressPostal: '',
+    email: '',
+    phone: '',
+    landline: '',
+  })
   const [logoUrl, setLogoUrl] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
   const [errors, setErrors] = useState({})
@@ -43,10 +69,15 @@ export default function SettingsPage() {
       .then((data) => {
         setForm({
           name: data.name ?? '',
-          address: data.address ?? '',
+          addressUnit: '',
+          addressStreet: data.address ?? '',
+          addressBarangay: '',
+          addressCity: '',
+          addressProvince: '',
+          addressPostal: '',
           email: data.email ?? '',
           phone: data.phone ?? '',
-          landline: data.landline ?? ''
+          landline: data.landline ?? '',
         })
         setLogoUrl(data.logoUrl ?? null)
       })
@@ -73,7 +104,7 @@ export default function SettingsPage() {
       const res = await fetch(`/api/clinics/${clinicId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, address: assembleAddress(form) }),
       })
       const data = await res.json()
       if (!res.ok) {

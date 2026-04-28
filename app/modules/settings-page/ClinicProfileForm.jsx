@@ -2,67 +2,168 @@
 
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import Skeleton from '@mui/material/Skeleton'
 import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
+
+function SectionCard({ title, subtitle, children }) {
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 2.5,
+        overflow: 'hidden',
+      }}
+    >
+      <Box sx={{ px: 3, py: 2, bgcolor: '#F8FAFC', borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Typography variant='body2' fontWeight={700} color='text.primary'>
+          {title}
+        </Typography>
+        {subtitle && (
+          <Typography variant='caption' color='text.secondary'>
+            {subtitle}
+          </Typography>
+        )}
+      </Box>
+      <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        {children}
+      </Box>
+    </Box>
+  )
+}
 
 export default function ClinicProfileForm({ form, errors, saving, loading, onChange, onSave }) {
   if (loading) {
     return (
-      <Typography variant='body2' color='text.secondary'>
-        Loading...
-      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {[1, 2, 3].map((i) => (
+          <Box key={i} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, overflow: 'hidden' }}>
+            <Box sx={{ px: 3, py: 2, bgcolor: '#F8FAFC', borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Skeleton width={120} height={20} />
+            </Box>
+            <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <Skeleton height={56} />
+              <Skeleton height={56} />
+            </Box>
+          </Box>
+        ))}
+      </Box>
     )
   }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Input
-        id='clinic-name'
-        label='Clinic Name'
-        value={form.name}
-        onChange={onChange('name')}
-        placeholder='e.g. Maria Laura Cruz Dental Clinic'
-        error={!!errors.name}
-        helperText={errors.name}
-        required
-      />
-      <Input
-        id='clinic-address'
-        label='Address'
-        value={form.address}
-        onChange={onChange('address')}
-        placeholder='Full clinic address'
-        error={!!errors.address}
-        helperText={errors.address}
-        required
-      />
-      <Input
-        id='clinic-email'
-        label='Email'
-        type='email'
-        value={form.email}
-        onChange={onChange('email')}
-        placeholder='clinic@example.com'
-        error={!!errors.email}
-        helperText={errors.email}
-        required
-      />
-      <Input
-        id='clinic-phone'
-        label='Mobile'
-        value={form.phone}
-        onChange={onChange('phone')}
-        placeholder='+639XXXXXXXXX'
-      />
-      <Input
-        id='clinic-landline'
-        label='Landline (optional)'
-        value={form.landline}
-        onChange={onChange('landline')}
-        placeholder='e.g. (02) 8XXX-XXXX'
-      />
 
-      <Box sx={{ pt: 1 }}>
+      {/* Clinic Identity */}
+      <SectionCard title='Clinic Identity'>
+        <Input
+          id='clinic-name'
+          label='Clinic Name'
+          value={form.name}
+          onChange={onChange('name')}
+          placeholder='e.g. Maria Laura Cruz Dental Clinic'
+          error={!!errors.name}
+          helperText={errors.name}
+          required
+        />
+      </SectionCard>
+
+      {/* Address */}
+      <SectionCard
+        title='Address'
+        subtitle='Break down the full clinic address by component.'
+      >
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2 }}>
+          <Input
+            id='clinic-address-unit'
+            label='Lot / Block / Unit No.'
+            value={form.addressUnit}
+            onChange={onChange('addressUnit')}
+            placeholder='e.g. Lot 5, Blk 3'
+          />
+          <Input
+            id='clinic-address-street'
+            label='Street / Road'
+            value={form.addressStreet}
+            onChange={onChange('addressStreet')}
+            placeholder='e.g. Rizal Avenue'
+            error={!!errors.addressStreet}
+            helperText={errors.addressStreet}
+            required
+          />
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Input
+            id='clinic-address-barangay'
+            label='Barangay'
+            value={form.addressBarangay}
+            onChange={onChange('addressBarangay')}
+            placeholder='e.g. Poblacion'
+          />
+          <Input
+            id='clinic-address-city'
+            label='City / Municipality'
+            value={form.addressCity}
+            onChange={onChange('addressCity')}
+            placeholder='e.g. Makati City'
+            error={!!errors.addressCity}
+            helperText={errors.addressCity}
+            required
+          />
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2 }}>
+          <Input
+            id='clinic-address-province'
+            label='Province'
+            value={form.addressProvince}
+            onChange={onChange('addressProvince')}
+            placeholder='e.g. Metro Manila'
+          />
+          <Input
+            id='clinic-address-postal'
+            label='Postal Code'
+            value={form.addressPostal}
+            onChange={onChange('addressPostal')}
+            placeholder='e.g. 1200'
+          />
+        </Box>
+      </SectionCard>
+
+      {/* Contact Information */}
+      <SectionCard title='Contact Information'>
+        <Input
+          id='clinic-email'
+          label='Email'
+          type='email'
+          value={form.email}
+          onChange={onChange('email')}
+          placeholder='clinic@example.com'
+          error={!!errors.email}
+          helperText={errors.email}
+          required
+        />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Input
+            id='clinic-phone'
+            label='Mobile'
+            value={form.phone}
+            onChange={onChange('phone')}
+            placeholder='+639XXXXXXXXX'
+            error={!!errors.phone}
+            helperText={errors.phone}
+          />
+          <Input
+            id='clinic-landline'
+            label='Landline (optional)'
+            value={form.landline}
+            onChange={onChange('landline')}
+            placeholder='e.g. (02) 8XXX-XXXX'
+          />
+        </Box>
+      </SectionCard>
+
+      <Box>
         <Button variant='contained' loading={saving} onClick={onSave}>
           Save Changes
         </Button>
