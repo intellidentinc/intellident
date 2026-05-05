@@ -16,6 +16,7 @@
  * Params: serviceId, dentistId ('ANY' or specific ID), date (YYYY-MM-DD)
  */
 import { NextResponse } from 'next/server'
+import moment from 'moment-timezone'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
@@ -51,14 +52,13 @@ export async function GET(request) {
 
   if (!service || !schedule) return NextResponse.json({ slots: [] })
 
-  // Validate date is a working day / not a closure
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const targetDate = new Date(year, month - 1, day)
+  // Validate date is a working day / not a closure (all in Asia/Manila)
+  const targetManila = moment.tz(dateStr, 'Asia/Manila')
   const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-  if (schedule.workingDays.length && !schedule.workingDays.includes(DAY_NAMES[targetDate.getDay()])) {
+  if (schedule.workingDays.length && !schedule.workingDays.includes(DAY_NAMES[targetManila.day()])) {
     return NextResponse.json({ slots: [] })
   }
-  if (closures.some(c => new Date(c.date).toISOString().slice(0, 10) === dateStr)) {
+  if (closures.some(c => moment(c.date).tz('Asia/Manila').format('YYYY-MM-DD') === dateStr)) {
     return NextResponse.json({ slots: [] })
   }
 
@@ -77,14 +77,10 @@ export async function GET(request) {
     candidateSlots.push({ time: `${hh}:${mm}`, minutes: m })
   }
 
-  // Filter out past slots if date is today
-  const nowLocal = new Date()
-  const isToday = (
-    nowLocal.getFullYear() === year &&
-    nowLocal.getMonth() + 1 === month &&
-    nowLocal.getDate() === day
-  )
-  const nowMinutes = nowLocal.getHours() * 60 + nowLocal.getMinutes()
+  // Filter out past slots if date is today (in Asia/Manila)
+  const nowManila = moment().tz('Asia/Manila')
+  const isToday = nowManila.format('YYYY-MM-DD') === dateStr
+  const nowMinutes = nowManila.hours() * 60 + nowManila.minutes()
 
   const futureSlots = isToday
     ? candidateSlots.filter(s => s.minutes > nowMinutes + 30) // 30 min buffer for same-day
@@ -94,8 +90,8 @@ export async function GET(request) {
 
   // For a specific dentist: filter out conflicted slots
   if (dentistId !== 'ANY') {
-    const dayStart = new Date(year, month - 1, day, 0, 0, 0)
-    const dayEnd   = new Date(year, month - 1, day, 23, 59, 59)
+    const dayStart = targetManila.clone().startOf('day').toDate()
+    const dayEnd   = targetManila.clone().endOf('day').toDate()
 
     const bookedAppts = await prisma.appointment.findMany({
       where: {
@@ -108,7 +104,7 @@ export async function GET(request) {
     })
 
     const availableSlots = futureSlots.filter(slot => {
-      const slotStart = new Date(year, month - 1, day, Math.floor(slot.minutes / 60), slot.minutes % 60)
+      const slotStart = targetManila.clone().hours(Math.floor(slot.minutes / 60)).minutes(slot.minutes % 60).seconds(0).toDate()
       const slotEnd   = new Date(slotStart.getTime() + totalDuration * 60 * 1000)
 
       return !bookedAppts.some(appt => {

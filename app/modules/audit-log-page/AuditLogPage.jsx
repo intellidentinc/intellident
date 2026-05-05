@@ -31,12 +31,18 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import utc from 'dayjs/plugin/utc'
+import dayjsTimezone from 'dayjs/plugin/timezone'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import { ROLE_LABELS } from '@/lib/roles'
 
 dayjs.extend(relativeTime)
+dayjs.extend(utc)
+dayjs.extend(dayjsTimezone)
+
+const PHT = 'Asia/Manila'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,13 +102,13 @@ function MetadataRow({ log, colSpan }) {
         </TableCell>
 
         <TableCell sx={{ py: 1.25, borderBottom: open ? 'none' : undefined }}>
-          <Tooltip title={dayjs(log.createdAt).format('YYYY-MM-DD HH:mm:ss')} placement='top'>
+          <Tooltip title={dayjs(log.createdAt).tz(PHT).format('YYYY-MM-DD HH:mm:ss')} placement='top'>
             <Box>
               <Typography variant='body2' sx={{ color: '#334155', fontWeight: 500, lineHeight: 1.4 }}>
-                {dayjs(log.createdAt).format('MMM D, YYYY')}
+                {dayjs(log.createdAt).tz(PHT).format('MMM D, YYYY')}
               </Typography>
               <Typography variant='caption' sx={{ color: '#94a3b8' }}>
-                {dayjs(log.createdAt).format('HH:mm:ss')}
+                {dayjs(log.createdAt).tz(PHT).format('HH:mm:ss')}
               </Typography>
             </Box>
           </Tooltip>
@@ -352,7 +358,7 @@ export default function AuditLogPage() {
       ].map(escapeCell).join(','))
       const csv = [header.join(','), ...rows].join('\r\n')
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-      triggerDownload(blob, `audit-log-${dayjs().format('YYYY-MM-DD')}.csv`)
+      triggerDownload(blob, `audit-log-${dayjs().tz(PHT).format('YYYY-MM-DD')}.csv`)
     } catch {
       showToast('Export failed', 'error')
     } finally {
@@ -376,7 +382,7 @@ export default function AuditLogPage() {
       doc.setFontSize(9)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(100)
-      doc.text(`Exported ${dayjs().format('MMMM D, YYYY HH:mm')} · ${logs.length} entries`, 14, 22)
+      doc.text(`Exported ${dayjs().tz(PHT).format('MMMM D, YYYY HH:mm')} · ${logs.length} entries`, 14, 22)
 
       autoTable(doc, {
         startY: 27,
@@ -402,7 +408,7 @@ export default function AuditLogPage() {
         },
       })
 
-      doc.save(`audit-log-${dayjs().format('YYYY-MM-DD')}.pdf`)
+      doc.save(`audit-log-${dayjs().tz(PHT).format('YYYY-MM-DD')}.pdf`)
     } catch {
       showToast('Export failed', 'error')
     } finally {

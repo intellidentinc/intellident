@@ -19,6 +19,7 @@
  *   via in-app notification + email (same as the PENDING→CONFIRMED transition).
  */
 import { NextResponse } from 'next/server'
+import moment from 'moment-timezone'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyPatientStatusChange } from '@/lib/notifications'
@@ -115,28 +116,29 @@ export async function POST(request) {
   ])
 
   const apptDate = new Date(scheduledAt)
+  const apptManila = moment(scheduledAt).tz('Asia/Manila')
 
-  // Validate working day
+  // Validate working day (in Manila timezone)
   if (schedule?.workingDays?.length) {
     const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-    const dayName = DAY_NAMES[apptDate.getDay()]
+    const dayName = DAY_NAMES[apptManila.day()]
     if (!schedule.workingDays.includes(dayName)) {
       return NextResponse.json({ error: `${dayName} is not a working day` }, { status: 400 })
     }
   }
 
-  // Validate not a closure
-  const dateStr = apptDate.toISOString().slice(0, 10)
-  const isClosure = closures.some((c) => new Date(c.date).toISOString().slice(0, 10) === dateStr)
+  // Validate not a closure (compare in Manila timezone)
+  const manilaDateStr = apptManila.format('YYYY-MM-DD')
+  const isClosure = closures.some((c) => moment(c.date).tz('Asia/Manila').format('YYYY-MM-DD') === manilaDateStr)
   if (isClosure) {
     return NextResponse.json({ error: 'This date is a clinic closure' }, { status: 400 })
   }
 
-  // Validate operating hours
+  // Validate operating hours (in Manila timezone)
   if (schedule) {
     const [openH, openM]   = schedule.openTime.split(':').map(Number)
     const [closeH, closeM] = schedule.closeTime.split(':').map(Number)
-    const apptMinutes = apptDate.getHours() * 60 + apptDate.getMinutes()
+    const apptMinutes  = apptManila.hours() * 60 + apptManila.minutes()
     const openMinutes  = openH * 60 + openM
     const closeMinutes = closeH * 60 + closeM
     if (apptMinutes < openMinutes || apptMinutes >= closeMinutes) {
@@ -163,15 +165,15 @@ export async function POST(request) {
     }
   }
 
-  // Generate appointmentCode: APT-{CLINICCODE}-{YYYY/MM/DD}-{####}
+  // Generate appointmentCode: APT-{CLINICCODE}-{YYYY/MM/DD}-{####} (date in Manila timezone)
   const clinicCode = clinic?.code ?? 'CLN'
-  const datePart = `${apptDate.getFullYear()}/${String(apptDate.getMonth() + 1).padStart(2, '0')}/${String(apptDate.getDate()).padStart(2, '0')}`
+  const datePart = apptManila.format('YYYY/MM/DD')
   const existingCount = await prisma.appointment.count({
     where: {
       clinicId: caller.clinicId,
       scheduledAt: {
-        gte: new Date(apptDate.getFullYear(), apptDate.getMonth(), apptDate.getDate()),
-        lt:  new Date(apptDate.getFullYear(), apptDate.getMonth(), apptDate.getDate() + 1),
+        gte: apptManila.clone().startOf('day').toDate(),
+        lt:  apptManila.clone().endOf('day').toDate(),
       },
     },
   })
