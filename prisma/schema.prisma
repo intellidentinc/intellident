@@ -89,15 +89,16 @@ model Clinic {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  users         User[]
-  receptionists Receptionist[]
-  dentists      Dentist[]
-  patients      Patient[]
-  services      Service[]
-  appointments  Appointment[]
-  auditLogs     AuditLog[]
-  schedule      ClinicSchedule?
-  closures      ClinicClosure[]
+  users            User[]
+  receptionists    Receptionist[]
+  dentists         Dentist[]
+  patients         Patient[]
+  services         Service[]
+  appointments     Appointment[]
+  auditLogs        AuditLog[]
+  schedule         ClinicSchedule?
+  closures         ClinicClosure[]
+  schedulePresets  SchedulePreset[]
 
   @@map("clinics")
 }
@@ -127,6 +128,23 @@ model ClinicClosure {
 
   @@index([clinicId])
   @@map("clinic_closures")
+}
+
+model SchedulePreset {
+  id          String    @id @default(cuid())
+  clinicId    String
+  name        String
+  workingDays String[]
+  openTime    String
+  closeTime   String
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId])
+  @@map("schedule_presets")
 }
 
 model PasswordResetToken {
