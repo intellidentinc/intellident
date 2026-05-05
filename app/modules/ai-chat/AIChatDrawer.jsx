@@ -12,14 +12,40 @@ import Tooltip from '@mui/material/Tooltip'
 import { X, Plus, Send, Bot, Trash2, MessageSquare } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
-const QUICK_PROMPTS = [
-  'What services do you offer?',
-  'What are your operating hours?',
-  'How do I book an appointment?',
-  'How do I cancel an appointment?',
-]
+const QUICK_PROMPTS_BY_ROLE = {
+  // PATIENT
+  4: [
+    'Show my upcoming appointments',
+    'What services do you offer?',
+    'How do I book an appointment?',
+    'How do I cancel an appointment?',
+    'What are your operating hours?',
+  ],
+  // DENTIST
+  2: [
+    "What's my schedule today?",
+    'Who is my next patient?',
+    'How many patients do I have this week?',
+    'Show my pending appointments',
+  ],
+  // RECEPTIONIST
+  3: [
+    'How many patients are booked today?',
+    "Show all pending booking requests",
+    "What's today's full schedule?",
+    'Who is confirmed this afternoon?',
+  ],
+  // ADMIN
+  1: [
+    'How many appointments are booked today?',
+    'Show all pending booking requests',
+    "What's this week's appointment count?",
+    'List all dentists at this clinic',
+  ],
+}
 
-export default function AIChatDrawer({ open, onClose }) {
+export default function AIChatDrawer({ open, onClose, role }) {
+  const quickPrompts = QUICK_PROMPTS_BY_ROLE[role] ?? QUICK_PROMPTS_BY_ROLE[4]
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [messages, setMessages] = useState([])
@@ -331,7 +357,7 @@ export default function AIChatDrawer({ open, onClose }) {
               </Box>
 
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, width: '100%', maxWidth: 280 }}>
-                {QUICK_PROMPTS.map((q) => (
+                {quickPrompts.map((q) => (
                   <Box
                     key={q}
                     onClick={() => sendMessage(q)}
@@ -503,6 +529,13 @@ export default function AIChatDrawer({ open, onClose }) {
           >
             <Send size={16} />
           </Box>
+        </Box>
+
+        {/* Disclaimer */}
+        <Box sx={{ px: 2, pb: 1.25, bgcolor: '#fff' }}>
+          <Typography variant='caption' color='text.disabled' sx={{ fontSize: '0.68rem', lineHeight: 1.4, display: 'block', textAlign: 'center' }}>
+            IntelliDent AI can make mistakes. Always verify important information with clinic staff.
+          </Typography>
         </Box>
       </Box>
     </Drawer>

@@ -6,7 +6,7 @@ import Tooltip from '@mui/material/Tooltip'
 import { Bot } from 'lucide-react'
 import AIChatDrawer from './AIChatDrawer'
 
-export default function AIChatButton() {
+export default function AIChatButton({ role }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -34,7 +34,7 @@ export default function AIChatButton() {
         </Tooltip>
       </Box>
 
-      <AIChatDrawer open={open} onClose={() => setOpen(false)} />
+      <AIChatDrawer open={open} onClose={() => setOpen(false)} role={role} />
     </>
   )
 }
