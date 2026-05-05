@@ -65,6 +65,12 @@ enum AuditAction {
   VIEW
   EXPORT
   VERIFY
+  AI_INTERACTION
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
 }
 
 enum ConsentStatus {
@@ -99,6 +105,7 @@ model Clinic {
   schedule         ClinicSchedule?
   closures         ClinicClosure[]
   schedulePresets  SchedulePreset[]
+  chatSessions     ChatSession[]
 
   @@map("clinics")
 }
@@ -211,6 +218,7 @@ model User {
   appointmentStatusChanges AppointmentStatusHistory[]
   inAppNotifications      InAppNotification[]
   mfaOtps                 MfaOtp[]
+  chatSessions            ChatSession[]
 
   @@index([email])
   @@index([clinicId])
@@ -513,4 +521,36 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model ChatSession {
+  id        String    @id @default(cuid())
+  userId    String
+  clinicId  String
+  title     String?
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user     User          @relation(fields: [userId], references: [id])
+  clinic   Clinic        @relation(fields: [clinicId], references: [id])
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@index([clinicId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      ChatRole
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("chat_messages")
 }

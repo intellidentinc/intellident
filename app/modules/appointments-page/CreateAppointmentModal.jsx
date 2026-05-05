@@ -33,7 +33,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Sparkles } from 'lucide-react'
 import dayjs from 'dayjs'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
@@ -78,6 +78,8 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
   const [closures, setClosures] = useState([]) // ISO date strings
   const [schedule, setSchedule] = useState(null) // { workingDays, openTime, closeTime }
   const [conflict, setConflict] = useState(null) // { available, conflict }
+  const [aiSuggestions, setAiSuggestions] = useState([])
+  const [aiLoading, setAiLoading] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -90,6 +92,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
     setErrors({})
     setConflict(null)
     setPatientQuery('')
+    setAiSuggestions([])
 
     // Fetch services and clinic schedule
     fetch('/api/appointments/services').then(r => r.json()).then(d => setServices(d.services ?? []))
@@ -147,6 +150,31 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
   function combineDatetime(date, time) {
     if (!date || !time) return null
     return date.hour(time.hour()).minute(time.minute()).second(0).millisecond(0)
+  }
+
+  async function fetchAiSlots() {
+    if (!form.serviceId || !form.dentistId || !form.date) return
+    setAiLoading(true)
+    setAiSuggestions([])
+    try {
+      const params = new URLSearchParams({
+        serviceId: form.serviceId,
+        dentistId: form.dentistId,
+        date: form.date.format('YYYY-MM-DD'),
+      })
+      const res = await fetch(`/api/ai/slots?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setAiSuggestions(data.suggestions ?? [])
+      }
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  function applyAiSlot(timeStr) {
+    const [h, m] = timeStr.split(':').map(Number)
+    set('time', dayjs().hour(h).minute(m).second(0))
   }
 
   function isClosureDate(date) {
@@ -389,6 +417,51 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
           )}
           {conflict && conflict.available && form.dentistId && form.dentistId !== 'ANY' && form.date && form.time && (
             <Alert severity='success' sx={{ py: 0.5 }}>Slot is available.</Alert>
+          )}
+
+          {/* AI Slot Suggestions */}
+          {form.serviceId && form.dentistId && form.date && (
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Sparkles size={14} color='#7c3aed' />
+                  <Typography variant='body2' fontWeight={500} color='text.primary'>AI Suggested Slots</Typography>
+                </Box>
+                <Box
+                  component='button'
+                  onClick={fetchAiSlots}
+                  disabled={aiLoading}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.25, py: 0.5, bgcolor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 1.5, cursor: aiLoading ? 'wait' : 'pointer', '&:hover:not(:disabled)': { bgcolor: '#ede9fe' } }}
+                >
+                  {aiLoading ? <CircularProgress size={12} sx={{ color: '#7c3aed' }} /> : <Sparkles size={12} color='#7c3aed' />}
+                  <Typography variant='caption' color='#7c3aed' fontWeight={600}>{aiLoading ? 'Analyzing...' : 'Get suggestions'}</Typography>
+                </Box>
+              </Box>
+              {aiSuggestions.length > 0 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                  {aiSuggestions.map((s) => (
+                    <Box
+                      key={s.time}
+                      onClick={() => applyAiSlot(s.time)}
+                      sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 1, border: '1.5px solid', borderColor: '#ddd6fe', borderRadius: 2, cursor: 'pointer', bgcolor: '#faf5ff', '&:hover': { bgcolor: '#f5f3ff', borderColor: '#a78bfa' } }}
+                    >
+                      <Box>
+                        <Typography variant='body2' fontWeight={700} color='#6d28d9'>{
+                          (() => { const [h, m] = s.time.split(':').map(Number); const d = new Date(); d.setHours(h, m); return d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true }) })()
+                        }</Typography>
+                        {s.reason && <Typography variant='caption' color='text.secondary'>{s.reason}</Typography>}
+                      </Box>
+                      <Box sx={{ bgcolor: '#ede9fe', borderRadius: 1, px: 0.75, py: 0.25 }}>
+                        <Typography variant='caption' color='#7c3aed' fontWeight={600} sx={{ fontSize: '0.68rem' }}>{s.tag}</Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                  <Typography variant='caption' color='text.disabled' sx={{ fontStyle: 'italic', mt: 0.25 }}>
+                    AI suggestions only — staff confirmation required.
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           )}
 
           {/* Notes */}

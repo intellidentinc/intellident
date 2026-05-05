@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/app/modules/dashboard-page/AppSidebar';
+import AIChatButton from '@/app/modules/ai-chat/AIChatButton';
 import { ROLES } from '@/lib/roles';
 
 export default async function ClinicLayout({ children, params }) {
@@ -37,6 +38,7 @@ export default async function ClinicLayout({ children, params }) {
     <SidebarProvider>
       <AppSidebar session={session} role={effectiveRole} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} pendingCount={pendingCount} isSuperAdmin={session.superAdmin === true} />
       {children}
+      <AIChatButton />
     </SidebarProvider>
   );
 }

@@ -26,7 +26,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import { CalendarDays, Users } from 'lucide-react'
+import { CalendarDays, Users, Sparkles } from 'lucide-react'
 import dayjs from 'dayjs'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
@@ -111,6 +111,8 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [closures, setClosures]     = useState([])
   const [schedule, setSchedule]     = useState(null)
+  const [aiSuggestions, setAiSuggestions] = useState([])
+  const [aiLoading, setAiLoading]   = useState(false)
 
   // Reset on open
   useEffect(() => {
@@ -137,9 +139,10 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
 
   // Fetch slots when date + dentist + service all set
   useEffect(() => {
-    if (!serviceId || !dentistId || !date) { setSlots([]); setTimeSlot(''); return }
+    if (!serviceId || !dentistId || !date) { setSlots([]); setTimeSlot(''); setAiSuggestions([]); return }
     setSlotsLoading(true)
     setTimeSlot('')
+    setAiSuggestions([])
     const params = new URLSearchParams({
       serviceId,
       dentistId,
@@ -151,6 +154,22 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
       .catch(() => setSlots([]))
       .finally(() => setSlotsLoading(false))
   }, [serviceId, dentistId, date])
+
+  async function fetchAiSlots() {
+    if (!serviceId || !dentistId || !date) return
+    setAiLoading(true)
+    setAiSuggestions([])
+    try {
+      const params = new URLSearchParams({ serviceId, dentistId, date: date.format('YYYY-MM-DD') })
+      const res = await fetch(`/api/ai/slots?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setAiSuggestions(data.suggestions ?? [])
+      }
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   function shouldDisableDate(d) {
     if (d.isBefore(dayjs(), 'day')) return true
@@ -322,8 +341,51 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
           {/* Step 4: Time slot */}
           {date && (
             <Box>
-              <SectionLabel step={4} label='Time suggestions' />
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Typography sx={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700, lineHeight: 1 }}>4</Typography>
+                  </Box>
+                  <Typography variant='body2' fontWeight={600} color='text.primary'>Time suggestions</Typography>
+                </Box>
+                <Box
+                  component='button'
+                  onClick={fetchAiSlots}
+                  disabled={aiLoading || slotsLoading}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.25, py: 0.5, bgcolor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 1.5, cursor: aiLoading ? 'wait' : 'pointer', '&:hover:not(:disabled)': { bgcolor: '#ede9fe' } }}
+                >
+                  {aiLoading ? <CircularProgress size={11} sx={{ color: '#7c3aed' }} /> : <Sparkles size={11} color='#7c3aed' />}
+                  <Typography variant='caption' color='#7c3aed' fontWeight={600}>{aiLoading ? 'Analyzing...' : 'AI Pick'}</Typography>
+                </Box>
+              </Box>
               {errors.timeSlot && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.timeSlot}</Typography>}
+
+              {/* AI suggestions strip */}
+              {aiSuggestions.length > 0 && (
+                <Box sx={{ mb: 1.5, p: 1.25, bgcolor: '#faf5ff', border: '1px solid #ddd6fe', borderRadius: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                    <Sparkles size={12} color='#7c3aed' />
+                    <Typography variant='caption' fontWeight={700} color='#6d28d9'>AI Recommendations</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                    {aiSuggestions.map((s) => (
+                      <Box
+                        key={s.time}
+                        onClick={() => { setTimeSlot(s.time); setErrors(p => ({ ...p, timeSlot: undefined })) }}
+                        sx={{ display: 'flex', flexDirection: 'column', px: 1.25, py: 0.75, border: '1.5px solid', borderColor: timeSlot === s.time ? '#7c3aed' : '#c4b5fd', borderRadius: 1.5, cursor: 'pointer', bgcolor: timeSlot === s.time ? '#ede9fe' : '#fff', '&:hover': { bgcolor: '#f5f3ff' } }}
+                      >
+                        <Typography variant='caption' fontWeight={700} color='#6d28d9'>
+                          {(() => { const [h, m] = s.time.split(':').map(Number); const d = new Date(); d.setHours(h, m); return d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true }) })()}
+                        </Typography>
+                        <Typography variant='caption' sx={{ fontSize: '0.65rem', color: '#7c3aed' }}>{s.tag}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                  <Typography variant='caption' color='text.disabled' sx={{ fontStyle: 'italic', display: 'block', mt: 0.75 }}>
+                    AI suggestions only — not a confirmed booking.
+                  </Typography>
+                </Box>
+              )}
 
               {slotsLoading && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>

@@ -9,7 +9,8 @@ import Chip from '@mui/material/Chip'
 import MuiSelect from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import FormControl from '@mui/material/FormControl'
-import { CalendarDays } from 'lucide-react'
+import Tooltip from '@mui/material/Tooltip'
+import { CalendarDays, AlertTriangle } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import { useToast } from '@/app/providers/ToastProvider'
 
@@ -43,16 +44,22 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [noShowRisk, setNoShowRisk] = useState(null)
 
   useEffect(() => {
     if (!open || !appointment) return
     setNewStatus(appointment.status)
+    setNoShowRisk(null)
     setHistoryLoading(true)
-    fetch(`/api/appointments/${appointment.id}`)
-      .then(r => r.json())
-      .then(d => setHistory(d.statusHistory ?? []))
-      .catch(() => {})
-      .finally(() => setHistoryLoading(false))
+
+    const patientId = appointment.patient?.id
+    Promise.all([
+      fetch(`/api/appointments/${appointment.id}`).then(r => r.json()),
+      patientId ? fetch(`/api/ai/risk/${patientId}`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+    ]).then(([detail, risk]) => {
+      setHistory(detail.statusHistory ?? [])
+      setNoShowRisk(risk)
+    }).catch(() => {}).finally(() => setHistoryLoading(false))
   }, [open, appointment])
 
   const transitions = TRANSITIONS[appointment?.status] ?? []
@@ -116,10 +123,22 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
       <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
         {/* Appointment info */}
         <Box sx={{ bgcolor: '#f8fafc', borderRadius: 2, px: 2, py: 1.5 }}>
-          <DetailRow
-            label='Patient'
-            value={appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : null}
-          />
+          <Box sx={{ display: 'flex', gap: 1, py: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography variant='body2' color='text.secondary' sx={{ minWidth: 120 }}>Patient</Typography>
+            <Typography variant='body2' color='text.primary' fontWeight={500}>
+              {appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : '—'}
+            </Typography>
+            {noShowRisk?.risk === 'HIGH' && (
+              <Tooltip title={noShowRisk.reasons?.join(' · ') ?? 'High no-show risk'} placement='top'>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 1, px: 0.75, py: 0.25, cursor: 'default' }}>
+                  <AlertTriangle size={12} color='#b91c1c' />
+                  <Typography variant='caption' color='#b91c1c' fontWeight={700} sx={{ fontSize: '0.68rem' }}>
+                    High Risk
+                  </Typography>
+                </Box>
+              </Tooltip>
+            )}
+          </Box>
           <DetailRow
             label='Dentist'
             value={appointment.dentist ? `${appointment.dentist.user.firstName} ${appointment.dentist.user.lastName}` : 'Any available'}
@@ -140,6 +159,21 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
           />
           {appointment.notes && <DetailRow label='Notes' value={appointment.notes} />}
         </Box>
+
+        {/* No-show risk suggestions */}
+        {noShowRisk?.risk === 'HIGH' && noShowRisk.suggestions?.length > 0 && (
+          <Box sx={{ bgcolor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 2, px: 2, py: 1.25 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+              <AlertTriangle size={14} color='#c2410c' />
+              <Typography variant='caption' fontWeight={700} color='#c2410c'>AI Suggested Actions</Typography>
+            </Box>
+            {noShowRisk.suggestions.map((s, i) => (
+              <Typography key={i} variant='caption' color='#9a3412' sx={{ display: 'block', lineHeight: 1.5 }}>
+                • {s}
+              </Typography>
+            ))}
+          </Box>
+        )}
 
         {/* Status change */}
         {!isTerminal && (
