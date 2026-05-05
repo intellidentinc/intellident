@@ -20,7 +20,6 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { setSession } from '@/lib/auth';
 import { hexToken } from '@/lib/validate';
 
 export async function GET(request) {
@@ -82,8 +81,6 @@ export async function GET(request) {
 
     // Clean up the pending record
     await prisma.emailVerification.delete({ where: { token } });
-
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId);
 
     return NextResponse.redirect(`${appUrl}/sign-in?verified=success`);
   } catch (error) {
