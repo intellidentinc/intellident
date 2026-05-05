@@ -18,6 +18,7 @@ import SearchIcon from '@mui/icons-material/Search'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
+import PatientRecordsDrawer from './PatientRecordsDrawer'
 
 const STATUS_CHIP = {
   CONFIRMED: { bg: '#dbeafe', color: '#1d4ed8', label: 'Confirmed' },
@@ -32,6 +33,7 @@ export default function RecordsPage() {
   const [page, setPage]         = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [search, setSearch]     = useState('')
+  const [selectedPatient, setSelectedPatient] = useState(null)
 
   const searchTimeout = useRef(null)
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -128,7 +130,7 @@ export default function RecordsPage() {
                   const lastAppt = patient.appointments[0] ?? null
                   const chip = lastAppt ? (STATUS_CHIP[lastAppt.status] ?? null) : null
                   return (
-                    <TableRow key={patient.id} hover sx={{ '&:last-child td': { border: 0 }, '&:hover': { bgcolor: '#f8fafc' } }}>
+                    <TableRow key={patient.id} hover onClick={() => setSelectedPatient(patient)} sx={{ '&:last-child td': { border: 0 }, '&:hover': { bgcolor: '#f8fafc' }, cursor: 'pointer' }}>
                       <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#64748b' }}>
                         {patient.patientCode ?? '—'}
                       </TableCell>
@@ -169,6 +171,11 @@ export default function RecordsPage() {
           />
         </Box>
       </Box>
+
+      <PatientRecordsDrawer
+        patient={selectedPatient}
+        onClose={() => setSelectedPatient(null)}
+      />
     </SidebarInset>
   )
 }

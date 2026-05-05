@@ -215,7 +215,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 | Role | Value | Sidebar Access |
 |---|---|---|
 | `SUPERADMIN` | 0 | `/super` portal — clinic picker, enters any clinic as ADMIN |
-| `PATIENT` | 4 | Dashboard, My Schedules, My Profile |
+| `PATIENT` | 4 | Dashboard, My Schedules, My Dental Records, My Profile |
 | `RECEPTIONIST` | 3 | Dashboard, Appointments, Patients, Billing |
 | `DENTIST` | 2 | Dashboard, Schedule, Patient Records, My Profile |
 | `ADMIN` | 1 | Dashboard, Users, Services, Appointments, Billing, Settings, Audit Log |
@@ -316,10 +316,14 @@ All appointment events → in-app bell + Mailjet email. No Reminders page — be
   - [x] Delete user (soft delete; auto-logout if self)
   - [x] Activate / deactivate user — `isActive Boolean @default(true)` on `User`; deactivated users are shown in the table (with a Status chip) but blocked at sign-in with a 403; PATCH `/api/users/[id]` handles both role updates and `isActive` toggle; deactivating self clears session
   - [x] Create user (admin-set, default password `Intellident2026#`, E2EE key generated client-side, creates Dentist/Receptionist profile)
+  - [x] Middle initial field — `User.middleInitial String?` on schema; flows through sign-up, profile edit, and admin user creation
+  - [x] Confirm password field on sign-up — client-side match validation + submit-time guard
+  - [x] Sign-up no longer auto-logs in after email verification — redirects to `/sign-in?verified=success` only
 - [x] Clinic Settings (ADMIN)
   - [x] Clinic profile (name, address, email, phone, landline)
   - [x] Clinic logo upload (Supabase Storage, shown in sidebar)
   - [x] Operating hours (working days + open/close time)
+  - [x] Operating hours presets — `SchedulePreset` model; CRUD via `GET/POST /api/clinics/[id]/schedule/presets` + `DELETE /api/clinics/[id]/schedule/presets/[presetId]`; apply preset fills fields without saving; applied indicator on card
   - [x] Clinic closure dates (holidays/maintenance)
 - [x] Service Catalog (ADMIN)
   - [x] Create / edit / delete dental services
@@ -350,11 +354,13 @@ All appointment events → in-app bell + Mailjet email. No Reminders page — be
   - [x] Vercel cron job for 24h + 2h appointment reminders (every 15 min, protected by CRON_SECRET)
   - [x] Mark-read (single + all) functionality
 - [ ] Virtual Assistant / Chatbot
-- [ ] Patient Record Management
+- [x] Patient Record Management
   - [x] DB schema complete (`PatientRecord`, `Attachment` with E2EE fields + `contentHash`)
   - [x] `GET /api/records` — dentist's patient list (paginated, searchable — patients with ≥1 CONFIRMED or COMPLETED appt)
-  - [ ] View individual patient record (encrypted notes)
-  - [ ] Create / edit / delete patient records via API + UI
+  - [x] Dentist: click patient row → right-side drawer with full record list; add/edit/delete records via `POST/PATCH/DELETE /api/records/[patientId]/[recordId]`
+  - [x] Patient: My Dental Records page (`/my-records`) — two tabs: Clinical Records + Visit History; `GET /api/patient/records`; sidebar entry under Health group
+  - [ ] E2EE encryption wired to record notes (currently stored as plaintext in `encryptedData`)
+  - [ ] `contentHash` SHA-256 tamper detection wired to API routes
 - [ ] Billing & Payment Tracking
   - [x] DB schema complete (`Billing`, `Payment` models with PaymentStatus enum)
   - [ ] API routes + UI for billing creation, payment recording, receipt tracking

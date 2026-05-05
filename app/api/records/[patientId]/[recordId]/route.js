@@ -1,0 +1,77 @@
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
+
+async function getDentistForClinic(session) {
+  const caller = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, clinicId: true }
+  })
+  if (!caller || caller.role !== ROLES.DENTIST) return null
+
+  const dentist = await prisma.dentist.findUnique({
+    where: { userId: session.userId },
+    select: { id: true, clinicId: true }
+  })
+  if (!dentist || dentist.clinicId !== caller.clinicId) return null
+
+  return { ...caller, dentistId: dentist.id }
+}
+
+// PATCH /api/records/[patientId]/[recordId]
+export async function PATCH(request, { params }) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const dentist = await getDentistForClinic(session)
+  if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { patientId, recordId } = await params
+  const { title, notes, status } = await request.json()
+
+  if (title !== undefined && !title?.trim()) {
+    return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+  }
+
+  const existing = await prisma.patientRecord.findFirst({
+    where: { id: recordId, patientId, clinicId: dentist.clinicId, isDeleted: false }
+  })
+  if (!existing) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+
+  const validStatuses = ['ACTIVE', 'ARCHIVED']
+  const record = await prisma.patientRecord.update({
+    where: { id: recordId },
+    data: {
+      ...(title !== undefined && { title: title.trim() }),
+      ...(notes !== undefined && { encryptedData: notes?.trim() || null }),
+      ...(status !== undefined && validStatuses.includes(status) && { status }),
+    },
+    select: { id: true, title: true, encryptedData: true, status: true, createdAt: true, updatedAt: true }
+  })
+
+  return NextResponse.json(record)
+}
+
+// DELETE /api/records/[patientId]/[recordId]
+export async function DELETE(request, { params }) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const dentist = await getDentistForClinic(session)
+  if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { patientId, recordId } = await params
+
+  const existing = await prisma.patientRecord.findFirst({
+    where: { id: recordId, patientId, clinicId: dentist.clinicId, isDeleted: false }
+  })
+  if (!existing) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+
+  await prisma.patientRecord.update({
+    where: { id: recordId },
+    data: { isDeleted: true, deletedAt: new Date() }
+  })
+
+  return NextResponse.json({ success: true })
+}

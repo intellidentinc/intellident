@@ -18,11 +18,12 @@
  */
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
-import crypto from 'crypto';
+// import crypto from 'crypto'; // MFA: not needed while OTP is disabled
 import { prisma } from '@/lib/prisma';
+import { setSession } from '@/lib/auth';
 import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
-import { sendMfaOtpEmail } from '@/lib/email';
+// import { sendMfaOtpEmail } from '@/lib/email'; // MFA: disabled
 
 // Configurable lockout constants (override via env vars)
 const MAX_ATTEMPTS     = parseInt(process.env.LOCKOUT_MAX_ATTEMPTS      ?? '5');
@@ -120,26 +121,30 @@ export async function POST(request) {
       data: { failedLoginAttempts: 0, lastFailedAt: null, lockedUntil: null },
     });
 
-    // Generate 6-digit OTP + secure pending token
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const pendingToken = crypto.randomBytes(32).toString('hex');
-    const codeHash = await bcrypt.hash(otp, 8);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // MFA (OTP) step disabled — skipping OTP generation and proceeding directly to session creation
+    // ------- MFA BLOCK START (commented out) -------
+    // const otp = String(Math.floor(100000 + Math.random() * 900000));
+    // const pendingToken = crypto.randomBytes(32).toString('hex');
+    // const codeHash = await bcrypt.hash(otp, 8);
+    // const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // await prisma.mfaOtp.deleteMany({ where: { userId: user.id, usedAt: null } });
+    // await prisma.mfaOtp.create({
+    //   data: { userId: user.id, pendingToken, codeHash, rememberMe, expiresAt },
+    // });
+    // sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp }).catch(() => {});
+    // return NextResponse.json(
+    //   { mfaPending: true, pendingToken, wrappedKey: user.wrappedKey, keySalt: user.keySalt },
+    //   { status: 200 }
+    // );
+    // ------- MFA BLOCK END -------
 
-    // Clean up any old unused OTPs for this user
-    await prisma.mfaOtp.deleteMany({ where: { userId: user.id, usedAt: null } });
+    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe);
 
-    await prisma.mfaOtp.create({
-      data: { userId: user.id, pendingToken, codeHash, rememberMe, expiresAt },
-    });
-
-    // Send OTP email (fire-and-forget — don't await to keep response fast)
-    sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp }).catch(() => {});
+    logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });
 
     return NextResponse.json(
       {
-        mfaPending: true,
-        pendingToken,
+        clinicId: user.clinicId,
         wrappedKey: user.wrappedKey,
         keySalt: user.keySalt,
       },

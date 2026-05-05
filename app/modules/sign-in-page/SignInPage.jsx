@@ -69,16 +69,18 @@ export default function SignInPage() {
         return;
       }
 
-      if (data.mfaPending) {
-        // Store credentials in sessionStorage so the verify-otp page can unwrap the master key
-        sessionStorage.setItem('mfa_pending', JSON.stringify({
-          password,
-          wrappedKey: data.wrappedKey,
-          keySalt: data.keySalt,
-        }));
-        router.push(`/verify-otp?token=${data.pendingToken}`);
-        return;
-      }
+      // MFA (OTP) step disabled — skipping redirect to verify-otp
+      // ------- MFA BLOCK START (commented out) -------
+      // if (data.mfaPending) {
+      //   sessionStorage.setItem('mfa_pending', JSON.stringify({
+      //     password,
+      //     wrappedKey: data.wrappedKey,
+      //     keySalt: data.keySalt,
+      //   }));
+      //   router.push(`/verify-otp?token=${data.pendingToken}`);
+      //   return;
+      // }
+      // ------- MFA BLOCK END -------
 
       // Unwrap the master key client-side using the password — server cannot do this
       const salt = fromBase64(data.keySalt);
