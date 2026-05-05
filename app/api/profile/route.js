@@ -9,13 +9,14 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { firstName: true, lastName: true, email: true, phone: true, address: true, dateOfBirth: true, isDeleted: true }
+    select: { firstName: true, middleInitial: true, lastName: true, email: true, phone: true, address: true, dateOfBirth: true, isDeleted: true }
   })
 
   if (!user || user.isDeleted) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   return NextResponse.json({
     firstName: user.firstName,
+    middleInitial: user.middleInitial,
     lastName: user.lastName,
     email: user.email,
     phone: user.phone,
@@ -28,7 +29,7 @@ export async function PATCH(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { firstName, lastName, email, phone, address, dateOfBirth } = await request.json()
+  const { firstName, middleInitial, lastName, email, phone, address, dateOfBirth } = await request.json()
 
   if (!firstName?.trim()) return NextResponse.json({ error: 'First name is required' }, { status: 400 })
   if (!lastName?.trim()) return NextResponse.json({ error: 'Last name is required' }, { status: 400 })
@@ -49,6 +50,7 @@ export async function PATCH(request) {
     where: { id: session.userId },
     data: {
       firstName: firstName.trim(),
+      middleInitial: middleInitial?.trim() || null,
       lastName: lastName.trim(),
       email: email.trim(), // email simple change for now
       phone: phone?.trim() || null,

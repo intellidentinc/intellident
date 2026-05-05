@@ -36,6 +36,7 @@ export async function POST(request) {
     const email = sanitizeEmail(body.email);
     const password = secret(body.password, 128);
     const firstName = str(body.firstName, 100) ?? null;
+    const middleInitial = str(body.middleInitial, 5) ?? null;
     const lastName = str(body.lastName, 100) ?? null;
     const wrappedKey = secret(body.wrappedKey, 128);
     const keySalt = secret(body.keySalt, 64);
@@ -83,6 +84,7 @@ export async function POST(request) {
         token,
         email,
         firstName: firstName || null,
+        middleInitial: middleInitial || null,
         lastName: lastName || null,
         password: hashedPassword,
         wrappedKey,

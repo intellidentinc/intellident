@@ -43,6 +43,7 @@ export default function SignUpPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
+  const [middleInitial, setMiddleInitial] = useState('');
   const [lastName, setLastName] = useState('');
   const [clinicId, setClinicId] = useState('');
   const [clinicError, setClinicError] = useState('');
@@ -100,7 +101,7 @@ export default function SignUpPage() {
       const response = await fetch('/api/auth/sign-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, firstName, lastName, wrappedKey, keySalt, clinicId }),
+        body: JSON.stringify({ email, password, firstName, middleInitial: middleInitial || undefined, lastName, wrappedKey, keySalt, clinicId }),
       });
 
       const data = await response.json();
@@ -198,6 +199,17 @@ export default function SignUpPage() {
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="John"
               />
+              <Box sx={{ width: 90, flexShrink: 0 }}>
+                <Input
+                  id="middleInitial"
+                  label="M.I."
+                  type="text"
+                  value={middleInitial}
+                  onChange={(e) => setMiddleInitial(e.target.value.slice(0, 2).toUpperCase())}
+                  placeholder="A."
+                  slotProps={{ htmlInput: { maxLength: 2 } }}
+                />
+              </Box>
               <Input
                 id="lastName"
                 label="Last Name"

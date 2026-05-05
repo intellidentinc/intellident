@@ -162,10 +162,11 @@ model PasswordResetToken {
 
 model EmailVerification {
   id         String   @id @default(cuid())
-  token      String   @unique
-  email      String
-  firstName  String?
-  lastName   String?
+  token         String   @unique
+  email         String
+  firstName     String?
+  middleInitial String?
+  lastName      String?
   password   String
   wrappedKey String
   keySalt    String
@@ -179,10 +180,11 @@ model EmailVerification {
 }
 
 model User {
-  id         String    @id @default(cuid())
-  email      String    @unique
-  firstName   String?
-  lastName    String?
+  id            String    @id @default(cuid())
+  email         String    @unique
+  firstName     String?
+  middleInitial String?
+  lastName      String?
   phone       String?
   address     String?
   dateOfBirth DateTime?

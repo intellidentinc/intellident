@@ -27,7 +27,7 @@ export default function ProfilePage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '+63', address: '', dateOfBirth: '' })
+  const [form, setForm] = useState({ firstName: '', middleInitial: '', lastName: '', email: '', phone: '+63', address: '', dateOfBirth: '' })
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
@@ -36,6 +36,7 @@ export default function ProfilePage() {
       .then((data) => {
         setForm({
           firstName: data.firstName ?? '',
+          middleInitial: data.middleInitial ?? '',
           lastName: data.lastName ?? '',
           email: data.email ?? '',
           phone: data.phone ?? '+63',
@@ -108,26 +109,42 @@ export default function ProfilePage() {
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Input
-              id='first-name'
-              label='First Name'
-              value={form.firstName}
-              onChange={handleChange('firstName')}
-              placeholder='e.g. Juan'
-              error={!!errors.firstName}
-              helperText={errors.firstName}
-              required
-            />
-            <Input
-              id='last-name'
-              label='Last Name'
-              value={form.lastName}
-              onChange={handleChange('lastName')}
-              placeholder='e.g. dela Cruz'
-              error={!!errors.lastName}
-              helperText={errors.lastName}
-              required
-            />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Input
+                id='first-name'
+                label='First Name'
+                value={form.firstName}
+                onChange={handleChange('firstName')}
+                placeholder='e.g. Juan'
+                error={!!errors.firstName}
+                helperText={errors.firstName}
+                required
+              />
+              <Box sx={{ width: 100, flexShrink: 0 }}>
+                <Input
+                  id='middle-initial'
+                  label='M.I.'
+                  value={form.middleInitial}
+                  onChange={(e) => {
+                    const val = e.target.value.slice(0, 2).toUpperCase()
+                    setForm((prev) => ({ ...prev, middleInitial: val }))
+                    setErrors((prev) => ({ ...prev, middleInitial: '' }))
+                  }}
+                  placeholder='A.'
+                  slotProps={{ htmlInput: { maxLength: 2 } }}
+                />
+              </Box>
+              <Input
+                id='last-name'
+                label='Last Name'
+                value={form.lastName}
+                onChange={handleChange('lastName')}
+                placeholder='e.g. dela Cruz'
+                error={!!errors.lastName}
+                helperText={errors.lastName}
+                required
+              />
+            </Box>
             <Input
               id='email'
               label='Email'

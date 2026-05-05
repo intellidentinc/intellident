@@ -34,8 +34,8 @@ function normalizeName(value) {
     .join(' ')
 }
 
-const EMPTY = { firstName: '', lastName: '', email: '', phone: '', role: '' }
-const EMPTY_ERRORS = { firstName: '', lastName: '', email: '', phone: '', role: '' }
+const EMPTY = { firstName: '', middleInitial: '', lastName: '', email: '', phone: '', role: '' }
+const EMPTY_ERRORS = { firstName: '', middleInitial: '', lastName: '', email: '', phone: '', role: '' }
 
 export default function AddUserModal({ open, onClose, onSuccess }) {
   const { showToast } = useToast()
@@ -100,6 +100,7 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           firstName: normalizeName(form.firstName.trim()),
+          middleInitial: form.middleInitial.trim() || null,
           lastName: normalizeName(form.lastName.trim()),
           email: form.email.trim().toLowerCase(),
           phone: form.phone.trim() || null,
@@ -192,6 +193,19 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
             helperText={errors.firstName}
             required
           />
+          <Box sx={{ width: 80, flexShrink: 0 }}>
+            <Input
+              id='middleInitial'
+              label='M.I.'
+              value={form.middleInitial}
+              onChange={(e) => {
+                const val = e.target.value.slice(0, 2).toUpperCase()
+                setForm((prev) => ({ ...prev, middleInitial: val }))
+              }}
+              placeholder='A.'
+              slotProps={{ htmlInput: { maxLength: 2 } }}
+            />
+          </Box>
           <Input
             id='lastName'
             label='Last Name'

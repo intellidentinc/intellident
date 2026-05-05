@@ -58,6 +58,7 @@ export async function GET(request) {
           email: pending.email,
           password: pending.password,
           firstName: pending.firstName,
+          middleInitial: pending.middleInitial || null,
           lastName: pending.lastName,
           wrappedKey: pending.wrappedKey,
           keySalt: pending.keySalt,

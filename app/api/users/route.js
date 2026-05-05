@@ -76,7 +76,7 @@ export async function POST(request) {
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
 
   const { ip, userAgent } = getRequestMeta(request)
-  const { firstName, lastName, email, phone, role, wrappedKey, keySalt } = await request.json()
+  const { firstName, middleInitial, lastName, email, phone, role, wrappedKey, keySalt } = await request.json()
 
   if (!firstName || !lastName || !email || !role || !wrappedKey || !keySalt) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -99,6 +99,7 @@ export async function POST(request) {
       data: {
         email: email.trim().toLowerCase(),
         firstName: firstName.trim(),
+        middleInitial: middleInitial?.trim() || null,
         lastName: lastName.trim(),
         phone: phone?.trim() || null,
         password: hashedPassword,
