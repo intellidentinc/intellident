@@ -49,7 +49,9 @@ export default function SignUpPage() {
   const [clinicOptions, setClinicOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { showToast } = useToast();
   const passwordStrength = getPasswordStrength(password);
 
@@ -71,6 +73,12 @@ export default function SignUpPage() {
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
     if (!passwordRegex.test(password)) {
       showToast('Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.', 'error');
+      setLoading(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showToast('Passwords do not match.', 'error');
       setLoading(false);
       return;
     }
@@ -271,6 +279,32 @@ export default function SignUpPage() {
                 </Box>
               )}
             </Box>
+
+            <Input
+              id="confirmPassword"
+              label="Confirm Password"
+              type={showConfirmPassword ? 'text' : 'password'}
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter your password"
+              error={!!confirmPassword && confirmPassword !== password}
+              helperText={confirmPassword && confirmPassword !== password ? 'Passwords do not match' : ''}
+              slotProps={{ htmlInput: { minLength: 8 } }}
+              endAdornment={
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    edge="end"
+                    size="small"
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </IconButton>
+                </InputAdornment>
+              }
+            />
 
             <Select
               id="clinicId"
