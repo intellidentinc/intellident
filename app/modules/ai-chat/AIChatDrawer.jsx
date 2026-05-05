@@ -394,19 +394,29 @@ export default function AIChatDrawer({ open, onClose }) {
                   boxShadow: msg.role === 'ASSISTANT' ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
                   border: msg.role === 'ASSISTANT' ? '1px solid' : 'none',
                   borderColor: 'divider',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.55,
+                  color: msg.role === 'USER' ? '#fff' : '#334155',
+                  '& p': { m: 0, mb: 0.75, '&:last-child': { mb: 0 } },
+                  '& strong': { fontWeight: 700 },
+                  '& em': { fontStyle: 'italic' },
+                  '& ul, & ol': { pl: 2.5, m: 0, mb: 0.75 },
+                  '& li': { mb: 0.25 },
+                  '& code': { bgcolor: msg.role === 'USER' ? 'rgba(255,255,255,0.2)' : '#f1f5f9', px: 0.5, py: 0.125, borderRadius: 0.5, fontFamily: 'monospace', fontSize: '0.8rem' },
+                  '& h1, & h2, & h3': { fontWeight: 700, mb: 0.5, mt: 1, '&:first-of-type': { mt: 0 } },
+                  '& h1': { fontSize: '1rem' },
+                  '& h2': { fontSize: '0.9375rem' },
+                  '& h3': { fontSize: '0.875rem' },
+                  '& hr': { my: 1, borderColor: 'divider' },
                 }}
               >
-                <Typography
-                  variant='body2'
-                  sx={{
-                    whiteSpace: 'pre-wrap',
-                    lineHeight: 1.55,
-                    fontSize: '0.875rem',
-                    color: msg.role === 'USER' ? '#fff' : 'text.primary',
-                  }}
-                >
-                  {msg.content}
-                </Typography>
+                {msg.role === 'ASSISTANT' ? (
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                ) : (
+                  <Typography sx={{ whiteSpace: 'pre-wrap', fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit' }}>
+                    {msg.content}
+                  </Typography>
+                )}
               </Box>
             </Box>
           ))}
