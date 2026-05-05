@@ -35,7 +35,24 @@ async function buildSystemPrompt(session) {
 
   let roleContext = ''
 
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+  const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999)
+  const weekEnd    = new Date(todayStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59, 999)
+
+  function fmtDate(d) {
+    return new Date(d).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })
+  }
+  function fmtTime(d) {
+    return new Date(d).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
+  }
+  function fmtAppt(a) {
+    const dentistName = a.dentist ? `Dr. ${a.dentist.user.firstName} ${a.dentist.user.lastName}` : 'Any available dentist'
+    const patient = a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : 'Unknown patient'
+    return `- [${a.appointmentCode ?? a.id}] ${fmtDate(a.scheduledAt)} ${fmtTime(a.scheduledAt)} | Patient: ${patient} | Service: ${a.service.name} | Dentist: ${dentistName} | Status: ${a.status}`
+  }
+
   if (role === 4) {
+    // PATIENT — inject their own upcoming appointments only
     const patient = await prisma.patient.findFirst({
       where: { userId, clinicId, isDeleted: false },
     })
@@ -55,20 +72,97 @@ async function buildSystemPrompt(session) {
         orderBy: { scheduledAt: 'asc' },
         take: 5,
       })
-
-      if (upcoming.length > 0) {
-        roleContext =
-          `\nThe patient's upcoming appointments:\n` +
-          upcoming
-            .map(
-              (a) =>
-                `- ${a.appointmentCode ?? a.id}: ${a.service.name} on ${new Date(a.scheduledAt).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })} at ${new Date(a.scheduledAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })} — Status: ${a.status}${a.dentist ? ` with Dr. ${a.dentist.user.firstName} ${a.dentist.user.lastName}` : ''}`
-            )
-            .join('\n')
-      } else {
-        roleContext = `\nThe patient has no upcoming appointments.`
-      }
+      roleContext = upcoming.length > 0
+        ? `\n## Your Upcoming Appointments\n` + upcoming.map((a) =>
+            `- ${a.appointmentCode ?? a.id}: ${a.service.name} on ${fmtDate(a.scheduledAt)} at ${fmtTime(a.scheduledAt)} — Status: ${a.status}${a.dentist ? ` with Dr. ${a.dentist.user.firstName} ${a.dentist.user.lastName}` : ''}`
+          ).join('\n')
+        : `\n## Your Upcoming Appointments\nNo upcoming appointments.`
     }
+
+  } else if (role === 2) {
+    // DENTIST — inject their own today + this week schedule
+    const dentist = await prisma.dentist.findFirst({
+      where: { userId, clinicId, isDeleted: false },
+    })
+    if (dentist) {
+      const [todayAppts, weekAppts, pendingCount] = await Promise.all([
+        prisma.appointment.findMany({
+          where: { clinicId, dentistId: dentist.id, isDeleted: false, status: { notIn: ['CANCELLED'] }, scheduledAt: { gte: todayStart, lte: todayEnd } },
+          include: { patient: { select: { firstName: true, lastName: true } }, service: { select: { name: true } } },
+          orderBy: { scheduledAt: 'asc' },
+        }),
+        prisma.appointment.findMany({
+          where: { clinicId, dentistId: dentist.id, isDeleted: false, status: { notIn: ['CANCELLED'] }, scheduledAt: { gte: todayStart, lte: weekEnd } },
+          include: { patient: { select: { firstName: true, lastName: true } }, service: { select: { name: true } }, dentist: { include: { user: { select: { firstName: true, lastName: true } } } } },
+          orderBy: { scheduledAt: 'asc' },
+          take: 20,
+        }),
+        prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
+      ])
+
+      roleContext = `
+## Your Schedule — Today (${fmtDate(todayStart)})
+Total appointments today: ${todayAppts.length}
+${todayAppts.length === 0 ? 'No appointments scheduled for today.' : todayAppts.map((a) => `- ${fmtTime(a.scheduledAt)} | ${a.patient.firstName} ${a.patient.lastName} | ${a.service.name} | Status: ${a.status}`).join('\n')}
+
+## Your Schedule — This Week
+Total this week: ${weekAppts.length}
+${weekAppts.map((a) => `- ${fmtDate(a.scheduledAt)} ${fmtTime(a.scheduledAt)} | ${a.patient.firstName} ${a.patient.lastName} | ${a.service.name} | Status: ${a.status}`).join('\n') || 'No appointments this week.'}
+
+## Clinic Overview
+Pending booking requests: ${pendingCount}`
+
+    }
+
+  } else if (role === 3 || role === 1 || role === 0) {
+    // RECEPTIONIST / ADMIN / SUPERADMIN — full clinic appointment view
+    const [todayAppts, pendingAppts, weekCount, allDentists] = await Promise.all([
+      prisma.appointment.findMany({
+        where: { clinicId, isDeleted: false, status: { notIn: ['CANCELLED'] }, scheduledAt: { gte: todayStart, lte: todayEnd } },
+        include: {
+          patient: { select: { firstName: true, lastName: true } },
+          service: { select: { name: true } },
+          dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
+        },
+        orderBy: { scheduledAt: 'asc' },
+      }),
+      prisma.appointment.findMany({
+        where: { clinicId, isDeleted: false, status: 'PENDING' },
+        include: {
+          patient: { select: { firstName: true, lastName: true } },
+          service: { select: { name: true } },
+          dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
+        },
+        orderBy: { scheduledAt: 'asc' },
+        take: 20,
+      }),
+      prisma.appointment.count({
+        where: { clinicId, isDeleted: false, status: { notIn: ['CANCELLED'] }, scheduledAt: { gte: todayStart, lte: weekEnd } },
+      }),
+      prisma.dentist.findMany({
+        where: { clinicId, isDeleted: false },
+        include: { user: { select: { firstName: true, lastName: true } } },
+      }),
+    ])
+
+    const confirmedToday   = todayAppts.filter(a => a.status === 'CONFIRMED').length
+    const pendingToday     = todayAppts.filter(a => a.status === 'PENDING').length
+    const completedToday   = todayAppts.filter(a => a.status === 'COMPLETED').length
+
+    roleContext = `
+## Today's Appointments (${fmtDate(todayStart)})
+Total: ${todayAppts.length} | Confirmed: ${confirmedToday} | Pending: ${pendingToday} | Completed: ${completedToday}
+${todayAppts.length === 0 ? 'No appointments today.' : todayAppts.map(fmtAppt).join('\n')}
+
+## Pending Booking Requests (clinic-wide)
+Total pending: ${pendingAppts.length}
+${pendingAppts.length === 0 ? 'No pending requests.' : pendingAppts.map(fmtAppt).join('\n')}
+
+## This Week
+Total appointments this week: ${weekCount}
+
+## Dentists at this Clinic
+${allDentists.map(d => `- Dr. ${d.user.firstName} ${d.user.lastName}${d.specialty ? ` (${d.specialty})` : ''}`).join('\n') || 'None listed.'}`
   }
 
   return `You are IntelliDent AI, a helpful assistant for ${clinic?.name ?? 'this dental clinic'}.
@@ -87,13 +181,16 @@ ${roleContext}
 
 ## Guidelines
 - Be professional, friendly, and concise
+- Use the live data above to answer questions accurately (appointment counts, schedules, patient names, etc.)
 - Answer questions about dental procedures, services, clinic policies, and appointments
 - For booking, guide patients to use the "Book Appointment" button in My Schedules
-- Never disclose or speculate about other patients' personal information or records
+- Never disclose or speculate about patient data to users who are not authorized to see it
 - AI suggestions are recommendations only — staff must confirm any changes
-- If asked something outside your knowledge, say so honestly
-${role === 4 ? '- You are speaking with a PATIENT. Only discuss their own appointments and general clinic information.' : ''}
-${role >= 1 && role <= 3 ? '- You are speaking with CLINIC STAFF. You can discuss scheduling, appointments, and operational questions.' : ''}`
+- If asked something not covered by the data above, say so honestly
+${role === 4 ? '- You are speaking with a PATIENT. Only discuss their own appointments and general clinic information. Never mention other patients.' : ''}
+${role === 2 ? '- You are speaking with a DENTIST. Answer questions about their own schedule, their patients, and clinical topics.' : ''}
+${role === 3 ? '- You are speaking with a RECEPTIONIST. You can answer questions about today\'s schedule, pending bookings, patient appointments, and operational tasks.' : ''}
+${role === 1 || role === 0 ? '- You are speaking with an ADMIN. You have full visibility of clinic operations, appointments, and staff schedules.' : ''}`
 }
 
 export async function GET() {
