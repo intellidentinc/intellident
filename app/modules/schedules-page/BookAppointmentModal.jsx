@@ -22,12 +22,11 @@ import Dialog from '@mui/material/Dialog'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
-import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Users } from 'lucide-react'
 import dayjs from 'dayjs'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
@@ -40,6 +39,55 @@ function SectionLabel({ step, label }) {
         <Typography sx={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700, lineHeight: 1 }}>{step}</Typography>
       </Box>
       <Typography variant='body2' fontWeight={600} color='text.primary'>{label}</Typography>
+    </Box>
+  )
+}
+
+function TimeSlotRow({ slot, date, duration, selected, onClick, formatSlot }) {
+  const [h, m] = slot.split(':').map(Number)
+  const start = date.hour(h).minute(m).second(0)
+  const end = start.add(duration, 'minute')
+
+  const startStr = formatSlot(slot)
+  const endStr = end.toDate().toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const dateStr = date.format('ddd M/D')
+
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        px: 2,
+        py: 1.5,
+        border: '1.5px solid',
+        borderColor: selected ? '#2563eb' : '#e2e8f0',
+        borderRadius: 2,
+        cursor: 'pointer',
+        bgcolor: selected ? '#eff6ff' : '#fff',
+        transition: 'all 0.15s',
+        '&:hover': {
+          borderColor: '#93c5fd',
+          bgcolor: selected ? '#eff6ff' : '#f8fafc',
+        },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Typography variant='body2' fontWeight={700} color={selected ? '#1d4ed8' : 'text.primary'} sx={{ minWidth: 60 }}>
+          {dateStr}
+        </Typography>
+        <Typography variant='body2' color={selected ? '#1d4ed8' : 'text.secondary'}>
+          {startStr} – {endStr}
+          <Typography component='span' variant='body2' color='text.disabled' sx={{ ml: 0.75 }}>
+            ({duration} min)
+          </Typography>
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Users size={14} color='#22c55e' />
+        <Typography variant='caption' fontWeight={700} color='#22c55e'>1</Typography>
+      </Box>
     </Box>
   )
 }
@@ -274,7 +322,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
           {/* Step 4: Time slot */}
           {date && (
             <Box>
-              <SectionLabel step={4} label='Select a time slot' />
+              <SectionLabel step={4} label='Time suggestions' />
               {errors.timeSlot && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.timeSlot}</Typography>}
 
               {slotsLoading && (
@@ -290,57 +338,19 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
                 </Typography>
               )}
 
-              {!slotsLoading && morningSlots.length > 0 && (
-                <Box sx={{ mb: 1.5 }}>
-                  <Typography variant='caption' color='text.secondary' fontWeight={600} sx={{ display: 'block', mb: 1 }}>
-                    Morning
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {morningSlots.map(s => (
-                      <Chip
-                        key={s}
-                        label={formatSlot(s)}
-                        size='small'
-                        onClick={() => { setTimeSlot(s); setErrors(p => ({ ...p, timeSlot: undefined })) }}
-                        sx={{
-                          cursor: 'pointer',
-                          fontWeight: 600,
-                          fontSize: '0.78rem',
-                          bgcolor: timeSlot === s ? '#2563eb' : '#f1f5f9',
-                          color: timeSlot === s ? '#fff' : '#334155',
-                          border: timeSlot === s ? '1.5px solid #2563eb' : '1.5px solid transparent',
-                          '&:hover': { bgcolor: timeSlot === s ? '#1d4ed8' : '#e2e8f0' },
-                        }}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-              )}
-
-              {!slotsLoading && afternoonSlots.length > 0 && (
-                <Box>
-                  <Typography variant='caption' color='text.secondary' fontWeight={600} sx={{ display: 'block', mb: 1 }}>
-                    Afternoon
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {afternoonSlots.map(s => (
-                      <Chip
-                        key={s}
-                        label={formatSlot(s)}
-                        size='small'
-                        onClick={() => { setTimeSlot(s); setErrors(p => ({ ...p, timeSlot: undefined })) }}
-                        sx={{
-                          cursor: 'pointer',
-                          fontWeight: 600,
-                          fontSize: '0.78rem',
-                          bgcolor: timeSlot === s ? '#2563eb' : '#f1f5f9',
-                          color: timeSlot === s ? '#fff' : '#334155',
-                          border: timeSlot === s ? '1.5px solid #2563eb' : '1.5px solid transparent',
-                          '&:hover': { bgcolor: timeSlot === s ? '#1d4ed8' : '#e2e8f0' },
-                        }}
-                      />
-                    ))}
-                  </Box>
+              {!slotsLoading && slots.length > 0 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {slots.map(s => (
+                    <TimeSlotRow
+                      key={s}
+                      slot={s}
+                      date={date}
+                      duration={selectedService?.duration ?? 30}
+                      selected={timeSlot === s}
+                      onClick={() => { setTimeSlot(s); setErrors(p => ({ ...p, timeSlot: undefined })) }}
+                      formatSlot={formatSlot}
+                    />
+                  ))}
                 </Box>
               )}
             </Box>
