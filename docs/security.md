@@ -59,7 +59,7 @@ MFA is enforced for **all users** on every sign-in. After credentials are verifi
               ├─ generates 6-digit OTP + secure pendingToken (32 random bytes)
               ├─ bcrypt-hashes OTP (cost 8) → stored in MfaOtp table
               ├─ deletes any previous unused OTPs for this user
-              ├─ emails OTP via Mailjet (fire-and-forget)
+              ├─ emails OTP via Gmail/nodemailer (fire-and-forget)
               └─ returns { mfaPending: true, pendingToken, wrappedKey, keySalt }
                     │
                     └─ client stores { password, wrappedKey, keySalt } in sessionStorage
@@ -128,7 +128,7 @@ model MfaOtp {
 | `app/api/auth/verify-otp/route.js` | Validates OTP, creates session |
 | `app/(main)/verify-otp/page.jsx` | Page entry point |
 | `app/modules/verify-otp-page/VerifyOtpPage.jsx` | OTP entry UI (6 digit boxes, paste support) |
-| `lib/email.js` → `sendMfaOtpEmail()` | Sends styled OTP email via Mailjet |
+| `lib/email.js` → `sendMfaOtpEmail()` | Sends styled OTP email via Gmail/nodemailer |
 | `prisma/schema.prisma` → `MfaOtp` | OTP record model |
 
 ---
@@ -142,7 +142,7 @@ Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUn
 
 ## Email Verification on Sign-Up
 - `POST /api/auth/sign-up` → validates input, generates E2EE key material client-side, stores everything in `EmailVerification` record (24h expiry). **Does NOT create a `User` yet.**
-- A verification email with a tokenized link is sent via Mailjet.
+- A verification email with a tokenized link is sent via Gmail/nodemailer.
 - `POST /api/auth/verify` → validates token, creates `User` + profile record (`Patient` / `Dentist` / `Receptionist`). Token is single-use.
 - Model: `EmailVerification` (token, email, firstName, lastName, hashed password, wrappedKey, keySalt, clinicId, expiresAt)
 

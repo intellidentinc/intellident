@@ -34,7 +34,7 @@ All major models (`User`, `Patient`, `Dentist`, `Receptionist`, `Clinic`, `Servi
 ## Audit & Notifications
 - `AuditLog` — system-wide audit trail (schema built; query API/UI not yet implemented); fields: `userId?`, `clinicId?`, `action` (AuditAction enum), `entity`, `entityId?`, `ipAddress?`, `userAgent?`, `metadata` (Json)
 - `InAppNotification` — in-app bell notifications; fields: `userId`, `clinicId`, `type` (NotificationType), `title`, `body`, `appointmentId?`, `isRead`, `createdAt`
-- `Notification` — **legacy email queue model; not actively used.** System uses `InAppNotification` for bell + Mailjet fire-and-forget for email.
+- `Notification` — **legacy email queue model; not actively used.** System uses `InAppNotification` for bell + Gmail fire-and-forget for email.
 
 ## Enums
 

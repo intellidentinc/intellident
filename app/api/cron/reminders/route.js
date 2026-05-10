@@ -17,7 +17,7 @@ import { sendAppointmentReminder } from '@/lib/notifications'
  *    multiple times within the ±30-minute detection window.
  *
  * 3. Dual-Channel Notification
- *    Each reminder sends both an in-app notification (bell) and a Mailjet email
+ *    Each reminder sends both an in-app notification (bell) and a Gmail email
  *    via sendAppointmentReminder in lib/notifications.js.
  *
  * Detection windows (±30 min around each threshold):

@@ -24,9 +24,9 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | Auth | Custom session-based (cookies via `lib/auth.js`) |
 | Encryption | Web Crypto API — AES-GCM E2EE, PBKDF2 key derivation |
 | File Storage | Supabase Storage (`clinic-logos` bucket) |
-| Email | Mailjet (`MJ_APIKEY_PUBLIC`, `MJ_APIKEY_PRIVATE`, `MJ_FROM_EMAIL`, `MJ_FROM_NAME`) |
+| Email | Gmail SMTP via nodemailer (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `GMAIL_FROM_NAME`) |
 | Cron | Vercel Cron Jobs (every 15 min) → `CRON_SECRET` bearer token |
-| AI | GPT-5 (for appointment scheduling suggestions — not yet implemented) |
+| AI | Gemini 2.5 Flash — **testing placeholder only; final AI model not decided** |
 | Analytics | Vercel Analytics |
 
 ---
@@ -118,7 +118,7 @@ lib/
 ├── crypto.js                 # Web Crypto API helpers (E2EE)
 ├── supabase.js               # Supabase client (service role — server-side only)
 ├── notifications.js          # In-app + email notification helpers (see Notification System section)
-├── email.js                  # Mailjet email helpers (auth emails + all appointment notification emails)
+├── email.js                  # Gmail/nodemailer email helpers (auth emails + all appointment notification emails)
 ├── validate.js               # Input sanitization helpers (parseJsonBody, sanitizeEmail, str, secret, bool, hexToken)
 └── utils.js                  # cn() — clsx + tailwind-merge class name helper
 prisma/
@@ -247,7 +247,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - `PatientRecord` has E2EE fields (`encryptedData`, `dataIv`, `contentHash` for tamper detection)
 - `Billing`/`Payment` schema complete; API/UI not yet built
 - `AuditLog` schema complete; query UI not yet built
-- `Notification` model is legacy — system uses `InAppNotification` + Mailjet fire-and-forget
+- `Notification` model is legacy — system uses `InAppNotification` + Gmail fire-and-forget
 
 **Key enums:** `UserRole`, `AppointmentStatus` (PENDING/CONFIRMED/RESCHEDULED/CANCELLED/COMPLETED/NO_SHOW), `NotificationType`, `AuditAction`, `PaymentStatus`, `RecordStatus`, `ConsentStatus`
 
@@ -257,7 +257,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 
 > Full details: [`docs/notifications.md`](./docs/notifications.md)
 
-All appointment events → in-app bell + Mailjet email. No Reminders page — bell opens Framer Motion drawer.
+All appointment events → in-app bell + Gmail email. No Reminders page — bell opens Framer Motion drawer.
 
 **Helpers in `lib/notifications.js`:**
 - `notifyStaffBooking(...)` — new booking → all staff (in-app + email)
@@ -350,7 +350,7 @@ All appointment events → in-app bell + Mailjet email. No Reminders page — be
   - [x] In-app notification bell in page header (all roles)
   - [x] Framer Motion slide-in notification drawer
   - [x] In-app notifications for: booking request, confirmation, cancellation, completion, no-show, rescheduled, 24h reminder, 2h reminder
-  - [x] Email notifications via Mailjet for all notification types
+  - [x] Email notifications via Gmail/nodemailer for all notification types
   - [x] Vercel cron job for 24h + 2h appointment reminders (every 15 min, protected by CRON_SECRET)
   - [x] Mark-read (single + all) functionality
 - [ ] Virtual Assistant / Chatbot
@@ -527,10 +527,9 @@ const { data: { publicUrl } } = supabase.storage.from('clinic-logos').getPublicU
 |---|---|
 | `DATABASE_URL` | Neon PostgreSQL connection string |
 | `SESSION_SECRET` | Cookie signing secret |
-| `MJ_APIKEY_PUBLIC` | Mailjet public API key |
-| `MJ_APIKEY_PRIVATE` | Mailjet private API key |
-| `MJ_FROM_EMAIL` | Sender email address |
-| `MJ_FROM_NAME` | Sender display name |
+| `GMAIL_USER` | Gmail sender address |
+| `GMAIL_APP_PASSWORD` | Gmail App Password (not the account password) |
+| `GMAIL_FROM_NAME` | Sender display name |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
 | `CRON_SECRET` | Bearer token protecting `/api/cron/reminders`; must match Vercel env var |

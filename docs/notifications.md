@@ -1,7 +1,7 @@
 # Notification System
 
 ## Overview
-All appointment events generate both **in-app notifications** (bell icon) and **email notifications** (Mailjet). There is no separate Reminders page — the bell icon in `PageHeader` opens a Framer Motion slide-in drawer.
+All appointment events generate both **in-app notifications** (bell icon) and **email notifications** (Gmail/nodemailer). There is no separate Reminders page — the bell icon in `PageHeader` opens a Framer Motion slide-in drawer.
 
 ## `lib/notifications.js` Helpers
 

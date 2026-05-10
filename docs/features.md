@@ -89,7 +89,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | In-app notification bell | `[x]` | All roles, page header |
 | Framer Motion notification drawer | `[x]` | Slide-in on bell click |
 | In-app notifications for all events | `[x]` | Booking, confirm, cancel, complete, no-show, reschedule, 24h/2h reminders |
-| Email notifications via Mailjet | `[x]` | All notification types |
+| Email notifications via Gmail/nodemailer | `[x]` | All notification types |
 | Vercel cron reminders | `[x]` | Every 15 min, `CRON_SECRET` protected |
 | Mark read (single + all) | `[x]` | |
 

@@ -5,7 +5,7 @@
  *
  * 1. Two-Phase Registration (Email Verification Gate)
  *    This route does NOT create a User. It creates an EmailVerification record
- *    (24h expiry) and sends a tokenized link via Mailjet. The actual User +
+ *    (24h expiry) and sends a tokenized link via Gmail. The actual User +
  *    Patient profile are only created when the link is clicked (see /api/auth/verify).
  *    This prevents unverified email addresses from accessing the system.
  *
