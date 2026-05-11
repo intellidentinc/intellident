@@ -19,6 +19,25 @@ async function getDentistForClinic(session) {
   return { ...caller, dentistId: dentist.id }
 }
 
+// GET /api/records/[patientId]/[recordId]
+export async function GET(request, { params }) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const dentist = await getDentistForClinic(session)
+  if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { patientId, recordId } = await params
+
+  const record = await prisma.patientRecord.findFirst({
+    where: { id: recordId, patientId, clinicId: dentist.clinicId, isDeleted: false },
+    select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
+  })
+  if (!record) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+
+  return NextResponse.json({ record })
+}
+
 // PATCH /api/records/[patientId]/[recordId]
 export async function PATCH(request, { params }) {
   const session = await getSession()
@@ -28,7 +47,7 @@ export async function PATCH(request, { params }) {
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { patientId, recordId } = await params
-  const { title, notes, status } = await request.json()
+  const { title, encryptedData, dataIv, contentHash, status } = await request.json()
 
   if (title !== undefined && !title?.trim()) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -44,10 +63,12 @@ export async function PATCH(request, { params }) {
     where: { id: recordId },
     data: {
       ...(title !== undefined && { title: title.trim() }),
-      ...(notes !== undefined && { encryptedData: notes?.trim() || null }),
+      ...(encryptedData !== undefined && { encryptedData: encryptedData || null }),
+      ...(dataIv !== undefined && { dataIv: dataIv || null }),
+      ...(contentHash !== undefined && { contentHash: contentHash || null }),
       ...(status !== undefined && validStatuses.includes(status) && { status }),
     },
-    select: { id: true, title: true, encryptedData: true, status: true, createdAt: true, updatedAt: true }
+    select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
   })
 
   return NextResponse.json(record)

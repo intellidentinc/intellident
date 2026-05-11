@@ -46,7 +46,7 @@ export async function GET(request, { params }) {
   const records = await prisma.patientRecord.findMany({
     where: { patientId, clinicId: dentist.clinicId, isDeleted: false },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, title: true, encryptedData: true, status: true, createdAt: true, updatedAt: true }
+    select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
   })
 
   return NextResponse.json({ patient, records })
@@ -61,7 +61,7 @@ export async function POST(request, { params }) {
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { patientId } = await params
-  const { title, notes } = await request.json()
+  const { title, encryptedData, dataIv, contentHash } = await request.json()
 
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
 
@@ -75,9 +75,11 @@ export async function POST(request, { params }) {
       patientId,
       clinicId: dentist.clinicId,
       title: title.trim(),
-      encryptedData: notes?.trim() || null,
+      encryptedData: encryptedData || null,
+      dataIv: dataIv || null,
+      contentHash: contentHash || null,
     },
-    select: { id: true, title: true, encryptedData: true, status: true, createdAt: true, updatedAt: true }
+    select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
   })
 
   return NextResponse.json(record, { status: 201 })
