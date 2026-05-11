@@ -1,5 +1,6 @@
 'use client'
 
+import { usePathname } from 'next/navigation'
 import { ROLES, ROLE_LABELS } from '@/lib/roles'
 import {
   Sidebar,
@@ -11,7 +12,7 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem
+  SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import {
   LayoutDashboard,
@@ -24,7 +25,6 @@ import {
   Settings,
   Stethoscope,
   User,
-  ClipboardList
 } from 'lucide-react'
 import SignOutButton from './SignOutButton'
 import ExitSuperAdminButton from './ExitSuperAdminButton'
@@ -44,18 +44,22 @@ function buildNavGroups(role, clinicId) {
         {
           label: 'Navigation',
           items: [
-            { label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard') },
-            { label: 'My Schedules', icon: CalendarDays, href: p('/schedules') }
-          ]
+            { label: 'Dashboard',        icon: LayoutDashboard, href: p('/dashboard') },
+            { label: 'My Schedules',     icon: CalendarDays,    href: p('/schedules') },
+          ],
         },
         {
           label: 'Health',
-          items: [{ label: 'My Dental Records', icon: FileText, href: p('/my-records') }]
+          items: [
+            { label: 'My Dental Records', icon: FileText, href: p('/my-records') },
+          ],
         },
         {
           label: 'Account',
-          items: [{ label: 'My Profile', icon: User, href: p('/profile') }]
-        }
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
+          ],
+        },
       ]
 
     case ROLES.DENTIST:
@@ -64,17 +68,21 @@ function buildNavGroups(role, clinicId) {
           label: 'Navigation',
           items: [
             { label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard') },
-            { label: 'Schedule', icon: CalendarDays, href: p('/schedule') }
-          ]
+            { label: 'Schedule',  icon: CalendarDays,    href: p('/schedule') },
+          ],
         },
         {
           label: 'Clinical',
-          items: [{ label: 'Patient Records', icon: FileText, href: p('/records') }]
+          items: [
+            { label: 'Patient Records', icon: FileText, href: p('/records') },
+          ],
         },
         {
           label: 'Account',
-          items: [{ label: 'My Profile', icon: User, href: p('/profile') }]
-        }
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
+          ],
+        },
       ]
 
     case ROLES.RECEPTIONIST:
@@ -82,45 +90,55 @@ function buildNavGroups(role, clinicId) {
         {
           label: 'Navigation',
           items: [
-            { label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard'), badgeKey: null },
-            { label: 'Appointments', icon: CalendarDays, href: p('/appointments'), badgeKey: 'pending' },
-            { label: 'Patients', icon: Users, href: p('/patients') }
-          ]
+            { label: 'Dashboard',    icon: LayoutDashboard, href: p('/dashboard') },
+            { label: 'Appointments', icon: CalendarDays,    href: p('/appointments'), badgeKey: 'pending' },
+            { label: 'Patients',     icon: Users,           href: p('/patients') },
+          ],
         },
         {
           label: 'Billing',
-          items: [{ label: 'Billing', icon: CreditCard, href: p('/billing') }]
+          items: [
+            { label: 'Billing', icon: CreditCard, href: p('/billing') },
+          ],
         },
         {
           label: 'Account',
-          items: [{ label: 'My Profile', icon: User, href: p('/profile') }]
-        }
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
+          ],
+        },
       ]
 
     case ROLES.ADMIN:
       return [
         {
           label: 'Navigation',
-          items: [{ label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard') }]
+          items: [
+            { label: 'Dashboard', icon: LayoutDashboard, href: p('/dashboard') },
+          ],
         },
         {
           label: 'Management',
           items: [
-            { label: 'Users', icon: UserCog, href: p('/users') },
-            { label: 'Services', icon: Stethoscope, href: p('/services') },
-            { label: 'Schedules', icon: CalendarDays, href: p('/appointments'), badgeKey: 'pending' },
-            { label: 'Billing', icon: CreditCard, href: p('/billing') },
-            { label: 'Settings', icon: Settings, href: p('/settings') }
-          ]
+            { label: 'Users',        icon: UserCog,      href: p('/users') },
+            { label: 'Services',     icon: Stethoscope,  href: p('/services') },
+            { label: 'Appointments', icon: CalendarDays, href: p('/appointments'), badgeKey: 'pending' },
+            { label: 'Billing',      icon: CreditCard,   href: p('/billing') },
+            { label: 'Settings',     icon: Settings,     href: p('/settings') },
+          ],
         },
         {
           label: 'System',
-          items: [{ label: 'Audit Log', icon: ShieldCheck, href: p('/audit-log') }]
+          items: [
+            { label: 'Audit Log', icon: ShieldCheck, href: p('/audit-log') },
+          ],
         },
         {
           label: 'Account',
-          items: [{ label: 'My Profile', icon: User, href: p('/profile') }]
-        }
+          items: [
+            { label: 'My Profile', icon: User, href: p('/profile') },
+          ],
+        },
       ]
 
     default:
@@ -132,38 +150,53 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
   const clinicId = session?.clinicId
   const navGroups = buildNavGroups(role, clinicId)
   const badges = { pending: pendingCount }
+  const pathname = usePathname()
 
   return (
     <Sidebar>
       {/* Header */}
-      <SidebarHeader className='border-b border-sidebar-border px-5 py-4'>
-        {clinicLogo ? (
-          <img src={clinicLogo} alt='Clinic logo' className='h-10 w-10 rounded-full object-cover mb-1' />
-        ) : (
-          <div className='h-10 w-10 rounded-full bg-[#dbeafe] flex items-center justify-center mb-1'>
-            <Stethoscope size={20} className='text-[#2563eb]' />
+      <SidebarHeader className='border-b border-sidebar-border px-4 py-4'>
+        <div className='flex items-center gap-2.5'>
+          {clinicLogo ? (
+            <img src={clinicLogo} alt='Clinic logo' className='h-8 w-8 rounded-lg object-cover flex-shrink-0' />
+          ) : (
+            <div className='h-8 w-8 rounded-lg bg-[#eff6ff] flex items-center justify-center flex-shrink-0'>
+              <Stethoscope size={16} className='text-[#2563eb]' />
+            </div>
+          )}
+          <div className='min-w-0'>
+            <span className='block text-[14px] font-bold text-[#2563eb] leading-tight tracking-tight'>IntelliDent</span>
+            {clinicName && (
+              <span className='block text-[11px] text-sidebar-foreground/50 truncate leading-tight mt-0.5'>{clinicName}</span>
+            )}
           </div>
-        )}
-        <span className='text-lg font-bold text-[#2563eb]'>IntelliDent</span>
-        {clinicName && <span className='text-xs text-sidebar-foreground/60'>{clinicName}</span>}
+        </div>
       </SidebarHeader>
 
       {/* Nav */}
-      <SidebarContent>
+      <SidebarContent className='py-3'>
         {navGroups.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+          <SidebarGroup key={group.label} className='px-3 mb-1'>
+            <SidebarGroupLabel className='text-[10px] font-semibold tracking-[0.1em] uppercase text-sidebar-foreground/35 px-2 mb-0.5'>
+              {group.label}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className='gap-1 px-3'>
+              <SidebarMenu className='gap-px'>
                 {group.items.map((item) => {
                   const badgeCount = item.badgeKey ? (badges[item.badgeKey] ?? 0) : 0
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                   return (
                     <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton size='lg' render={<a href={item.href} />} className='cursor-pointer pl-4'>
-                        <item.icon />
+                      <SidebarMenuButton
+                        size='default'
+                        isActive={isActive}
+                        render={<a href={item.href} />}
+                        className='cursor-pointer h-8 rounded-md px-2 text-[13px] font-medium transition-colors duration-100'
+                      >
+                        <item.icon size={15} className={isActive ? 'text-[#2563eb]' : 'text-sidebar-foreground/45'} />
                         <span className='flex-1'>{item.label}</span>
                         {badgeCount > 0 && (
-                          <span className='ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2563eb] px-1.5 text-[10px] font-bold text-white'>
+                          <span className='ml-auto flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[9px] font-bold text-white tabular-nums'>
                             {badgeCount > 99 ? '99+' : badgeCount}
                           </span>
                         )}
@@ -178,28 +211,30 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className='border-t border-sidebar-border p-4'>
+      <SidebarFooter className='border-t border-sidebar-border p-3'>
         {isSuperAdmin && (
-          <div className='mb-3'>
+          <div className='mb-2'>
             <ExitSuperAdminButton />
           </div>
         )}
-        <div className='mb-3 flex items-center gap-3'>
-          <div className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-sm font-bold text-white'>
+
+        {/* User info */}
+        <div className='flex items-center gap-2.5 px-2 py-2 mb-2'>
+          <div className='flex size-8 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-[11px] font-bold text-white'>
             {getInitials(session?.firstName, session?.lastName)}
           </div>
-          <div className='min-w-0'>
-            <p className='text-sm font-medium text-sidebar-foreground'>
+          <div className='min-w-0 flex-1'>
+            <p className='text-[12.5px] font-semibold text-sidebar-foreground leading-tight truncate'>
               {session?.firstName && session?.lastName
                 ? `${session.firstName} ${session.lastName}`
                 : (session?.firstName ?? 'User')}
             </p>
-            <p className='text-xs text-sidebar-foreground/60 truncate'>{session?.email}</p>
-            <span className='mt-0.5 inline-block rounded-full bg-[#dbeafe] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2563eb]'>
-              {ROLE_LABELS[role] ?? role}
-            </span>
+            <p className='text-[10.5px] text-sidebar-foreground/45 truncate mt-px'>
+              {ROLE_LABELS[role] ?? role} · {session?.email}
+            </p>
           </div>
         </div>
+
         <SignOutButton />
       </SidebarFooter>
     </Sidebar>
