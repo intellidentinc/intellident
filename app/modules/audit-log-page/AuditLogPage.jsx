@@ -46,14 +46,18 @@ const PHT = 'Asia/Manila'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE']
+const ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'VERIFY', 'AI_INTERACTION']
 
 const ACTION_STYLES = {
-  LOGIN:  { bg: '#dcfce7', color: '#15803d' },
-  LOGOUT: { bg: '#f1f5f9', color: '#475569' },
-  CREATE: { bg: '#dbeafe', color: '#1d4ed8' },
-  UPDATE: { bg: '#fef9c3', color: '#854d0e' },
-  DELETE: { bg: '#fee2e2', color: '#b91c1c' },
+  LOGIN:          { bg: '#dcfce7', color: '#15803d' },
+  LOGOUT:         { bg: '#f1f5f9', color: '#475569' },
+  CREATE:         { bg: '#dbeafe', color: '#1d4ed8' },
+  UPDATE:         { bg: '#fef9c3', color: '#854d0e' },
+  DELETE:         { bg: '#fee2e2', color: '#b91c1c' },
+  VIEW:           { bg: '#f3e8ff', color: '#7c3aed' },
+  EXPORT:         { bg: '#fff7ed', color: '#c2410c' },
+  VERIFY:         { bg: '#ecfdf5', color: '#065f46' },
+  AI_INTERACTION: { bg: '#eff6ff', color: '#1e40af' },
 }
 
 const HEAD_CELLS = [

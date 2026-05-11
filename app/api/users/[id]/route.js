@@ -51,7 +51,7 @@ export async function PATCH(request, { params }) {
     const isSelf = session?.userId === id
     if (isSelf && !body.isActive) await clearSession()
 
-    logAudit({ userId: caller.id, clinicId: caller.clinicId, action: body.isActive ? 'ACTIVATE' : 'DEACTIVATE', entity: 'User', entityId: id, ipAddress: ip, userAgent })
+    logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'UPDATE', entity: 'User', entityId: id, ipAddress: ip, userAgent, metadata: { isActive: body.isActive } })
 
     return NextResponse.json({ ...updated, loggedOut: isSelf && !body.isActive })
   }
