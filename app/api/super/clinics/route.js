@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { normalizeAddress } from '@/lib/utils'
+import { parseJsonBody, str } from '@/lib/validate'
 
 async function requireSuperAdmin() {
   const session = await getSession()
@@ -27,28 +28,27 @@ export async function POST(request) {
   const session = await requireSuperAdmin()
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const body = await request.json()
-  const { name, address, phone } = body
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const name    = str(parsed.body.name, 200)
+  const address = str(parsed.body.address, 500)
+  const phone   = str(parsed.body.phone, 20)
 
-  if (!name?.trim()) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
-
-  if (phone?.trim()) {
-    const phoneRegex = /^\+639\d{9}$/
-    if (!phoneRegex.test(phone.trim())) {
-      return NextResponse.json(
-        { error: 'Phone must be in +63XXXXXXXXXX format (starts with +639)' },
-        { status: 400 }
-      )
-    }
+  if (!name) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
+  if (phone && !/^\+639\d{9}$/.test(phone)) {
+    return NextResponse.json(
+      { error: 'Phone must be in +63XXXXXXXXXX format (starts with +639)' },
+      { status: 400 }
+    )
   }
 
   const code = generateCode(name)
 
   const clinic = await prisma.clinic.create({
     data: {
-      name: name.trim(),
+      name,
       address: normalizeAddress(address),
-      phone: phone?.trim() || null,
+      phone: phone || null,
       code,
     },
     select: { id: true, name: true, code: true, address: true, logoUrl: true, email: true, phone: true },

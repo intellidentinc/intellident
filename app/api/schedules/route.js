@@ -22,6 +22,7 @@ import { prisma } from '@/lib/prisma'
 import { notifyStaffBooking } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody, str } from '@/lib/validate'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -86,7 +87,10 @@ export async function POST(request) {
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { ip, userAgent } = getRequestMeta(request)
-  const { serviceId, dentistId, scheduledAt, notes } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { serviceId, dentistId, scheduledAt } = parsed.body
+  const notes = str(parsed.body.notes, 2000)
 
   if (!serviceId || !scheduledAt) {
     return NextResponse.json({ error: 'serviceId and scheduledAt are required' }, { status: 400 })

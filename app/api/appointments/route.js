@@ -25,6 +25,7 @@ import { prisma } from '@/lib/prisma'
 import { notifyPatientStatusChange } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody, str } from '@/lib/validate'
 
 async function getCaller() {
   const session = await getSession()
@@ -96,7 +97,10 @@ export async function POST(request) {
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { ip, userAgent } = getRequestMeta(request)
-  const { patientId, serviceId, dentistId, scheduledAt, notes, status } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { patientId, serviceId, dentistId, scheduledAt, status } = parsed.body
+  const notes = str(parsed.body.notes, 2000)
 
   if (!patientId || !serviceId || !scheduledAt) {
     return NextResponse.json({ error: 'patientId, serviceId, and scheduledAt are required' }, { status: 400 })

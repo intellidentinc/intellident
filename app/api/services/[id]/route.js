@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody, str } from '@/lib/validate'
 
 async function getAdminCaller() {
   const session = await getSession()
@@ -22,7 +23,10 @@ export async function PATCH(request, { params }) {
 
   const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
-  const { name, duration, price, bufferTime, dentistIds } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { duration, price, bufferTime, dentistIds } = parsed.body
+  const name = str(parsed.body.name, 200)
 
   const existing = await prisma.service.findUnique({
     where: { id },
@@ -32,9 +36,7 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  if (!name?.trim()) {
-    return NextResponse.json({ error: 'Name is required' }, { status: 400 })
-  }
+  if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   if (!duration || duration < 15 || duration > 240) {
     return NextResponse.json({ error: 'Duration must be between 15 and 240 minutes' }, { status: 400 })
   }
@@ -45,7 +47,7 @@ export async function PATCH(request, { params }) {
   const service = await prisma.service.update({
     where: { id },
     data: {
-      name: name.trim(),
+      name,
       duration: parseInt(duration, 10),
       price: price !== undefined && price !== null && price !== '' ? parseFloat(price) : null,
       bufferTime: bufferTime !== undefined ? parseInt(bufferTime, 10) : 0,

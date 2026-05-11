@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { parseJsonBody, str, secret } from '@/lib/validate'
 
 async function getDentistForClinic(session) {
   const caller = await prisma.user.findUnique({
@@ -61,9 +62,14 @@ export async function POST(request, { params }) {
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { patientId } = await params
-  const { title, encryptedData, dataIv, contentHash } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const title         = str(parsed.body.title, 200)
+  const encryptedData = secret(parsed.body.encryptedData, 65536)
+  const dataIv        = secret(parsed.body.dataIv, 256)
+  const contentHash   = secret(parsed.body.contentHash, 256)
 
-  if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+  if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
 
   const patient = await prisma.patient.findFirst({
     where: { id: patientId, clinicId: dentist.clinicId, isDeleted: false }
@@ -74,7 +80,7 @@ export async function POST(request, { params }) {
     data: {
       patientId,
       clinicId: dentist.clinicId,
-      title: title.trim(),
+      title,
       encryptedData: encryptedData || null,
       dataIv: dataIv || null,
       contentHash: contentHash || null,

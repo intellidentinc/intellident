@@ -3,6 +3,7 @@ import { getSession, setSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { logAudit, getRequestMeta } from '@/lib/audit'
+import { parseJsonBody } from '@/lib/validate'
 
 export async function POST(request) {
   const session = await getSession()
@@ -13,7 +14,9 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { clinicId } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { clinicId } = parsed.body
   if (!clinicId) return NextResponse.json({ error: 'clinicId is required' }, { status: 400 })
 
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId, isDeleted: false } })

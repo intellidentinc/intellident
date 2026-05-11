@@ -3,6 +3,7 @@ import { getSession, clearSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, ROLE_LABELS, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody } from '@/lib/validate'
 
 async function getAdminCaller() {
   const session = await getSession()
@@ -34,7 +35,9 @@ export async function PATCH(request, { params }) {
 
   const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
-  const body = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const body = parsed.body
 
   const target = await getTargetUser(id, caller.clinicId)
   if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })

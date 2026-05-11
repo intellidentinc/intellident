@@ -23,6 +23,7 @@ import { prisma } from '@/lib/prisma'
 import { notifyPatientStatusChange, notifyStaff } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody, str } from '@/lib/validate'
 
 async function getCaller() {
   const session = await getSession()
@@ -73,7 +74,10 @@ export async function PATCH(request, { params }) {
 
   const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
-  const { status, note } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { status } = parsed.body
+  const note = str(parsed.body.note, 2000)
 
   if (!status) return NextResponse.json({ error: 'status is required' }, { status: 400 })
 

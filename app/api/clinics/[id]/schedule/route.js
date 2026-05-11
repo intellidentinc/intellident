@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
+import { parseJsonBody } from '@/lib/validate'
 
 const VALID_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -36,7 +37,9 @@ export async function PATCH(request, { params }) {
   const caller = await getAdminForClinic(id)
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { workingDays, openTime, closeTime } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { workingDays, openTime, closeTime } = parsed.body
 
   if (!Array.isArray(workingDays) || workingDays.some((d) => !VALID_DAYS.includes(d))) {
     return NextResponse.json({ error: 'Invalid working days' }, { status: 400 })

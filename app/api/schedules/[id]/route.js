@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { notifyStaff } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody } from '@/lib/validate'
 
 export async function PATCH(request, { params }) {
   const session = await getSession()
@@ -22,7 +23,9 @@ export async function PATCH(request, { params }) {
   if (!patient) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  const { status } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { status } = parsed.body
 
   if (status !== 'CANCELLED') {
     return NextResponse.json({ error: 'Patients can only cancel appointments' }, { status: 400 })

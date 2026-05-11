@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, setSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { normalizeAddress } from '@/lib/utils'
+import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 
 export async function GET() {
   const session = await getSession()
@@ -29,31 +30,35 @@ export async function PATCH(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { firstName, middleInitial, lastName, email, phone, address, dateOfBirth } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const firstName     = str(parsed.body.firstName, 100)
+  const middleInitial = str(parsed.body.middleInitial, 10)
+  const lastName      = str(parsed.body.lastName, 100)
+  const email         = sanitizeEmail(parsed.body.email)
+  const phone         = str(parsed.body.phone, 20)
+  const { address, dateOfBirth } = parsed.body
 
-  if (!firstName?.trim()) return NextResponse.json({ error: 'First name is required' }, { status: 400 })
-  if (!lastName?.trim()) return NextResponse.json({ error: 'Last name is required' }, { status: 400 })
-  if (!email?.trim()) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-    return NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
-  }
-  if (phone?.trim() && !/^\+63\d{10}$/.test(phone.trim())) {
+  if (!firstName) return NextResponse.json({ error: 'First name is required' }, { status: 400 })
+  if (!lastName) return NextResponse.json({ error: 'Last name is required' }, { status: 400 })
+  if (!email) return NextResponse.json({ error: 'Email is required or has an invalid format' }, { status: 400 })
+  if (phone && !/^\+63\d{10}$/.test(phone)) {
     return NextResponse.json({ error: 'Mobile must be +63XXXXXXXXXX (10 digits after +63)' }, { status: 400 })
   }
 
   const existing = await prisma.user.findFirst({
-    where: { email: email.trim(), NOT: { id: session.userId } }
+    where: { email, NOT: { id: session.userId } }
   })
   if (existing) return NextResponse.json({ error: 'Email is already in use' }, { status: 409 })
 
   const updated = await prisma.user.update({
     where: { id: session.userId },
     data: {
-      firstName: firstName.trim(),
-      middleInitial: middleInitial?.trim() || null,
-      lastName: lastName.trim(),
-      email: email.trim(), // email simple change for now
-      phone: phone?.trim() || null,
+      firstName,
+      middleInitial: middleInitial || null,
+      lastName,
+      email,
+      phone: phone || null,
       address: normalizeAddress(address),
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
     },

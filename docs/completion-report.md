@@ -13,7 +13,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Dimension | Completion |
 |---|---|
 | System Functionality | ~80% |
-| Security Implementation | ~75% |
+| Security Implementation | ~80% |
 
 ---
 
@@ -92,7 +92,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | E2EE for Patient Records | ✅ Fixed | ~~Critical~~ | API routes (`POST`/`PATCH`/`GET /api/records/[patientId]/[recordId]`) now accept and store `encryptedData`, `dataIv`, `contentHash`. `PatientRecordsDrawer` replaced with `RecordFormModal` which encrypts on write and decrypts on read via `lib/crypto.js`. |
 | `contentHash` Tamper Detection | ✅ Fixed | ~~High~~ | `RecordFormModal` computes SHA-256 of plaintext before encryption on every write and verifies on every read; API routes store and return `contentHash`. |
 | Audit Log Queryability | ✅ Fixed | ~~High~~ | Full Admin UI built at `/audit-log` with paginated table, filters (action/entity/date/search), expandable metadata rows, and CSV/PDF export up to 5,000 entries. Fixed invalid `ACTIVATE`/`DEACTIVATE` enum calls (changed to `UPDATE` with metadata) and extended `VALID_ACTIONS` to cover all `AuditAction` enum values. |
-| Input Sanitization Coverage | ⚠️ Partial | Medium | `lib/validate.js` is confirmed only on auth routes (`sign-in`, `sign-up`, `forgot-password`, `reset-password`, `change-password`, `verify`). It is not documented as applied to non-auth routes (appointments, patients, services, records). |
+| Input Sanitization Coverage | ✅ Fixed | ~~Medium~~ | `parseJsonBody` (16 KB payload cap, JSON type validation) + field-level `str()`/`sanitizeEmail()`/`secret()` applied to all 20 non-auth write routes: appointments, patients, services, profile, records, schedules, clinics profile/schedule/closures/presets, users, super-admin clinics/enter. |
 | Security Event Reporting | ❌ Not started | Medium | No mechanism to export or report on security events, failed login attempts, or access anomalies. |
 
 ### 2.3 Security Layer Breakdown
@@ -118,7 +118,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 1 | ~~Wire E2EE to patient record create/read/update in `/api/records`~~ | ✅ Done | — |
 | 2 | ~~Wire `contentHash` SHA-256 to record write + verify on read~~ | ✅ Done | — |
 | 3 | ~~Build Audit Log query API + Admin UI~~ | ✅ Done | — |
-| 4 | Apply `lib/validate.js` sanitization to all non-auth API routes | ❌ Open | Low–Medium |
+| 4 | ~~Apply `lib/validate.js` sanitization to all non-auth API routes~~ | ✅ Done | — |
 | 5 | Patient-facing notes decrypt/view on My Dental Records page | ❌ Open | Low |
 | 6 | Rescheduling flow UI (status + form) | ❌ Open | Medium |
 | 7 | Billing & Payment API + UI | ❌ Open | High |

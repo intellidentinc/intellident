@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 
 export async function PATCH(request, { params }) {
   const session = await getSession()
@@ -19,7 +20,12 @@ export async function PATCH(request, { params }) {
 
   const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
-  const { firstName, lastName, email, phone } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const firstName = str(parsed.body.firstName, 100)
+  const lastName  = str(parsed.body.lastName, 100)
+  const email     = sanitizeEmail(parsed.body.email)
+  const phone     = str(parsed.body.phone, 20)
 
   if (!firstName || !lastName || !email) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })

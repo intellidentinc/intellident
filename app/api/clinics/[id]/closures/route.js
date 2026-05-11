@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
+import { parseJsonBody, str } from '@/lib/validate'
 
 async function getAdminForClinic(clinicId) {
   const session = await getSession()
@@ -35,7 +36,10 @@ export async function POST(request, { params }) {
   const caller = await getAdminForClinic(id)
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { date, reason } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { date } = parsed.body
+  const reason = str(parsed.body.reason, 200)
 
   if (!date) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
 

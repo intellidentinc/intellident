@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { normalizeAddress } from '@/lib/utils'
+import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 
 async function getAdminForClinic(clinicId) {
   const session = await getSession()
@@ -39,33 +40,29 @@ export async function PATCH(request, { params }) {
   const caller = await getAdminForClinic(id)
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const body = await request.json()
-  const { name, address, email, phone, landline } = body
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const name     = str(parsed.body.name, 200)
+  const address  = str(parsed.body.address, 500)
+  const email    = sanitizeEmail(parsed.body.email)
+  const phone    = str(parsed.body.phone, 20)
+  const landline = str(parsed.body.landline, 20)
 
-  if (!name?.trim()) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
-  if (!address?.trim()) return NextResponse.json({ error: 'Address is required' }, { status: 400 })
-  if (!email?.trim()) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(email)) {
-    return NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
-  }
-
-  if (phone?.trim()) {
-    const phoneRegex = /^\+639\d{9}$/
-    if (!phoneRegex.test(phone.trim())) {
-      return NextResponse.json({ error: 'Mobile must be in +63XXXXXXXXXX format (11 digits after +63)' }, { status: 400 })
-    }
+  if (!name) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
+  if (!address) return NextResponse.json({ error: 'Address is required' }, { status: 400 })
+  if (!email) return NextResponse.json({ error: 'Email is required or has an invalid format' }, { status: 400 })
+  if (phone && !/^\+639\d{9}$/.test(phone)) {
+    return NextResponse.json({ error: 'Mobile must be in +63XXXXXXXXXX format (11 digits after +63)' }, { status: 400 })
   }
 
   const clinic = await prisma.clinic.update({
     where: { id },
     data: {
-      name: name.trim(),
+      name,
       address: normalizeAddress(address),
-      email: email.trim(),
-      phone: phone.trim() || null,
-      landline: landline?.trim() || null
+      email,
+      phone: phone || null,
+      landline: landline || null
     },
     select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true }
   })

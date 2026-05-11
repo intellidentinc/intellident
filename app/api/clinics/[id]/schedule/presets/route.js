@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
+import { parseJsonBody, str } from '@/lib/validate'
 
 const VALID_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -38,9 +39,12 @@ export async function POST(request, { params }) {
   const caller = await getAdminForClinic(id)
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { name, workingDays, openTime, closeTime } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { workingDays, openTime, closeTime } = parsed.body
+  const name = str(parsed.body.name, 200)
 
-  if (!name?.trim()) return NextResponse.json({ error: 'Preset name is required' }, { status: 400 })
+  if (!name) return NextResponse.json({ error: 'Preset name is required' }, { status: 400 })
   if (!Array.isArray(workingDays) || workingDays.some((d) => !VALID_DAYS.includes(d))) {
     return NextResponse.json({ error: 'Invalid working days' }, { status: 400 })
   }
@@ -52,7 +56,7 @@ export async function POST(request, { params }) {
   }
 
   const preset = await prisma.schedulePreset.create({
-    data: { clinicId: id, name: name.trim(), workingDays, openTime, closeTime },
+    data: { clinicId: id, name, workingDays, openTime, closeTime },
     select: { id: true, name: true, workingDays: true, openTime: true, closeTime: true }
   })
 

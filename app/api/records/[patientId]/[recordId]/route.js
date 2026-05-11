@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { parseJsonBody, str, secret } from '@/lib/validate'
 
 async function getDentistForClinic(session) {
   const caller = await prisma.user.findUnique({
@@ -47,9 +48,15 @@ export async function PATCH(request, { params }) {
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { patientId, recordId } = await params
-  const { title, encryptedData, dataIv, contentHash, status } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const title         = parsed.body.title !== undefined ? str(parsed.body.title, 200) : undefined
+  const encryptedData = parsed.body.encryptedData !== undefined ? secret(parsed.body.encryptedData, 65536) : undefined
+  const dataIv        = parsed.body.dataIv !== undefined ? secret(parsed.body.dataIv, 256) : undefined
+  const contentHash   = parsed.body.contentHash !== undefined ? secret(parsed.body.contentHash, 256) : undefined
+  const { status }    = parsed.body
 
-  if (title !== undefined && !title?.trim()) {
+  if (parsed.body.title !== undefined && !title) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 })
   }
 
@@ -62,7 +69,7 @@ export async function PATCH(request, { params }) {
   const record = await prisma.patientRecord.update({
     where: { id: recordId },
     data: {
-      ...(title !== undefined && { title: title.trim() }),
+      ...(title !== undefined && { title }),
       ...(encryptedData !== undefined && { encryptedData: encryptedData || null }),
       ...(dataIv !== undefined && { dataIv: dataIv || null }),
       ...(contentHash !== undefined && { contentHash: contentHash || null }),

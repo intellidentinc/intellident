@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
 
 export async function GET(request) {
   const session = await getSession()
@@ -76,7 +77,16 @@ export async function POST(request) {
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { ip, userAgent } = getRequestMeta(request)
-  const { firstName, middleInitial, lastName, email, phone, role, wrappedKey, keySalt } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const firstName     = str(parsed.body.firstName, 100)
+  const middleInitial = str(parsed.body.middleInitial, 10)
+  const lastName      = str(parsed.body.lastName, 100)
+  const email         = sanitizeEmail(parsed.body.email)
+  const phone         = str(parsed.body.phone, 20)
+  const { role }      = parsed.body
+  const wrappedKey    = secret(parsed.body.wrappedKey, 1024)
+  const keySalt       = secret(parsed.body.keySalt, 256)
 
   if (!firstName || !lastName || !email || !role || !wrappedKey || !keySalt) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -97,11 +107,11 @@ export async function POST(request) {
   const newUser = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
-        email: email.trim().toLowerCase(),
-        firstName: firstName.trim(),
-        middleInitial: middleInitial?.trim() || null,
-        lastName: lastName.trim(),
-        phone: phone?.trim() || null,
+        email,
+        firstName,
+        middleInitial: middleInitial || null,
+        lastName,
+        phone: phone || null,
         password: hashedPassword,
         passwordHistory: [hashedPassword],
         role,

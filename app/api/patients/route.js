@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
 
 export async function GET(request) {
   const session = await getSession()
@@ -76,7 +77,14 @@ export async function POST(request) {
   }
 
   const { ip, userAgent } = getRequestMeta(request)
-  const { firstName, lastName, email, phone, wrappedKey, keySalt } = await request.json()
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const firstName = str(parsed.body.firstName, 100)
+  const lastName  = str(parsed.body.lastName, 100)
+  const email     = sanitizeEmail(parsed.body.email)
+  const phone     = str(parsed.body.phone, 20)
+  const wrappedKey = secret(parsed.body.wrappedKey, 1024)
+  const keySalt    = secret(parsed.body.keySalt, 256)
 
   if (!firstName || !lastName || !email || !phone || !wrappedKey || !keySalt) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
