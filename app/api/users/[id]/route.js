@@ -56,10 +56,10 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ ...updated, loggedOut: isSelf && !body.isActive })
   }
 
-  // Role update
+  // Role update — only clinic-assignable roles permitted; ADMIN and SUPERADMIN cannot be granted via this endpoint
   const { role } = body
-  const validRoles = Object.values(ROLES)
-  if (!validRoles.includes(role)) {
+  const assignableRoles = [ROLES.DENTIST, ROLES.RECEPTIONIST, ROLES.PATIENT]
+  if (!assignableRoles.includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 

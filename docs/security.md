@@ -170,3 +170,69 @@ Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUn
 
 ## Multi-Tenancy
 All data is scoped to a `ClinicID`. Every DB query must include a clinic scope filter. No cross-clinic data access is allowed regardless of role.
+
+---
+
+## RBAC — Role Assignment Rules
+
+When an ADMIN changes a user's role via `PATCH /api/users/[id]`, only the following roles may be assigned:
+
+| Assignable | Value |
+|---|---|
+| `DENTIST` | 2 |
+| `RECEPTIONIST` | 3 |
+| `PATIENT` | 4 |
+
+`ADMIN (1)` and `SUPERADMIN (0)` are **never assignable** through this endpoint. This is enforced server-side via an explicit allowlist in `app/api/users/[id]/route.js`. The same restriction applies to user creation via `POST /api/users`.
+
+`SUPERADMIN` accounts are provisioned only via the seed script (`prisma/seed-super.js`) or direct database access. There is no API path that grants the `SUPERADMIN` role.
+
+---
+
+## Security Audit Log
+
+### 2026-05-12 — Internal Security Review
+
+A security review of the codebase identified two vulnerabilities. Both were remediated immediately.
+
+#### Finding 1 — Privilege Escalation via Role Assignment *(Critical — Fixed)*
+
+**File:** `app/api/users/[id]/route.js`
+
+**Description:** The `PATCH /api/users/[id]` endpoint validated the incoming `role` value against `Object.values(ROLES)`, which includes `SUPERADMIN (0)`. An authenticated ADMIN could send `{ "role": 0 }` to promote themselves or any clinic user to `SUPERADMIN`, gaining access to the `/super` portal and all clinics in the system.
+
+**Fix:** Replaced `Object.values(ROLES)` with an explicit allowlist `[ROLES.DENTIST, ROLES.RECEPTIONIST, ROLES.PATIENT]`, consistent with the restriction already applied in the `POST /api/users` handler.
+
+```js
+// Before (vulnerable)
+const validRoles = Object.values(ROLES)   // included SUPERADMIN (0) and ADMIN (1)
+
+// After (fixed)
+const assignableRoles = [ROLES.DENTIST, ROLES.RECEPTIONIST, ROLES.PATIENT]
+```
+
+---
+
+#### Finding 2 — Broken `clinicId` Scoping (TDZ Bug) *(Medium — Fixed)*
+
+**File:** `app/api/users/route.js`
+
+**Description:** Both the `GET` and `POST` handlers resolved `clinicId` using a self-referential `const` declaration:
+
+```js
+const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
+//                                                                      ^^^^^^^
+//                                              References itself — TDZ ReferenceError
+```
+
+For every non-`SUPERADMIN` caller (i.e. regular clinic admins), this threw a `Temporal Dead Zone ReferenceError` at runtime, making both `GET /api/users` (user listing) and `POST /api/users` (user creation) completely unusable for clinic admins. As a latent risk: if a future error handler were to catch the error and allow execution to continue with `clinicId = undefined`, Prisma would omit the clinic filter and return or write data across all clinics.
+
+**Fix:** Changed both occurrences to reference `caller.clinicId` — matching the correct pattern already used in the `getAdminCaller()` helper in the sibling `[id]/route.js` file.
+
+```js
+// Before (broken)
+const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
+
+// After (fixed)
+const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+```

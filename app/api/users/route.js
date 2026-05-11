@@ -18,7 +18,7 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
   const page = parseInt(searchParams.get('page') ?? '0', 10)
@@ -73,7 +73,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { ip, userAgent } = getRequestMeta(request)
   const { firstName, middleInitial, lastName, email, phone, role, wrappedKey, keySalt } = await request.json()
