@@ -11,8 +11,9 @@ import Skeleton from '@mui/material/Skeleton'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import { FileText, CalendarCheck, Stethoscope } from 'lucide-react'
+import { FileText, CalendarCheck, Stethoscope, Eye } from 'lucide-react'
 import dayjs from 'dayjs'
+import RecordViewModal from './RecordViewModal'
 
 const STATUS_CHIP = {
   ACTIVE:   { label: 'Active',   bg: '#dcfce7', color: '#15803d' },
@@ -30,6 +31,7 @@ export default function MyRecordsPage() {
   const [records, setRecords] = useState([])
   const [visits, setVisits] = useState([])
   const [loading, setLoading] = useState(true)
+  const [viewRecord, setViewRecord] = useState(null)
 
   useEffect(() => {
     fetch('/api/patient/records')
@@ -89,14 +91,14 @@ export default function MyRecordsPage() {
                         bgcolor: 'background.paper',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 2
+                        gap: 2,
                       }}
                     >
                       <Box
                         sx={{
                           width: 40, height: 40, borderRadius: 2,
                           bgcolor: '#eff6ff', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                          alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                         }}
                       >
                         <FileText size={20} color='#2563eb' />
@@ -113,8 +115,23 @@ export default function MyRecordsPage() {
                       <Chip
                         label={chip.label}
                         size='small'
-                        sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.7rem' }}
+                        sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.7rem', mr: 0.5 }}
                       />
+                      <Box
+                        component='button'
+                        onClick={() => setViewRecord(rec)}
+                        sx={{
+                          display: 'flex', alignItems: 'center', gap: 0.5,
+                          px: 1.25, py: 0.6, border: '1px solid', borderColor: '#dbeafe',
+                          borderRadius: 1.5, bgcolor: '#eff6ff', cursor: 'pointer',
+                          color: '#2563eb', fontSize: '0.75rem', fontWeight: 600,
+                          flexShrink: 0, transition: 'all 0.15s',
+                          '&:hover': { bgcolor: '#dbeafe', borderColor: '#93c5fd' },
+                        }}
+                      >
+                        <Eye size={13} />
+                        View
+                      </Box>
                     </Box>
                   )
                 })}
@@ -198,6 +215,12 @@ export default function MyRecordsPage() {
           </Box>
         )}
       </Box>
+
+      <RecordViewModal
+        open={!!viewRecord}
+        record={viewRecord}
+        onClose={() => setViewRecord(null)}
+      />
     </SidebarInset>
   )
 }

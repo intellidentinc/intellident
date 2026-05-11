@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { ROLES, ROLE_LABELS } from '@/lib/roles'
 import {
   Sidebar,
@@ -190,7 +191,7 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
                       <SidebarMenuButton
                         size='default'
                         isActive={isActive}
-                        render={<a href={item.href} />}
+                        render={<Link href={item.href} />}
                         className='cursor-pointer h-8 rounded-md px-2 text-[13px] font-medium transition-colors duration-100'
                       >
                         <item.icon size={15} className={isActive ? 'text-[#2563eb]' : 'text-sidebar-foreground/45'} />

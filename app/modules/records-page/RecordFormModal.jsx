@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Dialog from '@mui/material/Dialog'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -16,29 +17,31 @@ import Input from '@/components/commons/Input'
 import { useToast } from '@/app/providers/ToastProvider'
 import { useCrypto } from '@/app/providers/CryptoProvider'
 import { encryptData, decryptData, toBase64 } from '@/lib/crypto'
-import { ArticleOutlined } from '@mui/icons-material'
+import { ArticleOutlined, LockOutlined } from '@mui/icons-material'
 
 const EMPTY_FORM = { title: '', notes: '', status: 'ACTIVE' }
 const EMPTY_ERRORS = { title: '', notes: '' }
 
 export default function RecordFormModal({ open, patientId, record, onClose, onSuccess }) {
+  const router = useRouter()
   const { showToast } = useToast()
   const { masterKey } = useCrypto()
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState(EMPTY_ERRORS)
   const [loading, setLoading] = useState(false)
   const [decrypting, setDecrypting] = useState(false)
+  const [keyMissing, setKeyMissing] = useState(false)
 
   const isEdit = !!record
 
   // Fetch and decrypt notes when opening in edit mode
   useEffect(() => {
     if (!open || !record) return
+    setKeyMissing(false)
 
     async function fetchAndDecrypt() {
       if (!masterKey) {
-        showToast('Your session has expired. Please sign in again.', 'error')
-        onClose()
+        setKeyMissing(true)
         return
       }
       setDecrypting(true)
@@ -95,7 +98,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
   async function handleSubmit() {
     if (!validate()) return
     if (!masterKey) {
-      showToast('Your session has expired. Please sign in again.', 'error')
+      setKeyMissing(true)
       return
     }
     setLoading(true)
@@ -137,6 +140,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     if (loading || decrypting) return
     setForm(EMPTY_FORM)
     setErrors(EMPTY_ERRORS)
+    setKeyMissing(false)
     onClose()
   }
 
@@ -173,6 +177,30 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
 
       {/* Body */}
       <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {keyMissing && (
+          <Box
+            sx={{
+              p: 2, borderRadius: 2, bgcolor: '#fef9c3',
+              border: '1px solid', borderColor: '#fcd34d',
+              display: 'flex', flexDirection: 'column', gap: 1,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <LockOutlined sx={{ fontSize: 16, color: '#92400e' }} />
+              <Typography variant='body2' fontWeight={600} sx={{ color: '#92400e' }}>
+                Decryption key unavailable
+              </Typography>
+            </Box>
+            <Typography variant='caption' color='text.secondary'>
+              Notes are end-to-end encrypted and can only be accessed during an active login session. Sign in again to continue.
+            </Typography>
+            <Box>
+              <Button variant='contained' size='small' onClick={() => router.push('/sign-in')}>
+                Sign in again
+              </Button>
+            </Box>
+          </Box>
+        )}
         <Input
           id='record-title'
           label='Title'

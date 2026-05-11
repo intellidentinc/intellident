@@ -33,7 +33,7 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Module | Completion | What's Done | What's Missing |
 |---|---|---|---|
-| Patient Record Management | ~83% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page, paginated API, E2EE fully wired (encrypt/decrypt via Web Crypto API), `contentHash` SHA-256 tamper detection active | Patient-facing notes decrypt/view not yet implemented |
+| Patient Record Management | ~100% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page with View Notes button (decrypt on demand via `RecordViewModal`), E2EE fully wired, `contentHash` SHA-256 tamper detection active on both dentist and patient sides | — |
 | Billing & Payment Tracking | ~10% | DB schema (`Billing`, `Payment`, `PaymentStatus`) | All API routes and UI |
 | Audit Logging | ~100% | DB schema, `logAudit()` fire-and-forget helper, `GET /api/audit-log` (paginated, filtered, sortable), `GET /api/audit-log/export` (CSV + PDF, up to 5000 rows), full Admin UI with expandable rows, action/entity/date/search filters | — |
 | Integrity Verification | ~20% | `contentHash` field on `PatientRecord` | SHA-256 computation and verification not wired to any API route |
@@ -55,13 +55,13 @@ This report assesses the current completion state of IntelliDent across two dime
 | Service Catalog | 3 | 3 | 100% |
 | Appointment Scheduling | 14 | 16 | 88% |
 | Notifications & Reminders | 6 | 6 | 100% |
-| Patient Record Management | 5 | 6 | 83% |
+| Patient Record Management | 6 | 6 | 100% |
 | Billing & Payment | 1 | 2 | 50% |
 | Audit Logging | 2 | 2 | 100% |
 | Integrity Verification | 1 | 2 | 50% |
 | Virtual Assistant / Chatbot | 0 | 1 | 0% |
 | Reporting & Exports | 0 | 1 | 0% |
-| **Total** | **57** | **64** | **~80%** |
+| **Total** | **58** | **64** | **~81%** |
 
 ---
 
@@ -119,7 +119,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 2 | ~~Wire `contentHash` SHA-256 to record write + verify on read~~ | ✅ Done | — |
 | 3 | ~~Build Audit Log query API + Admin UI~~ | ✅ Done | — |
 | 4 | ~~Apply `lib/validate.js` sanitization to all non-auth API routes~~ | ✅ Done | — |
-| 5 | Patient-facing notes decrypt/view on My Dental Records page | ❌ Open | Low |
+| 5 | ~~Patient-facing notes decrypt/view on My Dental Records page~~ | ✅ Done | — |
 | 6 | Rescheduling flow UI (status + form) | ❌ Open | Medium |
 | 7 | Billing & Payment API + UI | ❌ Open | High |
 | 8 | Reporting & Exports | ❌ Open | High |
