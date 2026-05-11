@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026  
+**Date:** May 12, 2026 (updated May 12, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -12,8 +12,8 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Dimension | Completion |
 |---|---|
-| System Functionality | ~75% |
-| Security Implementation | ~60% |
+| System Functionality | ~77% |
+| Security Implementation | ~70% |
 
 ---
 
@@ -33,7 +33,7 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Module | Completion | What's Done | What's Missing |
 |---|---|---|---|
-| Patient Record Management | ~67% | DB schema, dentist record drawer UI (add/edit/delete), patient My Dental Records page, paginated API | E2EE not wired to record notes; `contentHash` tamper detection not active |
+| Patient Record Management | ~83% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page, paginated API, E2EE fully wired (encrypt/decrypt via Web Crypto API), `contentHash` SHA-256 tamper detection active | Patient-facing notes decrypt/view not yet implemented |
 | Billing & Payment Tracking | ~10% | DB schema (`Billing`, `Payment`, `PaymentStatus`) | All API routes and UI |
 | Audit Logging | ~10% | DB schema (`AuditLog`, `AuditAction`) | All API routes and query/display UI |
 | Integrity Verification | ~20% | `contentHash` field on `PatientRecord` | SHA-256 computation and verification not wired to any API route |
@@ -55,13 +55,13 @@ This report assesses the current completion state of IntelliDent across two dime
 | Service Catalog | 3 | 3 | 100% |
 | Appointment Scheduling | 14 | 16 | 88% |
 | Notifications & Reminders | 6 | 6 | 100% |
-| Patient Record Management | 4 | 6 | 67% |
+| Patient Record Management | 5 | 6 | 83% |
 | Billing & Payment | 1 | 2 | 50% |
 | Audit Logging | 1 | 2 | 50% |
 | Integrity Verification | 1 | 2 | 50% |
 | Virtual Assistant / Chatbot | 0 | 1 | 0% |
 | Reporting & Exports | 0 | 1 | 0% |
-| **Total** | **55** | **64** | **~75%** |
+| **Total** | **56** | **64** | **~77%** |
 
 ---
 
@@ -83,14 +83,14 @@ This report assesses the current completion state of IntelliDent across two dime
 | Multi-Tenancy Isolation | ✅ Complete | Every DB query scoped to `clinicId`; no cross-clinic data access possible |
 | Soft Deletes | ✅ Complete | All major models use `isDeleted + deletedAt`; data never permanently removed |
 | Input Sanitization (Auth Routes) | ✅ Complete | `lib/validate.js` applied to all auth API routes: 16 KB payload cap, type checking, length limits, email normalization, hex token validation |
-| E2EE Architecture | ✅ Infrastructure only | Web Crypto API (AES-GCM-256 + PBKDF2) is implemented in `lib/crypto.js` and `CryptoProvider` — but not yet wired to patient data |
+| E2EE Architecture | ✅ Complete | Web Crypto API (AES-GCM-256 + PBKDF2) implemented in `lib/crypto.js` and `CryptoProvider`; fully wired to patient record create/read/update via `RecordFormModal` and `/api/records` routes |
 
 ### 2.2 Security Controls — Gaps
 
 | Control | Status | Risk | Details |
 |---|---|---|---|
-| E2EE for Patient Records | ❌ Not wired | **Critical** | Patient record notes are stored as plaintext in the `encryptedData` field. The crypto infrastructure (`lib/crypto.js`, `CryptoProvider`) exists but is not called in any records API route. The headline PHI protection is non-operational. |
-| `contentHash` Tamper Detection | ❌ Not wired | High | SHA-256 tamper detection field (`PatientRecord.contentHash`) exists in the schema but is not computed on write or verified on read. Record tampering cannot be detected. |
+| E2EE for Patient Records | ✅ Fixed | ~~Critical~~ | API routes (`POST`/`PATCH`/`GET /api/records/[patientId]/[recordId]`) now accept and store `encryptedData`, `dataIv`, `contentHash`. `PatientRecordsDrawer` replaced with `RecordFormModal` which encrypts on write and decrypts on read via `lib/crypto.js`. |
+| `contentHash` Tamper Detection | ✅ Fixed | ~~High~~ | `RecordFormModal` computes SHA-256 of plaintext before encryption on every write and verifies on every read; API routes store and return `contentHash`. |
 | Audit Log Queryability | ❌ No UI/API | High | `AuditLog` schema is complete with `AuditAction`, IP, user agent, and metadata fields. However, there are no API routes or admin UI to query it. The NIST "Detect" and "Respond" functions are inactive without a readable audit trail. |
 | Input Sanitization Coverage | ⚠️ Partial | Medium | `lib/validate.js` is confirmed only on auth routes (`sign-in`, `sign-up`, `forgot-password`, `reset-password`, `change-password`, `verify`). It is not documented as applied to non-auth routes (appointments, patients, services, records). |
 | Security Event Reporting | ❌ Not started | Medium | No mechanism to export or report on security events, failed login attempts, or access anomalies. |
@@ -101,11 +101,11 @@ This report assesses the current completion state of IntelliDent across two dime
 |---|---|---|
 | Authentication | ~95% | MFA, lockout, sessions, password controls all complete |
 | Access Control (RBAC + Tenancy) | ~90% | Role enforcement and clinicId scoping solid |
-| Data Protection (E2EE) | ~25% | Architecture in place; not wired to any actual PHI |
+| Data Protection (E2EE) | ~75% | Fully wired to patient records; patient-facing notes decrypt/view not yet implemented |
 | Input Validation Coverage | ~55% | Auth routes covered; non-auth API routes unclear |
 | Audit & Monitoring | ~15% | Schema done; no functional query path |
-| Integrity Verification | ~20% | Schema done; not computed or checked |
-| **Overall Security** | **~60%** | |
+| Integrity Verification | ~75% | SHA-256 `contentHash` now computed on write and verified on read for patient records; not yet applied to other data types |
+| **Overall Security** | **~70%** | |
 
 ---
 
@@ -113,16 +113,17 @@ This report assesses the current completion state of IntelliDent across two dime
 
 Ranked by impact for a healthcare/cybersecurity capstone:
 
-| Priority | Gap | Effort |
-|---|---|---|
-| 1 | Wire E2EE to patient record create/read/update in `/api/records` | Medium |
-| 2 | Wire `contentHash` SHA-256 to record write + verify on read | Low |
-| 3 | Build Audit Log query API + Admin UI | Medium |
-| 4 | Apply `lib/validate.js` sanitization to all non-auth API routes | Low–Medium |
-| 5 | Rescheduling flow UI (status + form) | Medium |
-| 6 | Billing & Payment API + UI | High |
-| 7 | Reporting & Exports | High |
-| 8 | Virtual Assistant / Chatbot | High |
+| Priority | Gap | Status | Effort |
+|---|---|---|---|
+| 1 | ~~Wire E2EE to patient record create/read/update in `/api/records`~~ | ✅ Done | — |
+| 2 | ~~Wire `contentHash` SHA-256 to record write + verify on read~~ | ✅ Done | — |
+| 3 | Build Audit Log query API + Admin UI | ❌ Open | Medium |
+| 4 | Apply `lib/validate.js` sanitization to all non-auth API routes | ❌ Open | Low–Medium |
+| 5 | Patient-facing notes decrypt/view on My Dental Records page | ❌ Open | Low |
+| 6 | Rescheduling flow UI (status + form) | ❌ Open | Medium |
+| 7 | Billing & Payment API + UI | ❌ Open | High |
+| 8 | Reporting & Exports | ❌ Open | High |
+| 9 | Virtual Assistant / Chatbot | ❌ Open | High |
 
 ---
 
@@ -130,7 +131,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 
 | Standard | Status | Gap |
 |---|---|---|
-| Philippine Data Privacy Act (RA 10173) | ⚠️ Partial | PHI not actually encrypted at rest; no breach detection via audit trail |
+| Philippine Data Privacy Act (RA 10173) | ⚠️ Partial | PHI now encrypted at rest via E2EE; no breach detection via audit trail yet |
 | ISO/IEC 27001 | ⚠️ Partial | Access control and authentication strong; audit, monitoring, and incident response controls incomplete |
 | NIST CSF | ⚠️ Partial | Identify ✅, Protect ⚠️ (E2EE gap), Detect ❌ (no audit UI), Respond ❌, Recover ⚠️ |
 
