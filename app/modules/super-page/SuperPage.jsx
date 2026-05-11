@@ -13,6 +13,7 @@ import { DeleteOutlined } from '@mui/icons-material'
 import { Stethoscope, MapPin, Mail, Phone, LogIn, Plus, Pencil, Trash2 } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
+import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
 import { useToast } from '@/app/providers/ToastProvider'
 import SignOutButton from '@/app/modules/dashboard-page/SignOutButton'
 
@@ -28,12 +29,7 @@ export default function SuperPage({ clinics: initialClinics }) {
   const [editTarget, setEditTarget] = useState(null) // null = create
   const [formLoading, setFormLoading] = useState(false)
   const [formName, setFormName] = useState('')
-  const [formAddressUnit, setFormAddressUnit] = useState('')
-  const [formAddressStreet, setFormAddressStreet] = useState('')
-  const [formAddressBarangay, setFormAddressBarangay] = useState('')
-  const [formAddressCity, setFormAddressCity] = useState('')
-  const [formAddressProvince, setFormAddressProvince] = useState('')
-  const [formAddressPostal, setFormAddressPostal] = useState('')
+  const [formAddress, setFormAddress] = useState({ ...EMPTY_ADDRESS })
   const [formPhone, setFormPhone] = useState('')
   const [formErrors, setFormErrors] = useState({})
 
@@ -57,33 +53,10 @@ export default function SuperPage({ clinics: initialClinics }) {
     }
   }
 
-  function resetAddressFields() {
-    setFormAddressUnit('')
-    setFormAddressStreet('')
-    setFormAddressBarangay('')
-    setFormAddressCity('')
-    setFormAddressProvince('')
-    setFormAddressPostal('')
-  }
-
-  function assembleAddress() {
-    return [
-      formAddressUnit,
-      formAddressStreet,
-      formAddressBarangay ? `Brgy. ${formAddressBarangay}` : '',
-      formAddressCity,
-      formAddressProvince,
-      formAddressPostal,
-    ]
-      .map((s) => s?.trim())
-      .filter(Boolean)
-      .join(', ')
-  }
-
   function openCreate() {
     setEditTarget(null)
     setFormName('')
-    resetAddressFields()
+    setFormAddress({ ...EMPTY_ADDRESS })
     setFormPhone('')
     setFormErrors({})
     setFormOpen(true)
@@ -92,9 +65,7 @@ export default function SuperPage({ clinics: initialClinics }) {
   function openEdit(clinic) {
     setEditTarget(clinic)
     setFormName(clinic.name)
-    resetAddressFields()
-    // Put existing address into street field — sub-fields will be filled manually
-    setFormAddressStreet(clinic.address || '')
+    setFormAddress({ ...EMPTY_ADDRESS, street: clinic.address || '' })
     setFormPhone(clinic.phone || '')
     setFormErrors({})
     setFormOpen(true)
@@ -122,7 +93,7 @@ export default function SuperPage({ clinics: initialClinics }) {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName, address: assembleAddress(), phone: formPhone }),
+        body: JSON.stringify({ name: formName, address: assembleAddress(formAddress), phone: formPhone }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -258,59 +229,11 @@ export default function SuperPage({ clinics: initialClinics }) {
                 Address
               </Typography>
             </Box>
-            <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 1.5 }}>
-                <Input
-                  id='form-address-unit'
-                  label='Lot / Block / Unit No.'
-                  value={formAddressUnit}
-                  onChange={(e) => setFormAddressUnit(e.target.value)}
-                  placeholder='e.g. Lot 5'
-                />
-                <Input
-                  id='form-address-street'
-                  label='Street / Road'
-                  value={formAddressStreet}
-                  onChange={(e) => { setFormAddressStreet(e.target.value); setFormErrors((p) => ({ ...p, addressStreet: '' })) }}
-                  error={!!formErrors.addressStreet}
-                  helperText={formErrors.addressStreet}
-                  placeholder='e.g. Rizal Avenue'
-                />
-              </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                <Input
-                  id='form-address-barangay'
-                  label='Barangay'
-                  value={formAddressBarangay}
-                  onChange={(e) => setFormAddressBarangay(e.target.value)}
-                  placeholder='e.g. Poblacion'
-                />
-                <Input
-                  id='form-address-city'
-                  label='City / Municipality'
-                  value={formAddressCity}
-                  onChange={(e) => { setFormAddressCity(e.target.value); setFormErrors((p) => ({ ...p, addressCity: '' })) }}
-                  error={!!formErrors.addressCity}
-                  helperText={formErrors.addressCity}
-                  placeholder='e.g. Makati City'
-                />
-              </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 1.5 }}>
-                <Input
-                  id='form-address-province'
-                  label='Province'
-                  value={formAddressProvince}
-                  onChange={(e) => setFormAddressProvince(e.target.value)}
-                  placeholder='e.g. Metro Manila'
-                />
-                <Input
-                  id='form-address-postal'
-                  label='Postal Code'
-                  value={formAddressPostal}
-                  onChange={(e) => setFormAddressPostal(e.target.value)}
-                  placeholder='e.g. 1200'
-                />
-              </Box>
+            <Box sx={{ p: 2 }}>
+              <AddressSelector
+                value={formAddress}
+                onChange={setFormAddress}
+              />
             </Box>
           </Box>
 

@@ -12,26 +12,12 @@ import ClinicLogoUpload from './ClinicLogoUpload'
 import ClinicProfileForm from './ClinicProfileForm'
 import ClinicSchedule from './ClinicSchedule'
 import ClinicClosures from './ClinicClosures'
-
-function assembleAddress(form) {
-  return [
-    form.addressUnit,
-    form.addressStreet,
-    form.addressBarangay ? `Brgy. ${form.addressBarangay}` : '',
-    form.addressCity,
-    form.addressProvince,
-    form.addressPostal,
-  ]
-    .map((s) => s?.trim())
-    .filter(Boolean)
-    .join(', ')
-}
+import { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
 
 function validate(form) {
   const errs = {}
   if (!form.name.trim()) errs.name = 'Clinic name is required'
-  if (!form.addressStreet.trim()) errs.addressStreet = 'Street is required'
-  if (!form.addressCity.trim()) errs.addressCity = 'City / Municipality is required'
+  if (!form.address.cityMuni) errs.addressCityMuni = 'City / Municipality is required'
   if (!form.email.trim()) errs.email = 'Email is required'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Invalid email format'
   if (form.phone.trim() && !/^\+639\d{9}$/.test(form.phone.trim())) errs.phone = 'Mobile must be +639XXXXXXXXX (10 digits after +63)'
@@ -48,12 +34,7 @@ export default function SettingsPage() {
 
   const [form, setForm] = useState({
     name: '',
-    addressUnit: '',
-    addressStreet: '',
-    addressBarangay: '',
-    addressCity: '',
-    addressProvince: '',
-    addressPostal: '',
+    address: { ...EMPTY_ADDRESS },
     email: '',
     phone: '',
     landline: '',
@@ -69,12 +50,7 @@ export default function SettingsPage() {
       .then((data) => {
         setForm({
           name: data.name ?? '',
-          addressUnit: '',
-          addressStreet: data.address ?? '',
-          addressBarangay: '',
-          addressCity: '',
-          addressProvince: '',
-          addressPostal: '',
+          address: { ...EMPTY_ADDRESS, street: data.address ?? '' },
           email: data.email ?? '',
           phone: data.phone ?? '',
           landline: data.landline ?? '',
@@ -92,6 +68,11 @@ export default function SettingsPage() {
     }
   }
 
+  function handleAddressChange(updated) {
+    setForm((prev) => ({ ...prev, address: updated }))
+    setErrors((prev) => ({ ...prev, addressCityMuni: '' }))
+  }
+
   async function handleSave() {
     const errs = validate(form)
     if (Object.keys(errs).length) {
@@ -104,7 +85,7 @@ export default function SettingsPage() {
       const res = await fetch(`/api/clinics/${clinicId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, address: assembleAddress(form) }),
+        body: JSON.stringify({ ...form, address: assembleAddress(form.address) }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -164,6 +145,7 @@ export default function SettingsPage() {
           saving={saving}
           loading={loading}
           onChange={handleChange}
+          onAddressChange={handleAddressChange}
           onSave={handleSave}
         />
 

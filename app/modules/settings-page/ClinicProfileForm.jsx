@@ -5,6 +5,7 @@ import Typography from '@mui/material/Typography'
 import Skeleton from '@mui/material/Skeleton'
 import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
+import AddressSelector from '@/components/commons/AddressSelector'
 
 function SectionCard({ title, subtitle, children }) {
   return (
@@ -33,7 +34,7 @@ function SectionCard({ title, subtitle, children }) {
   )
 }
 
-export default function ClinicProfileForm({ form, errors, saving, loading, onChange, onSave }) {
+export default function ClinicProfileForm({ form, errors, saving, loading, onChange, onAddressChange, onSave }) {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -72,62 +73,14 @@ export default function ClinicProfileForm({ form, errors, saving, loading, onCha
       {/* Address */}
       <SectionCard
         title='Address'
-        subtitle='Break down the full clinic address by component.'
+        subtitle='Select location from the dropdowns, then fill in the street details.'
       >
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2 }}>
-          <Input
-            id='clinic-address-unit'
-            label='Lot / Block / Unit No.'
-            value={form.addressUnit}
-            onChange={onChange('addressUnit')}
-            placeholder='e.g. Lot 5, Blk 3'
-          />
-          <Input
-            id='clinic-address-street'
-            label='Street / Road'
-            value={form.addressStreet}
-            onChange={onChange('addressStreet')}
-            placeholder='e.g. Rizal Avenue'
-            error={!!errors.addressStreet}
-            helperText={errors.addressStreet}
-            required
-          />
-        </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-          <Input
-            id='clinic-address-barangay'
-            label='Barangay'
-            value={form.addressBarangay}
-            onChange={onChange('addressBarangay')}
-            placeholder='e.g. Poblacion'
-          />
-          <Input
-            id='clinic-address-city'
-            label='City / Municipality'
-            value={form.addressCity}
-            onChange={onChange('addressCity')}
-            placeholder='e.g. Makati City'
-            error={!!errors.addressCity}
-            helperText={errors.addressCity}
-            required
-          />
-        </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2 }}>
-          <Input
-            id='clinic-address-province'
-            label='Province'
-            value={form.addressProvince}
-            onChange={onChange('addressProvince')}
-            placeholder='e.g. Metro Manila'
-          />
-          <Input
-            id='clinic-address-postal'
-            label='Postal Code'
-            value={form.addressPostal}
-            onChange={onChange('addressPostal')}
-            placeholder='e.g. 1200'
-          />
-        </Box>
+        <AddressSelector
+          value={form.address}
+          onChange={onAddressChange}
+          errors={{ cityMuni: errors.addressCityMuni }}
+          required
+        />
       </SectionCard>
 
       {/* Contact Information */}

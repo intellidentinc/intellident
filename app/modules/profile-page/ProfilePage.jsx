@@ -9,6 +9,7 @@ import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
+import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
 
 function validate(form) {
   const errs = {}
@@ -27,7 +28,7 @@ export default function ProfilePage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ firstName: '', middleInitial: '', lastName: '', email: '', phone: '+63', address: '', dateOfBirth: '' })
+  const [form, setForm] = useState({ firstName: '', middleInitial: '', lastName: '', email: '', phone: '+63', address: { ...EMPTY_ADDRESS }, dateOfBirth: '' })
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function ProfilePage() {
           lastName: data.lastName ?? '',
           email: data.email ?? '',
           phone: data.phone ?? '+63',
-          address: data.address ?? '',
+          address: { ...EMPTY_ADDRESS, street: data.address ?? '' },
           dateOfBirth: data.dateOfBirth ?? ''
         })
       })
@@ -70,7 +71,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, address: assembleAddress(form.address) })
       })
       const data = await res.json()
       if (!res.ok) {
@@ -165,12 +166,9 @@ export default function ProfilePage() {
               error={!!errors.phone}
               helperText={errors.phone}
             />
-            <Input
-              id='address'
-              label='Address'
+            <AddressSelector
               value={form.address}
-              onChange={handleChange('address')}
-              placeholder='e.g. 123 Rizal St, Manila'
+              onChange={(updated) => setForm((prev) => ({ ...prev, address: updated }))}
             />
             <Input
               id='date-of-birth'
