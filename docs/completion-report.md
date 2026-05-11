@@ -12,12 +12,12 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Dimension | Completion |
 |---|---|
-| System Functionality | ~80% |
-| Security Implementation | ~80% |
+| System Functionality | ~81% |
+| Security Implementation | ~85% |
 
 ---
 
-## 1. System Functionality (~75%)
+## 1. System Functionality (~81%)
 
 ### 1.1 Completed Modules
 
@@ -28,15 +28,15 @@ This report assesses the current completion state of IntelliDent across two dime
 | Service Catalog | ✅ 100% | Create / edit / delete services; duration, price, buffer; dentist assignment |
 | Appointment Scheduling | ✅ ~88% | 14/16 items done; missing AI slot suggestions and rescheduling UI |
 | Notifications & Reminders | ✅ 100% | In-app bell + Framer Motion drawer, email via Gmail/nodemailer, Vercel cron reminders (24h / 2h), mark-read |
+| Patient Record Management | ✅ 100% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page with View Notes button (decrypt on demand via `RecordViewModal`), E2EE fully wired, `contentHash` SHA-256 tamper detection active on both dentist and patient sides |
+| Audit Logging | ✅ 100% | DB schema, `logAudit()` fire-and-forget helper, `GET /api/audit-log` (paginated, filtered, sortable), `GET /api/audit-log/export` (CSV + PDF, up to 5000 rows), full Admin UI with expandable rows, action/entity/date/search filters |
+| Integrity Verification | ✅ 100% | `contentHash` SHA-256 computed on every record write, verified on every read — active on both dentist (`RecordFormModal`) and patient (`RecordViewModal`) sides |
 
 ### 1.2 Partially Completed Modules
 
 | Module | Completion | What's Done | What's Missing |
 |---|---|---|---|
-| Patient Record Management | ~100% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page with View Notes button (decrypt on demand via `RecordViewModal`), E2EE fully wired, `contentHash` SHA-256 tamper detection active on both dentist and patient sides | — |
 | Billing & Payment Tracking | ~10% | DB schema (`Billing`, `Payment`, `PaymentStatus`) | All API routes and UI |
-| Audit Logging | ~100% | DB schema, `logAudit()` fire-and-forget helper, `GET /api/audit-log` (paginated, filtered, sortable), `GET /api/audit-log/export` (CSV + PDF, up to 5000 rows), full Admin UI with expandable rows, action/entity/date/search filters | — |
-| Integrity Verification | ~20% | `contentHash` field on `PatientRecord` | SHA-256 computation and verification not wired to any API route |
 
 ### 1.3 Not Started
 
@@ -58,14 +58,14 @@ This report assesses the current completion state of IntelliDent across two dime
 | Patient Record Management | 6 | 6 | 100% |
 | Billing & Payment | 1 | 2 | 50% |
 | Audit Logging | 2 | 2 | 100% |
-| Integrity Verification | 1 | 2 | 50% |
+| Integrity Verification | 2 | 2 | 100% |
 | Virtual Assistant / Chatbot | 0 | 1 | 0% |
 | Reporting & Exports | 0 | 1 | 0% |
-| **Total** | **58** | **64** | **~81%** |
+| **Total** | **59** | **64** | **~92%** |
 
 ---
 
-## 2. Security Implementation (~60%)
+## 2. Security Implementation (~85%)
 
 ### 2.1 Security Controls — Implemented
 
@@ -82,17 +82,14 @@ This report assesses the current completion state of IntelliDent across two dime
 | RBAC Enforcement | ✅ Complete | 5 roles (SUPERADMIN, ADMIN, RECEPTIONIST, DENTIST, PATIENT); role checked on every request |
 | Multi-Tenancy Isolation | ✅ Complete | Every DB query scoped to `clinicId`; no cross-clinic data access possible |
 | Soft Deletes | ✅ Complete | All major models use `isDeleted + deletedAt`; data never permanently removed |
-| Input Sanitization (Auth Routes) | ✅ Complete | `lib/validate.js` applied to all auth API routes: 16 KB payload cap, type checking, length limits, email normalization, hex token validation |
-| E2EE Architecture | ✅ Complete | Web Crypto API (AES-GCM-256 + PBKDF2) implemented in `lib/crypto.js` and `CryptoProvider`; fully wired to patient record create/read/update via `RecordFormModal` and `/api/records` routes |
+| Input Sanitization (All API Routes) | ✅ Complete | `lib/validate.js` applied to all auth + non-auth API routes: 16 KB payload cap, type checking, length limits, email normalization, hex token validation |
+| E2EE Architecture | ✅ Complete | Web Crypto API (AES-GCM-256 + PBKDF2) in `lib/crypto.js` and `CryptoProvider`; fully wired to patient record create/read/update on both dentist and patient sides |
+| Integrity Verification (contentHash) | ✅ Complete | SHA-256 of plaintext computed before encryption on every write; recomputed and verified against stored hash on every read; mismatch surfaces a tamper warning |
 
 ### 2.2 Security Controls — Gaps
 
 | Control | Status | Risk | Details |
 |---|---|---|---|
-| E2EE for Patient Records | ✅ Fixed | ~~Critical~~ | API routes (`POST`/`PATCH`/`GET /api/records/[patientId]/[recordId]`) now accept and store `encryptedData`, `dataIv`, `contentHash`. `PatientRecordsDrawer` replaced with `RecordFormModal` which encrypts on write and decrypts on read via `lib/crypto.js`. |
-| `contentHash` Tamper Detection | ✅ Fixed | ~~High~~ | `RecordFormModal` computes SHA-256 of plaintext before encryption on every write and verifies on every read; API routes store and return `contentHash`. |
-| Audit Log Queryability | ✅ Fixed | ~~High~~ | Full Admin UI built at `/audit-log` with paginated table, filters (action/entity/date/search), expandable metadata rows, and CSV/PDF export up to 5,000 entries. Fixed invalid `ACTIVATE`/`DEACTIVATE` enum calls (changed to `UPDATE` with metadata) and extended `VALID_ACTIONS` to cover all `AuditAction` enum values. |
-| Input Sanitization Coverage | ✅ Fixed | ~~Medium~~ | `parseJsonBody` (16 KB payload cap, JSON type validation) + field-level `str()`/`sanitizeEmail()`/`secret()` applied to all 20 non-auth write routes: appointments, patients, services, profile, records, schedules, clinics profile/schedule/closures/presets, users, super-admin clinics/enter. |
 | Security Event Reporting | ❌ Not started | Medium | No mechanism to export or report on security events, failed login attempts, or access anomalies. |
 
 ### 2.3 Security Layer Breakdown
@@ -101,11 +98,11 @@ This report assesses the current completion state of IntelliDent across two dime
 |---|---|---|
 | Authentication | ~95% | MFA, lockout, sessions, password controls all complete |
 | Access Control (RBAC + Tenancy) | ~90% | Role enforcement and clinicId scoping solid |
-| Data Protection (E2EE) | ~75% | Fully wired to patient records; patient-facing notes decrypt/view not yet implemented |
-| Input Validation Coverage | ~55% | Auth routes covered; non-auth API routes unclear |
+| Data Protection (E2EE) | ~100% | Fully wired to patient records on both dentist and patient sides; tamper detection active |
+| Input Validation Coverage | ~95% | All auth + non-auth write routes covered via `parseJsonBody` + field-level helpers |
 | Audit & Monitoring | ~90% | Full query UI and export complete; `logAudit()` called on all major write operations |
-| Integrity Verification | ~75% | SHA-256 `contentHash` now computed on write and verified on read for patient records; not yet applied to other data types |
-| **Overall Security** | **~70%** | |
+| Integrity Verification | ~90% | SHA-256 `contentHash` computed on write and verified on read for patient records; not yet extended to other data types |
+| **Overall Security** | **~85%** | |
 
 ---
 
@@ -131,9 +128,9 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 
 | Standard | Status | Gap |
 |---|---|---|
-| Philippine Data Privacy Act (RA 10173) | ⚠️ Partial | PHI now encrypted at rest via E2EE; no breach detection via audit trail yet |
-| ISO/IEC 27001 | ⚠️ Partial | Access control and authentication strong; audit, monitoring, and incident response controls incomplete |
-| NIST CSF | ⚠️ Partial | Identify ✅, Protect ⚠️ (E2EE gap), Detect ❌ (no audit UI), Respond ❌, Recover ⚠️ |
+| Philippine Data Privacy Act (RA 10173) | ⚠️ Partial | PHI encrypted at rest via E2EE with tamper detection; no automated breach detection or security event reporting |
+| ISO/IEC 27001 | ⚠️ Partial | Access control, authentication, and audit logging strong; incident response controls incomplete |
+| NIST CSF | ⚠️ Partial | Identify ✅, Protect ✅ (E2EE + input validation complete), Detect ⚠️ (audit log queryable; no alerting), Respond ❌, Recover ⚠️ |
 
 ---
 
