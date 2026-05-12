@@ -12,6 +12,7 @@ import ClinicLogoUpload from './ClinicLogoUpload'
 import ClinicProfileForm from './ClinicProfileForm'
 import ClinicSchedule from './ClinicSchedule'
 import ClinicClosures from './ClinicClosures'
+import ClinicPaymentSettings from './ClinicPaymentSettings'
 import { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
 
 function validate(form) {
@@ -170,6 +171,17 @@ export default function SettingsPage() {
         </Typography>
 
         <ClinicClosures clinicId={clinicId} />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant='h6' fontWeight={700} color='text.primary' gutterBottom>
+          Payment Settings
+        </Typography>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+          Configure online payments and reservation fees via PayMongo.
+        </Typography>
+
+        <ClinicPaymentSettings clinicId={clinicId} />
       </Box>
     </SidebarInset>
   )

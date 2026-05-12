@@ -52,7 +52,8 @@ function buildNavGroups(role, clinicId) {
         {
           label: 'Health',
           items: [
-            { label: 'My Dental Records', icon: FileText, href: p('/my-records') },
+            { label: 'My Dental Records', icon: FileText,    href: p('/my-records') },
+            { label: 'My Bills',          icon: CreditCard,  href: p('/my-billing') },
           ],
         },
         {

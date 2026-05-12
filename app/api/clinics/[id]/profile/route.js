@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true }
   })
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -48,23 +48,41 @@ export async function PATCH(request, { params }) {
   const phone    = str(parsed.body.phone, 20)
   const landline = str(parsed.body.landline, 20)
 
-  if (!name) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
-  if (!address) return NextResponse.json({ error: 'Address is required' }, { status: 400 })
-  if (!email) return NextResponse.json({ error: 'Email is required or has an invalid format' }, { status: 400 })
-  if (phone && !/^\+639\d{9}$/.test(phone)) {
-    return NextResponse.json({ error: 'Mobile must be in +63XXXXXXXXXX format (11 digits after +63)' }, { status: 400 })
+  // Payment settings (optional fields — only updated when present)
+  const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body
+
+  if (!hasPaymentFields) {
+    // Regular clinic profile update
+    if (!name) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
+    if (!address) return NextResponse.json({ error: 'Address is required' }, { status: 400 })
+    if (!email) return NextResponse.json({ error: 'Email is required or has an invalid format' }, { status: 400 })
+    if (phone && !/^\+639\d{9}$/.test(phone)) {
+      return NextResponse.json({ error: 'Mobile must be in +63XXXXXXXXXX format (11 digits after +63)' }, { status: 400 })
+    }
+
+    const clinic = await prisma.clinic.update({
+      where: { id },
+      data: {
+        name,
+        address: normalizeAddress(address),
+        email,
+        phone: phone || null,
+        landline: landline || null
+      },
+      select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true }
+    })
+    return NextResponse.json(clinic)
   }
+
+  // Payment settings update
+  const paymongoEnabled = parsed.body.paymongoEnabled === true
+  const rawFee = parseFloat(parsed.body.reservationFeeAmount)
+  const reservationFeeAmount = isNaN(rawFee) || rawFee < 0 ? 0 : rawFee
 
   const clinic = await prisma.clinic.update({
     where: { id },
-    data: {
-      name,
-      address: normalizeAddress(address),
-      email,
-      phone: phone || null,
-      landline: landline || null
-    },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true }
+    data: { paymongoEnabled, reservationFeeAmount },
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true }
   })
 
   return NextResponse.json(clinic)

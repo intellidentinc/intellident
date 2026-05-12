@@ -20,6 +20,7 @@
     "@mui/x-data-grid": "^8.28.0",
     "@mui/x-date-pickers": "^8.27.2",
     "@prisma/client": "^6.19.2",
+    "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.100.0",
     "@vercel/analytics": "^2.0.1",
     "bcrypt": "^6.0.0",

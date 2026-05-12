@@ -24,6 +24,7 @@ import { notifyPatientStatusChange, notifyStaff } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
+import { generateReceiptNumber, computeBillingStatus } from '@/lib/billing'
 
 async function getCaller() {
   const session = await getSession()
@@ -150,6 +151,41 @@ export async function PATCH(request, { params }) {
   }
 
   logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'UPDATE', entity: 'Appointment', entityId: id, ipAddress: ip, userAgent, metadata: { from: appointment.status, to: status, appointmentCode: appointment.appointmentCode } })
+
+  // Auto-create or finalize billing when appointment is COMPLETED
+  if (status === 'COMPLETED') {
+    try {
+      const servicePrice = updated.service ? (await prisma.service.findUnique({ where: { id: updated.serviceId ?? appointment.serviceId } }))?.price ?? 0 : 0
+      const existingBilling = await prisma.billing.findUnique({
+        where: { appointmentId: id },
+        include: { payments: { where: { isDeleted: false } } },
+      })
+
+      if (!existingBilling) {
+        const receiptNumber = await generateReceiptNumber(caller.clinicId)
+        await prisma.billing.create({
+          data: {
+            clinicId:      caller.clinicId,
+            patientId:     updated.patient.id,
+            appointmentId: id,
+            amount:        servicePrice,
+            amountPaid:    0,
+            balance:       servicePrice,
+            status:        'UNPAID',
+            receiptNumber,
+          },
+        })
+      } else if (!existingBilling.receiptNumber) {
+        const receiptNumber = await generateReceiptNumber(caller.clinicId)
+        await prisma.billing.update({
+          where: { id: existingBilling.id },
+          data: { receiptNumber },
+        })
+      }
+    } catch {
+      // Billing auto-creation is non-blocking
+    }
+  }
 
   return NextResponse.json({ appointment: updated })
 }

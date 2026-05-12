@@ -54,6 +54,7 @@ enum NotificationType {
   APPOINTMENT_RESCHEDULED
   REMINDER_24H
   REMINDER_2H
+  PAYMENT_RECEIVED
 }
 
 enum AuditAction {
@@ -90,6 +91,8 @@ model Clinic {
   landline  String?
   logoUrl   String?
   email     String?
+  reservationFeeAmount Float   @default(0)
+  paymongoEnabled      Boolean @default(false)
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -424,16 +427,19 @@ model Billing {
 }
 
 model Payment {
-  id        String    @id @default(cuid())
-  billingId String
-  amount    Float
-  method    String?
-  notes     String?
-  paidAt    DateTime  @default(now())
-  isDeleted Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id                        String    @id @default(cuid())
+  billingId                 String
+  amount                    Float
+  method                    String?
+  notes                     String?
+  type                      String    @default("FULL") // "RESERVATION" | "FULL" | "PARTIAL"
+  paymongoCheckoutSessionId String?
+  paymongoPaymentId         String?
+  paidAt                    DateTime  @default(now())
+  isDeleted                 Boolean   @default(false)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  deletedAt                 DateTime?
 
   billing Billing @relation(fields: [billingId], references: [id])
 

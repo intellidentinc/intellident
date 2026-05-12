@@ -1,0 +1,40 @@
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
+
+async function getPatientCaller() {
+  const session = await getSession()
+  if (!session) return null
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, clinicId: true },
+  })
+  if (!user || user.role !== ROLES.PATIENT) return null
+  const patient = await prisma.patient.findUnique({ where: { userId: session.userId } })
+  if (!patient || patient.clinicId !== user.clinicId) return null
+  return { clinicId: user.clinicId, patientId: patient.id }
+}
+
+export async function GET() {
+  const caller = await getPatientCaller()
+  if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const billings = await prisma.billing.findMany({
+    where: { patientId: caller.patientId, isDeleted: false },
+    include: {
+      appointment: {
+        select: {
+          appointmentCode: true,
+          scheduledAt: true,
+          service: { select: { name: true, price: true } },
+          dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
+        },
+      },
+      payments: { where: { isDeleted: false }, orderBy: { paidAt: 'asc' } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  return NextResponse.json({ billings })
+}

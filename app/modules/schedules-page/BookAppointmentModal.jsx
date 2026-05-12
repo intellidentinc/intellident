@@ -213,7 +213,13 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
         const data = await res.json()
         throw new Error(data.error ?? 'Failed to book')
       }
-      showToast('Appointment request submitted! We\'ll confirm it shortly.', 'success')
+      const data = await res.json()
+      if (data.checkoutUrl) {
+        showToast('Redirecting to payment to secure your booking...', 'info')
+        window.location.href = data.checkoutUrl
+        return
+      }
+      showToast("Booking request submitted! We'll confirm it shortly.", 'success')
       onSuccess()
     } catch (err) {
       showToast(err.message || 'Something went wrong', 'error')
