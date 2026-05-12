@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026 (updated May 12, 2026)  
+**Date:** May 12, 2026 (updated May 13, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -12,12 +12,12 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Dimension | Completion |
 |---|---|
-| System Functionality | ~81% |
+| System Functionality | ~88% |
 | Security Implementation | ~85% |
 
 ---
 
-## 1. System Functionality (~81%)
+## 1. System Functionality (~88%)
 
 ### 1.1 Completed Modules
 
@@ -36,7 +36,7 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Module | Completion | What's Done | What's Missing |
 |---|---|---|---|
-| Billing & Payment Tracking | ~10% | DB schema (`Billing`, `Payment`, `PaymentStatus`) | All API routes and UI |
+| Billing & Payment Tracking | ~65% | DB schema (`Billing`, `Payment`, `PaymentStatus`); full CRUD API (`GET/POST /api/billing`, `GET/PATCH /api/billing/[id]`); patient-facing API (`GET /api/patient/billing`); Admin/Receptionist billing list + detail drawer UI; cash payment recording via `RecordPaymentModal`; PDF receipt generation via `@react-pdf/renderer`; PayMongo online payment integration (`createCheckoutSession`, webhook handler at `/api/webhooks/paymongo`); clinic payment settings (enable/disable PayMongo, reservation fee config); auto-billing creation when appointment is marked COMPLETED; `My Bills` patient page | PayMongo webhook not yet registered in dashboard; online payment flow unverified end-to-end; `qr_ph` (GCash/Maya QR) only available with live keys — test mode shows card only; reservation fee stored in DB but not yet charged at booking; known bugs under active investigation |
 
 ### 1.3 Not Started
 
@@ -56,7 +56,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Appointment Scheduling | 14 | 16 | 88% |
 | Notifications & Reminders | 6 | 6 | 100% |
 | Patient Record Management | 6 | 6 | 100% |
-| Billing & Payment | 1 | 2 | 50% |
+| Billing & Payment | 1 | 2 | 50% (UI + API built; not yet fully operational) |
 | Audit Logging | 2 | 2 | 100% |
 | Integrity Verification | 2 | 2 | 100% |
 | Virtual Assistant / Chatbot | 0 | 1 | 0% |
@@ -106,7 +106,42 @@ This report assesses the current completion state of IntelliDent across two dime
 
 ---
 
-## 3. Priority Gaps to Close
+## 3. Billing & Payment — Detailed Status
+
+The billing module was introduced on May 12, 2026. Core infrastructure is in place but the system is **not yet fully operational**. Known gaps and active bugs are listed below.
+
+### 3.1 What Is Built
+
+| Component | Status |
+|---|---|
+| `Billing` + `Payment` DB models, `PaymentStatus` enum | ✅ Complete |
+| `GET/POST /api/billing` — list + create billing records | ✅ Complete |
+| `GET/PATCH /api/billing/[id]` — detail + cash payment recording | ✅ Complete |
+| `GET /api/patient/billing` — patient-scoped billing list | ✅ Complete |
+| `POST /api/billing/[id]/checkout` — PayMongo checkout session creation | ✅ Complete |
+| `POST /api/webhooks/paymongo` — webhook handler (idempotent, updates billing on payment) | ✅ Complete |
+| Admin/Receptionist `BillingPage` — list, search, filter by status | ✅ Complete |
+| `BillingDetailDrawer` — amount summary, payment history, cash + online payment actions | ✅ Complete |
+| `RecordPaymentModal` — record manual cash payment | ✅ Complete |
+| `BillingReceiptDocument` — PDF receipt via `@react-pdf/renderer` | ✅ Complete |
+| Patient `MyBillingPage` — outstanding bills + payment history, Pay Now + Receipt download | ✅ Complete |
+| `ClinicPaymentSettings` — enable/disable PayMongo, set reservation fee amount | ✅ Complete |
+| Auto-billing creation on appointment COMPLETED | ✅ Complete |
+| In-app notification on online payment received (`PAYMENT_RECEIVED`) | ✅ Complete |
+
+### 3.2 Known Issues / Not Yet Functional
+
+| Issue | Severity | Notes |
+|---|---|---|
+| PayMongo webhook not registered | High | Webhook endpoint (`/api/webhooks/paymongo`) exists but has not been registered in the PayMongo dashboard. Online payments will redirect correctly but the billing record will not update until webhook fires. |
+| Online payment end-to-end flow unverified | High | Full cycle (checkout → PayMongo → webhook → billing update) has not been tested in a deployed environment. |
+| `qr_ph` (GCash / Maya QR) unavailable in test mode | Medium | Code correctly gates `qr_ph` behind live keys. Only card payments are available while using test credentials. |
+| Reservation fee not charged at booking | Medium | `reservationFeeAmount` is saved in clinic settings and stored in DB, but `BookAppointmentModal` and `POST /api/schedules` do not yet initiate a fee charge at booking time. |
+| Receipt number generation not atomic | Low | Uses a `COUNT`-based approach; could produce duplicate receipt numbers under concurrent completions on the same clinic. |
+
+---
+
+## 5. Priority Gaps to Close
 
 Ranked by impact for a healthcare/cybersecurity capstone:
 
@@ -118,13 +153,13 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 4 | ~~Apply `lib/validate.js` sanitization to all non-auth API routes~~ | ✅ Done | — |
 | 5 | ~~Patient-facing notes decrypt/view on My Dental Records page~~ | ✅ Done | — |
 | 6 | Rescheduling flow UI (status + form) | ❌ Open | Medium |
-| 7 | Billing & Payment API + UI | ❌ Open | High |
+| 7 | Billing & Payment — stabilize and fully test PayMongo flow | ⚠️ In Progress | Medium |
 | 8 | Reporting & Exports | ❌ Open | High |
 | 9 | Virtual Assistant / Chatbot | ❌ Open | High |
 
 ---
 
-## 4. Compliance Posture
+## 6. Compliance Posture
 
 | Standard | Status | Gap |
 |---|---|---|
