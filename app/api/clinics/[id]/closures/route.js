@@ -43,13 +43,13 @@ export async function POST(request, { params }) {
 
   if (!date) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
 
-  const parsed = new Date(date)
-  if (isNaN(parsed.getTime())) {
+  const parsedDate = new Date(date)
+  if (isNaN(parsedDate.getTime())) {
     return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
   }
 
   const closure = await prisma.clinicClosure.create({
-    data: { clinicId: id, date: parsed, reason: reason?.trim() || null },
+    data: { clinicId: id, date: parsedDate, reason: reason?.trim() || null },
     select: { id: true, date: true, reason: true }
   })
 
