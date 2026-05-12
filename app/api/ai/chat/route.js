@@ -93,7 +93,7 @@ export async function POST(request) {
       clinicId: session.clinicId,
       action: 'AI_INTERACTION',
       entity: 'ChatSession',
-      entityId: chatSession.id,
+      entityId: chatSession.id, // fjsfuafua
       metadata: { messageLength: message.trim().length, toolsAvailable: tools.map((t) => t.name) },
     },
   })
