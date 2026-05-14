@@ -66,7 +66,7 @@ export async function PATCH(request) {
   })
 
   // Refresh session with updated name/email
-  await setSession(session.userId, updated.email, updated.firstName, updated.lastName, session.clinicId)
+  await setSession(session.userId, updated.email, updated.firstName, updated.lastName, session.clinicId, session.rememberMe, session.superAdmin)
 
   return NextResponse.json(updated)
 }
