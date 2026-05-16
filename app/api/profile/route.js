@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession, setSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { normalizeAddress } from '@/lib/utils'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 
 export async function GET() {
@@ -15,13 +14,18 @@ export async function GET() {
 
   if (!user || user.isDeleted) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  let parsedAddress = null
+  if (user.address) {
+    try { parsedAddress = JSON.parse(user.address) } catch { parsedAddress = user.address }
+  }
+
   return NextResponse.json({
     firstName: user.firstName,
     middleInitial: user.middleInitial,
     lastName: user.lastName,
     email: user.email,
     phone: user.phone,
-    address: user.address,
+    address: parsedAddress,
     dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString().split('T')[0] : ''
   })
 }
@@ -59,7 +63,7 @@ export async function PATCH(request) {
       lastName,
       email,
       phone: phone || null,
-      address: normalizeAddress(address),
+      address: address && typeof address === 'object' ? JSON.stringify(address) : null,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
     },
     select: { firstName: true, lastName: true, email: true }

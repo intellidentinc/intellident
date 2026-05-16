@@ -9,7 +9,7 @@ import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
-import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
+import AddressSelector, { EMPTY_ADDRESS } from '@/components/commons/AddressSelector'
 
 function validate(form) {
   const errs = {}
@@ -41,7 +41,9 @@ export default function ProfilePage() {
           lastName: data.lastName ?? '',
           email: data.email ?? '',
           phone: data.phone ?? '+63',
-          address: { ...EMPTY_ADDRESS, street: data.address ?? '' },
+          address: (data.address && typeof data.address === 'object')
+            ? { ...EMPTY_ADDRESS, ...data.address }
+            : { ...EMPTY_ADDRESS, street: typeof data.address === 'string' ? data.address : '' },
           dateOfBirth: data.dateOfBirth ?? ''
         })
       })
@@ -71,7 +73,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, address: assembleAddress(form.address) })
+        body: JSON.stringify(form)
       })
       const data = await res.json()
       if (!res.ok) {

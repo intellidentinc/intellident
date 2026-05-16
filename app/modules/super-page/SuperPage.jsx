@@ -65,7 +65,12 @@ export default function SuperPage({ clinics: initialClinics }) {
   function openEdit(clinic) {
     setEditTarget(clinic)
     setFormName(clinic.name)
-    setFormAddress({ ...EMPTY_ADDRESS, street: clinic.address || '' })
+    let parsedAddr = { ...EMPTY_ADDRESS }
+    if (clinic.address) {
+      try { parsedAddr = { ...EMPTY_ADDRESS, ...JSON.parse(clinic.address) } }
+      catch { parsedAddr = { ...EMPTY_ADDRESS, street: clinic.address } }
+    }
+    setFormAddress(parsedAddr)
     setFormPhone(clinic.phone || '')
     setFormErrors({})
     setFormOpen(true)
@@ -93,7 +98,7 @@ export default function SuperPage({ clinics: initialClinics }) {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName, address: assembleAddress(formAddress), phone: formPhone }),
+        body: JSON.stringify({ name: formName, address: formAddress, phone: formPhone }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -374,7 +379,9 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete }) {
       {clinic.address && (
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
           <MapPin size={14} color='#94a3b8' style={{ marginTop: 2, flexShrink: 0 }} />
-          <Typography variant='caption' color='text.secondary'>{clinic.address}</Typography>
+          <Typography variant='caption' color='text.secondary'>
+            {(() => { try { return assembleAddress(JSON.parse(clinic.address)) } catch { return clinic.address } })()}
+          </Typography>
         </Box>
       )}
       {clinic.email && (

@@ -13,7 +13,7 @@ import ClinicProfileForm from './ClinicProfileForm'
 import ClinicSchedule from './ClinicSchedule'
 import ClinicClosures from './ClinicClosures'
 import ClinicPaymentSettings from './ClinicPaymentSettings'
-import { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
+import { EMPTY_ADDRESS } from '@/components/commons/AddressSelector'
 
 function validate(form) {
   const errs = {}
@@ -51,7 +51,9 @@ export default function SettingsPage() {
       .then((data) => {
         setForm({
           name: data.name ?? '',
-          address: { ...EMPTY_ADDRESS, street: data.address ?? '' },
+          address: (data.address && typeof data.address === 'object')
+            ? { ...EMPTY_ADDRESS, ...data.address }
+            : { ...EMPTY_ADDRESS, street: typeof data.address === 'string' ? data.address : '' },
           email: data.email ?? '',
           phone: data.phone ?? '',
           landline: data.landline ?? '',
@@ -86,7 +88,7 @@ export default function SettingsPage() {
       const res = await fetch(`/api/clinics/${clinicId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, address: assembleAddress(form.address) }),
+        body: JSON.stringify(form),
       })
       const data = await res.json()
       if (!res.ok) {

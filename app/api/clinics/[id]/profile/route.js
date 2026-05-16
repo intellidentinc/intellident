@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
-import { normalizeAddress } from '@/lib/utils'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 
 async function getAdminForClinic(clinicId) {
@@ -32,7 +31,12 @@ export async function GET(request, { params }) {
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  return NextResponse.json(clinic)
+  let parsedAddress = null
+  if (clinic.address) {
+    try { parsedAddress = JSON.parse(clinic.address) } catch { parsedAddress = clinic.address }
+  }
+
+  return NextResponse.json({ ...clinic, address: parsedAddress })
 }
 
 export async function PATCH(request, { params }) {
@@ -43,7 +47,7 @@ export async function PATCH(request, { params }) {
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   const name     = str(parsed.body.name, 200)
-  const address  = str(parsed.body.address, 500)
+  const { address } = parsed.body
   const email    = sanitizeEmail(parsed.body.email)
   const phone    = str(parsed.body.phone, 20)
   const landline = str(parsed.body.landline, 20)
@@ -54,7 +58,7 @@ export async function PATCH(request, { params }) {
   if (!hasPaymentFields) {
     // Regular clinic profile update
     if (!name) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
-    if (!address) return NextResponse.json({ error: 'Address is required' }, { status: 400 })
+    if (!address || typeof address !== 'object' || !address.cityMuni) return NextResponse.json({ error: 'Address is required' }, { status: 400 })
     if (!email) return NextResponse.json({ error: 'Email is required or has an invalid format' }, { status: 400 })
     if (phone && !/^\+639\d{9}$/.test(phone)) {
       return NextResponse.json({ error: 'Mobile must be in +63XXXXXXXXXX format (11 digits after +63)' }, { status: 400 })
@@ -64,7 +68,7 @@ export async function PATCH(request, { params }) {
       where: { id },
       data: {
         name,
-        address: normalizeAddress(address),
+        address: address && typeof address === 'object' ? JSON.stringify(address) : null,
         email,
         phone: phone || null,
         landline: landline || null
