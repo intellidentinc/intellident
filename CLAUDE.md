@@ -345,7 +345,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Dentist: read-only calendar of own appointments (Day / Week view)
   - [x] Dentist: patient records page (patients with CONFIRMED or COMPLETED appointment with them)
   - [x] AI slot suggestions — `app/api/ai/slots`; currently using Gemini 2.5 Flash; planned migration to OpenAI not yet integrated
-  - [ ] Rescheduling flow (RESCHEDULED status transition exists; no UI rescheduling form yet)
+  - [x] Rescheduling flow — `RescheduleAppointmentModal` with dentist/date/time picker, real-time conflict check, reason field; "Reschedule" button on `AppointmentDetailModal` for CONFIRMED appointments; creates new CONFIRMED appointment then patches original to RESCHEDULED
 - [x] Notifications & Reminders
   - [x] In-app notification bell in page header (all roles)
   - [x] Framer Motion slide-in notification drawer

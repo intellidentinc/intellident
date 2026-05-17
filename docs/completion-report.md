@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026 (updated May 17, 2026)  
+**Date:** May 12, 2026 (updated May 18, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -12,12 +12,12 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Dimension | Completion |
 |---|---|
-| System Functionality | ~97% |
+| System Functionality | ~100% |
 | Security Implementation | ~85% |
 
 ---
 
-## 1. System Functionality (~97%)
+## 1. System Functionality (~100%)
 
 ### 1.1 Completed Modules
 
@@ -26,26 +26,23 @@ This report assesses the current completion state of IntelliDent across two dime
 | User Access & Authentication | ✅ 100% | All 20 sub-items complete — MFA, lockout, RBAC, sessions, password policy, history, Remember Me, inactivity logout, admin user creation |
 | Clinic Settings | ✅ 100% | Profile, logo upload, operating hours + presets, closure dates |
 | Service Catalog | ✅ 100% | Create / edit / delete services; duration, price, buffer; dentist assignment |
-| Appointment Scheduling | ✅ ~94% | 15/16 items done; AI slot suggestions complete (OpenAI); rescheduling UI still missing |
+| Appointment Scheduling | ✅ 100% | All 16 items complete — scheduling, calendar, conflict detection, status transitions, AI slot suggestions, patient self-booking, dentist calendar, rescheduling flow UI |
 | AI Slot Suggestions | ✅ 100% | Gemini 2.5 Flash-powered slot ranking with fallback algorithmic tagging; audit logging of AI interactions (`app/api/ai/slots`); OpenAI migration planned but not yet integrated |
 | Virtual Assistant / Chatbot | ✅ 100% | Multi-turn AI chat (Gemini 2.5 Flash) with session persistence; drawer UI (`app/modules/ai-chat/`); `app/api/ai/chat`; OpenAI migration planned but not yet integrated |
 | Notifications & Reminders | ✅ 100% | In-app bell + Framer Motion drawer, email via Gmail/nodemailer, Vercel cron reminders (24h / 2h), mark-read |
 | Patient Record Management | ✅ 100% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page with View Notes button (decrypt on demand via `RecordViewModal`), E2EE fully wired, `contentHash` SHA-256 tamper detection active on both dentist and patient sides |
 | Audit Logging | ✅ 100% | DB schema, `logAudit()` fire-and-forget helper, `GET /api/audit-log` (paginated, filtered, sortable), `GET /api/audit-log/export` (CSV + PDF, up to 5000 rows), full Admin UI with expandable rows, action/entity/date/search filters |
 | Integrity Verification | ✅ 100% | `contentHash` SHA-256 computed on every record write, verified on every read — active on both dentist (`RecordFormModal`) and patient (`RecordViewModal`) sides |
+| Billing & Payment Tracking | ✅ 100% | Full CRUD API; Admin/Receptionist billing list + detail drawer; cash payment via `RecordPaymentModal`; PDF receipts; PayMongo checkout + webhook (registered, end-to-end verified); GCash/Maya QR working (live keys); reservation fee charged at booking; auto-billing on COMPLETED; patient `MyBillingPage`; receipt number generation atomic (PostgreSQL advisory lock) |
+| Reporting & Exports | ✅ 100% | Three-tab report page (Appointments, Revenue, Patients); date range filter; summary stat cards; breakdown tables by status, service, dentist, and month; CSV + PDF export; ADMIN only |
 
 ### 1.2 Partially Completed Modules
 
-| Module | Completion | What's Done | What's Missing |
-|---|---|---|---|
-| Billing & Payment Tracking | ~65% | DB schema (`Billing`, `Payment`, `PaymentStatus`); full CRUD API (`GET/POST /api/billing`, `GET/PATCH /api/billing/[id]`); patient-facing API (`GET /api/patient/billing`); Admin/Receptionist billing list + detail drawer UI; cash payment recording via `RecordPaymentModal`; PDF receipt generation via `@react-pdf/renderer`; PayMongo online payment integration (`createCheckoutSession`, webhook handler at `/api/webhooks/paymongo`); clinic payment settings (enable/disable PayMongo, reservation fee config); auto-billing creation when appointment is marked COMPLETED; `My Bills` patient page | PayMongo webhook not yet registered in dashboard; online payment flow unverified end-to-end; `qr_ph` (GCash/Maya QR) only available with live keys — test mode shows card only; reservation fee stored in DB but not yet charged at booking; known bugs under active investigation |
+None — all modules are fully complete.
 
-### 1.3 Not Started
+### 1.3 Not Started / Open
 
-| Module | Completion | Notes |
-|---|---|---|
-| Reporting & Exports | 100% | Three-tab report page (Appointments, Revenue, Patients); date range filter; summary stat cards; breakdown tables (by status, service, dentist, month); CSV + PDF export; ADMIN only |
-| Rescheduling Flow UI | 0% | `RESCHEDULED` status enum and transition logic exist; no front-end form or dedicated modal |
+None.
 
 ### 1.4 Functionality Checklist Breakdown
 
@@ -54,7 +51,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | User Access & Authentication | 20 | 20 | 100% |
 | Clinic Settings | 5 | 5 | 100% |
 | Service Catalog | 3 | 3 | 100% |
-| Appointment Scheduling | 15 | 16 | 94% (rescheduling UI missing) |
+| Appointment Scheduling | 16 | 16 | 100% |
 | Notifications & Reminders | 6 | 6 | 100% |
 | Patient Record Management | 6 | 6 | 100% |
 | Billing & Payment | 8 | 8 | 100% |
@@ -63,7 +60,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Virtual Assistant / Chatbot | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | AI Slot Suggestions | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | Reporting & Exports | 1 | 1 | 100% |
-| **Total** | **69** | **71** | **~97%** |
+| **Total** | **71** | **71** | **100%** |
 
 ---
 
@@ -108,37 +105,26 @@ This report assesses the current completion state of IntelliDent across two dime
 
 ---
 
-## 3. Billing & Payment — Detailed Status
+## 3. Billing & Payment — Full Status
 
-The billing module was introduced on May 12, 2026. Core infrastructure is in place but the system is **not yet fully operational**. Known gaps and active bugs are listed below.
-
-### 3.1 What Is Built
+The billing module is fully operational as of May 18, 2026. All previously identified issues have been resolved.
 
 | Component | Status |
 |---|---|
 | `Billing` + `Payment` DB models, `PaymentStatus` enum | ✅ Complete |
-| `GET/POST /api/billing` — list + create billing records | ✅ Complete |
-| `GET/PATCH /api/billing/[id]` — detail + cash payment recording | ✅ Complete |
+| `GET/POST /api/billing`, `GET/PATCH /api/billing/[id]` | ✅ Complete |
 | `GET /api/patient/billing` — patient-scoped billing list | ✅ Complete |
-| `POST /api/billing/[id]/checkout` — PayMongo checkout session creation | ✅ Complete |
-| `POST /api/webhooks/paymongo` — webhook handler (idempotent, updates billing on payment) | ✅ Complete |
-| Admin/Receptionist `BillingPage` — list, search, filter by status | ✅ Complete |
-| `BillingDetailDrawer` — amount summary, payment history, cash + online payment actions | ✅ Complete |
-| `RecordPaymentModal` — record manual cash payment | ✅ Complete |
+| `POST /api/billing/[id]/checkout` — PayMongo checkout session | ✅ Complete |
+| `POST /api/webhooks/paymongo` — webhook handler (idempotent, HMAC-verified) | ✅ Complete — registered and end-to-end verified |
+| GCash / Maya QR (`qr_ph`) payments | ✅ Complete — live keys in place |
+| Admin/Receptionist `BillingPage`, `BillingDetailDrawer`, `RecordPaymentModal` | ✅ Complete |
 | `BillingReceiptDocument` — PDF receipt via `@react-pdf/renderer` | ✅ Complete |
-| Patient `MyBillingPage` — outstanding bills + payment history, Pay Now + Receipt download | ✅ Complete |
-| `ClinicPaymentSettings` — enable/disable PayMongo, set reservation fee amount | ✅ Complete |
+| Patient `MyBillingPage` — Pay Now + receipt download | ✅ Complete |
+| `ClinicPaymentSettings` — enable/disable PayMongo, reservation fee config | ✅ Complete |
+| Reservation fee charged at booking via `POST /api/schedules` | ✅ Complete |
 | Auto-billing creation on appointment COMPLETED | ✅ Complete |
-| In-app notification on online payment received (`PAYMENT_RECEIVED`) | ✅ Complete |
-
-### 3.2 Known Issues / Not Yet Functional
-
-| Issue | Severity | Notes |
-|---|---|---|
-| ~~PayMongo webhook + end-to-end flow~~ | ~~High~~ | Resolved — webhook registered; signature verification (HMAC-SHA256, test+live), idempotency, Payment create + Billing update in a single transaction, patient notification, and audit log all verified working. |
-| ~~`qr_ph` (GCash / Maya QR) unavailable in test mode~~ | ~~Medium~~ | Resolved — live keys in place; GCash/Maya QR payments working. |
-| ~~Reservation fee not charged at booking~~ | ~~Medium~~ | Resolved — `POST /api/schedules` creates a billing record and PayMongo checkout session when `paymongoEnabled` and `reservationFeeAmount > 0`; `BookAppointmentModal` redirects patient to checkout on confirm; best-effort (booking succeeds even if checkout fails). |
-| ~~Receipt number generation not atomic~~ | ~~Low~~ | Resolved — `generateReceiptNumber` now acquires a PostgreSQL advisory lock (`pg_advisory_xact_lock`) inside a `$transaction`; count and write are atomic per clinic. |
+| In-app notification on online payment received | ✅ Complete |
+| Receipt number generation (atomic — PostgreSQL advisory lock) | ✅ Complete |
 
 ---
 
@@ -153,7 +139,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 3 | ~~Build Audit Log query API + Admin UI~~ | ✅ Done | — |
 | 4 | ~~Apply `lib/validate.js` sanitization to all non-auth API routes~~ | ✅ Done | — |
 | 5 | ~~Patient-facing notes decrypt/view on My Dental Records page~~ | ✅ Done | — |
-| 6 | Rescheduling flow UI (dedicated modal/form) | ❌ Open | Medium |
+| 6 | ~~Rescheduling flow UI (dedicated modal/form)~~ | ✅ Done | — |
 | 7 | ~~Billing & Payment — register PayMongo webhook; verify online flow end-to-end~~ | ✅ Done | — |
 | 8 | ~~Billing & Payment — charge reservation fee at booking~~ | ✅ Done | — |
 | 9 | ~~Reporting & Exports~~ | ✅ Done | — |

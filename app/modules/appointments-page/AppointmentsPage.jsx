@@ -49,6 +49,7 @@ import AppointmentCalendar from './AppointmentCalendar'
 import CreateAppointmentModal from './CreateAppointmentModal'
 import AppointmentDetailModal from './AppointmentDetailModal'
 import CancelAppointmentModal from './CancelAppointmentModal'
+import RescheduleAppointmentModal from './RescheduleAppointmentModal'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ export default function AppointmentsPage() {
   const [createDefault, setCreateDefault] = useState(null) // pre-filled scheduledAt from slot click
   const [detailTarget, setDetailTarget] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
+  const [rescheduleTarget, setRescheduleTarget] = useState(null)
 
   // Debounce search
   const searchTimeout = useRef(null)
@@ -515,12 +517,19 @@ export default function AppointmentsPage() {
         appointment={detailTarget}
         onClose={() => setDetailTarget(null)}
         onSuccess={() => { setDetailTarget(null); refresh() }}
+        onReschedule={() => { setRescheduleTarget(detailTarget); setDetailTarget(null) }}
       />
       <CancelAppointmentModal
         open={!!cancelTarget}
         appointment={cancelTarget}
         onClose={() => setCancelTarget(null)}
         onSuccess={() => { setCancelTarget(null); refresh() }}
+      />
+      <RescheduleAppointmentModal
+        open={!!rescheduleTarget}
+        appointment={rescheduleTarget}
+        onClose={() => setRescheduleTarget(null)}
+        onSuccess={() => { setRescheduleTarget(null); refresh() }}
       />
     </SidebarInset>
   )

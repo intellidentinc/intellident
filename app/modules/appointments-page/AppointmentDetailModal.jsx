@@ -38,7 +38,7 @@ function DetailRow({ label, value }) {
   )
 }
 
-export default function AppointmentDetailModal({ open, appointment, onClose, onSuccess }) {
+export default function AppointmentDetailModal({ open, appointment, onClose, onSuccess, onReschedule }) {
   const { showToast } = useToast()
   const [newStatus, setNewStatus] = useState('')
   const [history, setHistory] = useState([])
@@ -245,6 +245,16 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
       {/* Footer */}
       <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
         <Button variant='outlined' onClick={onClose} disabled={loading}>Close</Button>
+        {appointment.status === 'CONFIRMED' && onReschedule && (
+          <Button
+            variant='outlined'
+            onClick={onReschedule}
+            disabled={loading}
+            sx={{ borderColor: '#7c3aed', color: '#7c3aed', '&:hover': { borderColor: '#6d28d9', bgcolor: '#f5f3ff' } }}
+          >
+            Reschedule
+          </Button>
+        )}
         {!isTerminal && (
           <Button variant='contained' onClick={handleSave} loading={loading} disabled={newStatus === appointment.status}>
             Save changes
