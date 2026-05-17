@@ -9,7 +9,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { firstName: true, middleInitial: true, lastName: true, email: true, phone: true, address: true, dateOfBirth: true, isDeleted: true }
+    select: { firstName: true, middleInitial: true, lastName: true, email: true, phone: true, address: true, dateOfBirth: true, gender: true, isDeleted: true }
   })
 
   if (!user || user.isDeleted) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -26,7 +26,8 @@ export async function GET() {
     email: user.email,
     phone: user.phone,
     address: parsedAddress,
-    dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString().split('T')[0] : ''
+    dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString().split('T')[0] : '',
+    gender: user.gender ?? ''
   })
 }
 
@@ -41,7 +42,7 @@ export async function PATCH(request) {
   const lastName      = str(parsed.body.lastName, 100)
   const email         = sanitizeEmail(parsed.body.email)
   const phone         = str(parsed.body.phone, 20)
-  const { address, dateOfBirth } = parsed.body
+  const { address, dateOfBirth, gender } = parsed.body
 
   if (!firstName) return NextResponse.json({ error: 'First name is required' }, { status: 400 })
   if (!lastName) return NextResponse.json({ error: 'Last name is required' }, { status: 400 })
@@ -64,7 +65,8 @@ export async function PATCH(request) {
       email,
       phone: phone || null,
       address: address && typeof address === 'object' ? JSON.stringify(address) : null,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      gender: gender || null
     },
     select: { firstName: true, lastName: true, email: true }
   })

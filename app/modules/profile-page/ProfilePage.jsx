@@ -4,12 +4,31 @@ import { useState, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
+import MenuItem from '@mui/material/MenuItem'
+import TextField from '@mui/material/TextField'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
 import AddressSelector, { EMPTY_ADDRESS } from '@/components/commons/AddressSelector'
+
+const GENDER_OPTIONS = [
+  { value: 'MALE', label: 'Male' },
+  { value: 'FEMALE', label: 'Female' },
+  { value: 'OTHER', label: 'Other' },
+  { value: 'PREFER_NOT_TO_SAY', label: 'Prefer not to say' },
+]
+
+function computeAge(dateOfBirth) {
+  if (!dateOfBirth) return null
+  const today = new Date()
+  const dob = new Date(dateOfBirth)
+  let age = today.getFullYear() - dob.getFullYear()
+  const m = today.getMonth() - dob.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
+  return age >= 0 ? age : null
+}
 
 function validate(form) {
   const errs = {}
@@ -28,7 +47,7 @@ export default function ProfilePage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ firstName: '', middleInitial: '', lastName: '', email: '', phone: '+63', address: { ...EMPTY_ADDRESS }, dateOfBirth: '' })
+  const [form, setForm] = useState({ firstName: '', middleInitial: '', lastName: '', email: '', phone: '+63', address: { ...EMPTY_ADDRESS }, dateOfBirth: '', gender: '' })
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
@@ -44,7 +63,8 @@ export default function ProfilePage() {
           address: (data.address && typeof data.address === 'object')
             ? { ...EMPTY_ADDRESS, ...data.address }
             : { ...EMPTY_ADDRESS, street: typeof data.address === 'string' ? data.address : '' },
-          dateOfBirth: data.dateOfBirth ?? ''
+          dateOfBirth: data.dateOfBirth ?? '',
+          gender: data.gender ?? ''
         })
       })
       .catch(() => showToast('Failed to load profile', 'error'))
@@ -172,14 +192,54 @@ export default function ProfilePage() {
               value={form.address}
               onChange={(updated) => setForm((prev) => ({ ...prev, address: updated }))}
             />
-            <Input
-              id='date-of-birth'
-              label='Birthdate'
-              type='date'
-              value={form.dateOfBirth}
-              onChange={handleChange('dateOfBirth')}
-              slotProps={{ htmlInput: { max: new Date().toISOString().split('T')[0] } }}
-            />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+              <Box sx={{ flex: 1 }}>
+                <Input
+                  id='date-of-birth'
+                  label='Birthdate'
+                  type='date'
+                  value={form.dateOfBirth}
+                  onChange={handleChange('dateOfBirth')}
+                  slotProps={{ htmlInput: { max: new Date().toISOString().split('T')[0] } }}
+                />
+              </Box>
+              {computeAge(form.dateOfBirth) !== null && (
+                <Box sx={{ flexShrink: 0, mb: '2px' }}>
+                  <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: '4px', fontWeight: 500 }}>
+                    Age
+                  </Typography>
+                  <Box sx={{
+                    height: 40, px: 2, display: 'flex', alignItems: 'center',
+                    border: '1px solid', borderColor: 'divider', borderRadius: 1,
+                    bgcolor: 'action.hover', minWidth: 72
+                  }}>
+                    <Typography variant='body2' color='text.primary' fontWeight={600}>
+                      {computeAge(form.dateOfBirth)} yrs
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+            <Box>
+              <Typography variant='caption' color='text.secondary' display='block' sx={{ mb: '4px', fontWeight: 500 }}>
+                Gender
+              </Typography>
+              <TextField
+                select
+                fullWidth
+                size='small'
+                value={form.gender}
+                onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value }))}
+                slotProps={{ select: { displayEmpty: true } }}
+              >
+                <MenuItem value=''>
+                  <em style={{ color: '#94a3b8' }}>Select gender</em>
+                </MenuItem>
+                {GENDER_OPTIONS.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                ))}
+              </TextField>
+            </Box>
             <Box sx={{ pt: 1 }}>
               <Button variant='contained' loading={saving} onClick={handleSave}>
                 Save Changes

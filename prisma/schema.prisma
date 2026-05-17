@@ -198,6 +198,7 @@ model User {
   phone       String?
   address     String?
   dateOfBirth DateTime?
+  gender      Gender?
   password        String
   passwordHistory String[] @default([])
   role            Int       @default(4)
