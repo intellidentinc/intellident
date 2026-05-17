@@ -18,17 +18,22 @@ export async function GET(request) {
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
-  const serviceId = searchParams.get('serviceId')
+  const serviceIdsParam = searchParams.get('serviceIds') ?? searchParams.get('serviceId')
 
-  if (!serviceId) {
-    return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
+  if (!serviceIdsParam) {
+    return NextResponse.json({ error: 'serviceIds is required' }, { status: 400 })
   }
 
+  const serviceIds = serviceIdsParam.split(',').filter(Boolean)
+
+  // Intersection: only dentists assigned to ALL selected services
   const dentists = await prisma.dentist.findMany({
     where: {
       clinicId,
       isDeleted: false,
-      services: { some: { id: serviceId, isDeleted: false } },
+      AND: serviceIds.map(id => ({
+        services: { some: { id, isDeleted: false } },
+      })),
     },
     include: {
       user: { select: { firstName: true, lastName: true } },

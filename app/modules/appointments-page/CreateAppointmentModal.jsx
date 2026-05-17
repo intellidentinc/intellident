@@ -41,7 +41,7 @@ import { useToast } from '@/app/providers/ToastProvider'
 
 const EMPTY_FORM = {
   patient: null,
-  serviceId: '',
+  serviceIds: [],
   dentistId: '',
   date: null,
   time: null,
@@ -120,27 +120,27 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
     return () => clearTimeout(timeout)
   }, [patientQuery, open])
 
-  // Dentists for selected service
+  // Dentists for selected services (intersection)
   useEffect(() => {
-    if (!form.serviceId) { setDentists([]); return }
-    fetch(`/api/appointments/dentists?serviceId=${form.serviceId}`)
+    if (form.serviceIds.length === 0) { setDentists([]); return }
+    fetch(`/api/appointments/dentists?serviceIds=${form.serviceIds.join(',')}`)
       .then(r => r.json())
       .then(d => setDentists(d.dentists ?? []))
-  }, [form.serviceId])
+  }, [form.serviceIds.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time conflict check
   useEffect(() => {
-    if (!form.dentistId || form.dentistId === 'ANY' || !form.date || !form.time || !form.serviceId) {
+    if (!form.dentistId || form.dentistId === 'ANY' || !form.date || !form.time || form.serviceIds.length === 0) {
       setConflict(null)
       return
     }
     const scheduledAt = combineDatetime(form.date, form.time)
     if (!scheduledAt) return
-    const params = new URLSearchParams({ dentistId: form.dentistId, scheduledAt: scheduledAt.toISOString(), serviceId: form.serviceId })
+    const params = new URLSearchParams({ dentistId: form.dentistId, scheduledAt: scheduledAt.toISOString(), serviceIds: form.serviceIds.join(',') })
     fetch(`/api/appointments/slots/check?${params}`)
       .then(r => r.json())
       .then(d => setConflict(d))
-  }, [form.dentistId, form.date, form.time, form.serviceId])
+  }, [form.dentistId, form.date, form.time, form.serviceIds.join(',')])
 
   function set(field, value) {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -153,12 +153,12 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
   }
 
   async function fetchAiSlots() {
-    if (!form.serviceId || !form.dentistId || !form.date) return
+    if (form.serviceIds.length === 0 || !form.dentistId || !form.date) return
     setAiLoading(true)
     setAiSuggestions([])
     try {
       const params = new URLSearchParams({
-        serviceId: form.serviceId,
+        serviceIds: form.serviceIds.join(','),
         dentistId: form.dentistId,
         date: form.date.format('YYYY-MM-DD'),
       })
@@ -197,11 +197,11 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
 
   function validate() {
     const errs = {}
-    if (!form.patient) errs.patient = 'Patient is required'
-    if (!form.serviceId) errs.serviceId = 'Service is required'
-    if (!form.dentistId) errs.dentistId = 'Dentist selection is required'
-    if (!form.date) errs.date = 'Date is required'
-    if (!form.time) errs.time = 'Time is required'
+    if (!form.patient)            errs.patient   = 'Patient is required'
+    if (form.serviceIds.length === 0) errs.serviceIds = 'At least one service is required'
+    if (!form.dentistId)          errs.dentistId = 'Dentist selection is required'
+    if (!form.date)               errs.date      = 'Date is required'
+    if (!form.time)               errs.time      = 'Time is required'
     if (conflict && !conflict.available) errs.time = 'This time slot is already booked'
     return errs
   }
@@ -216,7 +216,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
     try {
       const body = {
         patientId: form.patient.id,
-        serviceId: form.serviceId,
+        serviceIds: form.serviceIds,
         dentistId: form.dentistId === 'ANY' ? null : form.dentistId,
         scheduledAt: scheduledAt.toISOString(),
         notes: form.notes || undefined,
@@ -312,37 +312,44 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
             />
           </Box>
 
-          {/* Service */}
+          {/* Services (multi-select) */}
           <Box>
-            <FieldLabel required>Service</FieldLabel>
-            <FormControl fullWidth size='small' error={!!errors.serviceId}>
-              <MuiSelect
-                value={form.serviceId}
-                onChange={(e) => { set('serviceId', e.target.value); set('dentistId', '') }}
-                displayEmpty
-              >
-                <MenuItem value='' disabled>
-                  <Typography variant='body2' color='text.disabled'>Select a service</Typography>
-                </MenuItem>
-                {services.map((s) => (
-                  <MenuItem key={s.id} value={s.id}>
-                    {s.name}
-                    <Typography component='span' variant='caption' color='text.secondary' sx={{ ml: 1 }}>
-                      {s.duration} min
-                    </Typography>
-                  </MenuItem>
-                ))}
-              </MuiSelect>
-              {errors.serviceId && (
-                <Typography variant='caption' color='error' sx={{ mt: 0.5, ml: 1.75 }}>{errors.serviceId}</Typography>
+            <FieldLabel required>Services</FieldLabel>
+            <Autocomplete
+              multiple
+              options={services}
+              getOptionLabel={(s) => s.name}
+              value={services.filter(s => form.serviceIds.includes(s.id))}
+              onChange={(_, selected) => {
+                set('serviceIds', selected.map(s => s.id))
+                set('dentistId', '')
+              }}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              filterOptions={(x) => x}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size='small'
+                  placeholder={form.serviceIds.length === 0 ? 'Select one or more services' : ''}
+                  error={!!errors.serviceIds}
+                  helperText={errors.serviceIds}
+                />
               )}
-            </FormControl>
+              renderOption={(props, s) => (
+                <li {...props} key={s.id}>
+                  {s.name}
+                  <Typography component='span' variant='caption' color='text.secondary' sx={{ ml: 1 }}>
+                    {s.duration} min{s.price != null ? ` · ₱${Number(s.price).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : ''}
+                  </Typography>
+                </li>
+              )}
+            />
           </Box>
 
           {/* Dentist */}
           <Box>
             <FieldLabel required>Dentist</FieldLabel>
-            <FormControl fullWidth size='small' error={!!errors.dentistId} disabled={!form.serviceId}>
+            <FormControl fullWidth size='small' error={!!errors.dentistId} disabled={form.serviceIds.length === 0}>
               <MuiSelect
                 value={form.dentistId}
                 onChange={(e) => set('dentistId', e.target.value)}
@@ -350,7 +357,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
               >
                 <MenuItem value='' disabled>
                   <Typography variant='body2' color='text.disabled'>
-                    {form.serviceId ? 'Select a dentist' : 'Select a service first'}
+                    {form.serviceIds.length > 0 ? 'Select a dentist' : 'Select a service first'}
                   </Typography>
                 </MenuItem>
                 <MenuItem value='ANY'>Any Available</MenuItem>
@@ -420,7 +427,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
           )}
 
           {/* AI Slot Suggestions */}
-          {form.serviceId && form.dentistId && form.date && (
+          {form.serviceIds.length > 0 && form.dentistId && form.date && (
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>

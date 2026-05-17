@@ -90,17 +90,24 @@ export async function POST(request) {
   const { ip, userAgent } = getRequestMeta(request)
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
-  const { serviceId, dentistId, scheduledAt } = parsed.body
+  const rawServiceIds = parsed.body.serviceIds ?? (parsed.body.serviceId ? [parsed.body.serviceId] : [])
+  const serviceIds = Array.isArray(rawServiceIds) ? rawServiceIds.filter(Boolean) : [rawServiceIds].filter(Boolean)
+  const { dentistId, scheduledAt } = parsed.body
   const notes = str(parsed.body.notes, 2000)
 
-  if (!serviceId || !scheduledAt) {
-    return NextResponse.json({ error: 'serviceId and scheduledAt are required' }, { status: 400 })
+  if (serviceIds.length === 0 || !scheduledAt) {
+    return NextResponse.json({ error: 'serviceIds and scheduledAt are required' }, { status: 400 })
   }
 
-  const service = await prisma.service.findFirst({
-    where: { id: serviceId, clinicId: caller.clinicId, isDeleted: false },
+  const services = await prisma.service.findMany({
+    where: { id: { in: serviceIds }, clinicId: caller.clinicId, isDeleted: false },
   })
-  if (!service) return NextResponse.json({ error: 'Service not found' }, { status: 404 })
+  if (services.length !== serviceIds.length) {
+    return NextResponse.json({ error: 'One or more services not found' }, { status: 404 })
+  }
+  // preserve selection order
+  const orderedServices = serviceIds.map(id => services.find(s => s.id === id))
+  const service = orderedServices[0]
 
   const [schedule, closures, clinic] = await Promise.all([
     prisma.clinicSchedule.findUnique({ where: { clinicId: caller.clinicId } }),
@@ -138,7 +145,8 @@ export async function POST(request) {
     }
   }
 
-  const endsAt = new Date(apptDate.getTime() + (service.duration + service.bufferTime) * 60 * 1000)
+  const totalDuration = orderedServices.reduce((sum, s) => sum + s.duration + s.bufferTime, 0)
+  const endsAt = new Date(apptDate.getTime() + totalDuration * 60 * 1000)
 
   // Verify dentistId belongs to this clinic (prevents cross-clinic manipulation)
   if (dentistId) {
@@ -180,17 +188,22 @@ export async function POST(request) {
   })
   const appointmentCode = `APT-${clinicCode}-${datePart}-${String(existingCount + 1).padStart(4, '0')}`
 
+  const totalPrice = orderedServices.reduce((sum, s) => sum + (s.price ?? 0), 0)
+
   const appointment = await prisma.appointment.create({
     data: {
       clinicId:   caller.clinicId,
       patientId:  caller.patientId,
-      serviceId,
+      serviceId:  service.id,
       dentistId:  dentistId || null,
       scheduledAt: apptDate,
       endsAt,
       status: 'PENDING',
       notes: notes || null,
       appointmentCode,
+      services: {
+        create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+      },
       statusHistory: {
         create: { status: 'PENDING', changedById: caller.userId },
       },
@@ -224,9 +237,9 @@ export async function POST(request) {
           clinicId:      caller.clinicId,
           patientId:     caller.patientId,
           appointmentId: appointment.id,
-          amount:        service.price ?? 0,
+          amount:        totalPrice,
           amountPaid:    0,
-          balance:       service.price ?? 0,
+          balance:       totalPrice,
           status:        'UNPAID',
         },
       })
@@ -237,7 +250,7 @@ export async function POST(request) {
           {
             amount:   Math.round(reservationFee * 100),
             currency: 'PHP',
-            name:     `Reservation Fee — ${service.name}`,
+            name:     `Reservation Fee — ${orderedServices.map(s => s.name).join(', ')}`,
             quantity: 1,
           },
         ],

@@ -6,14 +6,14 @@
  * Algorithm:
  *   1. Validate date is a working day and not a clinic closure
  *   2. Generate candidate slots every 30 minutes from openTime to (closeTime - totalDuration)
- *      where totalDuration = service.duration + service.bufferTime
+ *      where totalDuration = sum of (service.duration + service.bufferTime) across all services
  *   3. If date is today, filter out slots within 30 minutes of now (same-day buffer)
  *   4. If dentistId is a specific ID: cross-check each slot against the dentist's
  *      existing non-cancelled appointments and remove conflicting ones
  *   5. If dentistId is 'ANY': return all future slots without conflict filtering —
  *      the receptionist assigns the dentist when confirming the PENDING booking
  *
- * Params: serviceId, dentistId ('ANY' or specific ID), date (YYYY-MM-DD)
+ * Params: serviceIds (comma-separated), dentistId ('ANY' or specific ID), date (YYYY-MM-DD)
  */
 import { NextResponse } from 'next/server'
 import moment from 'moment-timezone'
@@ -34,23 +34,25 @@ export async function GET(request) {
   }
 
   const { searchParams } = new URL(request.url)
-  const serviceId  = searchParams.get('serviceId')
-  const dentistId  = searchParams.get('dentistId')   // specific ID or 'ANY'
-  const dateStr    = searchParams.get('date')         // YYYY-MM-DD
+  const serviceIdsParam = searchParams.get('serviceIds') ?? searchParams.get('serviceId')
+  const dentistId       = searchParams.get('dentistId')   // specific ID or 'ANY'
+  const dateStr         = searchParams.get('date')         // YYYY-MM-DD
 
-  if (!serviceId || !dentistId || !dateStr) {
+  if (!serviceIdsParam || !dentistId || !dateStr) {
     return NextResponse.json({ slots: [] })
   }
 
-  const [service, schedule, closures] = await Promise.all([
-    prisma.service.findFirst({
-      where: { id: serviceId, clinicId: user.clinicId, isDeleted: false },
+  const serviceIds = serviceIdsParam.split(',').filter(Boolean)
+
+  const [services, schedule, closures] = await Promise.all([
+    prisma.service.findMany({
+      where: { id: { in: serviceIds }, clinicId: user.clinicId, isDeleted: false },
     }),
     prisma.clinicSchedule.findUnique({ where: { clinicId: user.clinicId } }),
     prisma.clinicClosure.findMany({ where: { clinicId: user.clinicId } }),
   ])
 
-  if (!service || !schedule) return NextResponse.json({ slots: [] })
+  if (services.length === 0 || !schedule) return NextResponse.json({ slots: [] })
 
   // Validate date is a working day / not a closure (all in Asia/Manila)
   const targetManila = moment.tz(dateStr, 'Asia/Manila')
@@ -67,7 +69,7 @@ export async function GET(request) {
   const [closeH, closeM] = schedule.closeTime.split(':').map(Number)
   const openMin  = openH * 60 + openM
   const closeMin = closeH * 60 + closeM
-  const totalDuration = service.duration + service.bufferTime
+  const totalDuration = services.reduce((sum, s) => sum + s.duration + s.bufferTime, 0)
 
   // Generate candidate slots every 30 min
   const candidateSlots = []

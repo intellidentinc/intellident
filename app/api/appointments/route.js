@@ -99,18 +99,24 @@ export async function POST(request) {
   const { ip, userAgent } = getRequestMeta(request)
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
-  const { patientId, serviceId, dentistId, scheduledAt, status } = parsed.body
+  const rawServiceIds = parsed.body.serviceIds ?? (parsed.body.serviceId ? [parsed.body.serviceId] : [])
+  const serviceIds = Array.isArray(rawServiceIds) ? rawServiceIds.filter(Boolean) : [rawServiceIds].filter(Boolean)
+  const { patientId, dentistId, scheduledAt, status } = parsed.body
   const notes = str(parsed.body.notes, 2000)
 
-  if (!patientId || !serviceId || !scheduledAt) {
-    return NextResponse.json({ error: 'patientId, serviceId, and scheduledAt are required' }, { status: 400 })
+  if (!patientId || serviceIds.length === 0 || !scheduledAt) {
+    return NextResponse.json({ error: 'patientId, serviceIds, and scheduledAt are required' }, { status: 400 })
   }
 
-  // Fetch service for duration/buffer
-  const service = await prisma.service.findFirst({
-    where: { id: serviceId, clinicId: caller.clinicId, isDeleted: false },
+  // Fetch all services for duration/buffer aggregation
+  const services = await prisma.service.findMany({
+    where: { id: { in: serviceIds }, clinicId: caller.clinicId, isDeleted: false },
   })
-  if (!service) return NextResponse.json({ error: 'Service not found' }, { status: 404 })
+  if (services.length !== serviceIds.length) {
+    return NextResponse.json({ error: 'One or more services not found' }, { status: 404 })
+  }
+  const orderedServices = serviceIds.map(id => services.find(s => s.id === id))
+  const service = orderedServices[0]
 
   // Fetch clinic schedule + closures
   const [schedule, closures, clinic] = await Promise.all([
@@ -150,7 +156,8 @@ export async function POST(request) {
     }
   }
 
-  const endsAt = new Date(apptDate.getTime() + (service.duration + service.bufferTime) * 60 * 1000)
+  const totalDuration = orderedServices.reduce((sum, s) => sum + s.duration + s.bufferTime, 0)
+  const endsAt = new Date(apptDate.getTime() + totalDuration * 60 * 1000)
 
   // Dentist conflict check (only if specific dentist chosen)
   if (dentistId) {
@@ -189,13 +196,16 @@ export async function POST(request) {
     data: {
       clinicId: caller.clinicId,
       patientId,
-      serviceId,
+      serviceId: service.id,
       dentistId: dentistId || null,
       scheduledAt: apptDate,
       endsAt,
       status: initialStatus,
       notes: notes || null,
       appointmentCode,
+      services: {
+        create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+      },
       statusHistory: {
         create: {
           status: initialStatus,

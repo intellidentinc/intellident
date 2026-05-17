@@ -306,9 +306,10 @@ model Service {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  clinic       Clinic        @relation(fields: [clinicId], references: [id])
-  appointments Appointment[]
-  dentists     Dentist[]     @relation("ServiceDentists")
+  clinic              Clinic               @relation(fields: [clinicId], references: [id])
+  appointments        Appointment[]
+  appointmentServices AppointmentService[]
+  dentists            Dentist[]            @relation("ServiceDentists")
 
   @@index([clinicId])
   @@map("services")
@@ -319,7 +320,7 @@ model Appointment {
   clinicId        String
   patientId       String
   dentistId       String?
-  serviceId       String
+  serviceId       String?
   appointmentCode String?           @unique
   scheduledAt     DateTime
   endsAt          DateTime
@@ -336,7 +337,8 @@ model Appointment {
   clinic        Clinic                       @relation(fields: [clinicId], references: [id])
   patient       Patient                      @relation(fields: [patientId], references: [id])
   dentist       Dentist?                     @relation(fields: [dentistId], references: [id])
-  service       Service                      @relation(fields: [serviceId], references: [id])
+  service       Service?                     @relation(fields: [serviceId], references: [id])
+  services      AppointmentService[]
   billing            Billing?
   notifications      Notification[]
   inAppNotifications InAppNotification[]
@@ -347,6 +349,18 @@ model Appointment {
   @@index([dentistId])
   @@index([scheduledAt])
   @@map("appointments")
+}
+
+model AppointmentService {
+  appointmentId String
+  serviceId     String
+  order         Int    @default(0)
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  service     Service     @relation(fields: [serviceId], references: [id])
+
+  @@id([appointmentId, serviceId])
+  @@map("appointment_services")
 }
 
 model AppointmentStatusHistory {

@@ -2,9 +2,9 @@
  * BookAppointmentModal — 6-Step Patient Self-Booking Wizard
  *
  * Progressive disclosure — each step unlocks the next:
- *   Step 1: Service selection (visual cards from GET /api/appointments/services)
+ *   Step 1: Service selection (multi-select visual cards from GET /api/appointments/services)
  *   Step 2: Dentist preference chips — "Any Available" or a specific dentist
- *           (fetched from GET /api/appointments/dentists?serviceId=...)
+ *           (fetched from GET /api/appointments/dentists?serviceIds=...)
  *   Step 3: DatePicker — disables non-working days and closure dates
  *           (schedule + closures fetched from GET /api/clinics/schedule and /api/clinics/closures)
  *   Step 4: Time slot chips grouped by Morning / Afternoon
@@ -26,7 +26,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import { CalendarDays, Users, Sparkles } from 'lucide-react'
+import { CalendarDays, Users, Sparkles, Check } from 'lucide-react'
 import dayjs from 'dayjs'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
@@ -96,8 +96,8 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
 
-  // Form state
-  const [serviceId, setServiceId]   = useState('')
+  // Form state — serviceIds is now an array
+  const [serviceIds, setServiceIds] = useState([])
   const [dentistId, setDentistId]   = useState('')
   const [date, setDate]             = useState(null)
   const [timeSlot, setTimeSlot]     = useState('')
@@ -117,7 +117,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
   // Reset on open
   useEffect(() => {
     if (!open) return
-    setServiceId(''); setDentistId(''); setDate(null)
+    setServiceIds([]); setDentistId(''); setDate(null)
     setTimeSlot(''); setNotes(''); setErrors({})
     setSlots([])
 
@@ -128,23 +128,33 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
     })
   }, [open])
 
-  // Fetch dentists when service changes
+  function toggleService(id) {
+    setServiceIds(prev => {
+      const next = prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+      return next
+    })
+    setErrors(p => ({ ...p, service: undefined }))
+    // Reset downstream selections when services change
+    setDentistId(''); setDate(null); setTimeSlot(''); setSlots([])
+  }
+
+  // Fetch dentists when serviceIds change
   useEffect(() => {
-    if (!serviceId) { setDentists([]); setDentistId(''); return }
-    fetch(`/api/appointments/dentists?serviceId=${serviceId}`)
+    if (serviceIds.length === 0) { setDentists([]); setDentistId(''); return }
+    fetch(`/api/appointments/dentists?serviceIds=${serviceIds.join(',')}`)
       .then(r => r.json())
       .then(d => setDentists(d.dentists ?? []))
     setDentistId(''); setDate(null); setTimeSlot(''); setSlots([])
-  }, [serviceId])
+  }, [serviceIds.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch slots when date + dentist + service all set
+  // Fetch slots when date + dentist + serviceIds all set
   useEffect(() => {
-    if (!serviceId || !dentistId || !date) { setSlots([]); setTimeSlot(''); setAiSuggestions([]); return }
+    if (serviceIds.length === 0 || !dentistId || !date) { setSlots([]); setTimeSlot(''); setAiSuggestions([]); return }
     setSlotsLoading(true)
     setTimeSlot('')
     setAiSuggestions([])
     const params = new URLSearchParams({
-      serviceId,
+      serviceIds: serviceIds.join(','),
       dentistId,
       date: date.format('YYYY-MM-DD'),
     })
@@ -153,14 +163,14 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
       .then(d => setSlots(d.slots ?? []))
       .catch(() => setSlots([]))
       .finally(() => setSlotsLoading(false))
-  }, [serviceId, dentistId, date])
+  }, [serviceIds.join(','), dentistId, date])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchAiSlots() {
-    if (!serviceId || !dentistId || !date) return
+    if (serviceIds.length === 0 || !dentistId || !date) return
     setAiLoading(true)
     setAiSuggestions([])
     try {
-      const params = new URLSearchParams({ serviceId, dentistId, date: date.format('YYYY-MM-DD') })
+      const params = new URLSearchParams({ serviceIds: serviceIds.join(','), dentistId, date: date.format('YYYY-MM-DD') })
       const res = await fetch(`/api/ai/slots?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -183,10 +193,10 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
 
   function validate() {
     const errs = {}
-    if (!serviceId)  errs.service  = 'Please select a service'
-    if (!dentistId)  errs.dentist  = 'Please select a dentist preference'
-    if (!date)       errs.date     = 'Please select a date'
-    if (!timeSlot)   errs.timeSlot = 'Please select a time slot'
+    if (serviceIds.length === 0) errs.service  = 'Please select at least one service'
+    if (!dentistId)               errs.dentist  = 'Please select a dentist preference'
+    if (!date)                    errs.date     = 'Please select a date'
+    if (!timeSlot)                errs.timeSlot = 'Please select a time slot'
     return errs
   }
 
@@ -203,7 +213,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          serviceId,
+          serviceIds,
           dentistId: dentistId === 'ANY' ? null : dentistId,
           scheduledAt: scheduledAt.toISOString(),
           notes: notes || undefined,
@@ -228,7 +238,9 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
     }
   }
 
-  const selectedService = services.find(s => s.id === serviceId)
+  const selectedServices = services.filter(s => serviceIds.includes(s.id))
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration + (s.bufferTime ?? 0), 0)
+  const totalPrice    = selectedServices.reduce((sum, s) => sum + (s.price ?? 0), 0)
 
   // Group slots into morning / afternoon
   const morningSlots   = slots.filter(s => parseInt(s.split(':')[0], 10) < 12)
@@ -268,50 +280,71 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
 
         <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '65vh', overflowY: 'auto' }}>
 
-          {/* Step 1: Service */}
+          {/* Step 1: Services (multi-select) */}
           <Box>
-            <SectionLabel step={1} label='Choose a service' />
+            <SectionLabel step={1} label='Choose one or more services' />
             {errors.service && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.service}</Typography>}
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-              {services.map(s => (
-                <Box
-                  key={s.id}
-                  onClick={() => { setServiceId(s.id); setErrors(p => ({ ...p, service: undefined })) }}
-                  sx={{
-                    border: '2px solid',
-                    borderColor: serviceId === s.id ? '#2563eb' : 'divider',
-                    borderRadius: 2,
-                    p: 1.75,
-                    cursor: 'pointer',
-                    bgcolor: serviceId === s.id ? '#eff6ff' : '#fff',
-                    transition: 'all 0.15s',
-                    '&:hover': { borderColor: '#93c5fd' },
-                  }}
-                >
-                  <Typography variant='body2' fontWeight={600} color='text.primary' sx={{ lineHeight: 1.3 }}>
-                    {s.name}
-                  </Typography>
-                  <Typography variant='caption' color='text.secondary'>
-                    {s.duration} min
-                    {s.price != null ? ` · ₱${Number(s.price).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : ''}
-                  </Typography>
-                </Box>
-              ))}
+              {services.map(s => {
+                const selected = serviceIds.includes(s.id)
+                return (
+                  <Box
+                    key={s.id}
+                    onClick={() => toggleService(s.id)}
+                    sx={{
+                      position: 'relative',
+                      border: '2px solid',
+                      borderColor: selected ? '#2563eb' : 'divider',
+                      borderRadius: 2,
+                      p: 1.75,
+                      cursor: 'pointer',
+                      bgcolor: selected ? '#eff6ff' : '#fff',
+                      transition: 'all 0.15s',
+                      '&:hover': { borderColor: '#93c5fd' },
+                    }}
+                  >
+                    {selected && (
+                      <Box sx={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', bgcolor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Check size={11} color='#fff' strokeWidth={3} />
+                      </Box>
+                    )}
+                    <Typography variant='body2' fontWeight={600} color='text.primary' sx={{ lineHeight: 1.3, pr: selected ? 2.5 : 0 }}>
+                      {s.name}
+                    </Typography>
+                    <Typography variant='caption' color='text.secondary'>
+                      {s.duration} min
+                      {s.price != null ? ` · ₱${Number(s.price).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : ''}
+                    </Typography>
+                  </Box>
+                )
+              })}
               {services.length === 0 && (
                 <Typography variant='body2' color='text.disabled' sx={{ gridColumn: 'span 2', py: 1 }}>
                   No services available.
                 </Typography>
               )}
             </Box>
+
+            {/* Running total when 2+ services selected */}
+            {selectedServices.length >= 2 && (
+              <Box sx={{ mt: 1.5, px: 1.5, py: 1, bgcolor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 1.5, display: 'flex', gap: 2 }}>
+                <Typography variant='caption' color='#0369a1' fontWeight={600}>
+                  {selectedServices.length} services selected
+                </Typography>
+                <Typography variant='caption' color='#0369a1'>
+                  {totalDuration} min total
+                  {totalPrice > 0 ? ` · ₱${Number(totalPrice).toLocaleString('en-PH', { minimumFractionDigits: 0 })} total` : ''}
+                </Typography>
+              </Box>
+            )}
           </Box>
 
           {/* Step 2: Dentist preference */}
-          {serviceId && (
+          {serviceIds.length > 0 && (
             <Box>
               <SectionLabel step={2} label='Dentist preference' />
               {errors.dentist && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.dentist}</Typography>}
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {/* Any Available */}
                 <DentistChip
                   label='Any Available'
                   selected={dentistId === 'ANY'}
@@ -413,7 +446,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
                       key={s}
                       slot={s}
                       date={date}
-                      duration={selectedService?.duration ?? 30}
+                      duration={totalDuration || 30}
                       selected={timeSlot === s}
                       onClick={() => { setTimeSlot(s); setErrors(p => ({ ...p, timeSlot: undefined })) }}
                       formatSlot={formatSlot}
@@ -440,18 +473,24 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
           )}
 
           {/* Summary */}
-          {timeSlot && selectedService && (
+          {timeSlot && selectedServices.length > 0 && (
             <Box sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 2, p: 2 }}>
               <Typography variant='body2' fontWeight={600} color='#15803d' sx={{ mb: 0.5 }}>
                 Booking summary
               </Typography>
               <Typography variant='body2' color='text.secondary'>
-                <strong>{selectedService.name}</strong>
+                <strong>{selectedServices.map(s => s.name).join(', ')}</strong>
                 {' · '}
                 {date?.format('MMM D, YYYY')}
                 {' · '}
                 {formatSlot(timeSlot)}
               </Typography>
+              {selectedServices.length > 1 && (
+                <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.25 }}>
+                  {totalDuration} min total
+                  {totalPrice > 0 ? ` · ₱${Number(totalPrice).toLocaleString('en-PH', { minimumFractionDigits: 0 })} total` : ''}
+                </Typography>
+              )}
               <Typography variant='caption' color='text.disabled' sx={{ mt: 0.25, display: 'block' }}>
                 Your request will be reviewed and confirmed by our receptionist.
               </Typography>

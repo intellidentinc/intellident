@@ -155,7 +155,15 @@ export async function PATCH(request, { params }) {
   // Auto-create or finalize billing when appointment is COMPLETED
   if (status === 'COMPLETED') {
     try {
-      const servicePrice = updated.service ? (await prisma.service.findUnique({ where: { id: updated.serviceId ?? appointment.serviceId } }))?.price ?? 0 : 0
+      // Sum prices across all services in the junction table; fall back to single service for old records
+      const junctionServices = await prisma.appointmentService.findMany({
+        where: { appointmentId: id },
+        include: { service: { select: { price: true } } },
+      })
+      const totalPrice = junctionServices.length > 0
+        ? junctionServices.reduce((sum, js) => sum + (js.service.price ?? 0), 0)
+        : (updated.service?.price ?? 0)
+
       const existingBilling = await prisma.billing.findUnique({
         where: { appointmentId: id },
         include: { payments: { where: { isDeleted: false } } },
@@ -168,9 +176,9 @@ export async function PATCH(request, { params }) {
             clinicId:      caller.clinicId,
             patientId:     updated.patient.id,
             appointmentId: id,
-            amount:        servicePrice,
+            amount:        totalPrice,
             amountPaid:    0,
-            balance:       servicePrice,
+            balance:       totalPrice,
             status:        'UNPAID',
             receiptNumber,
           },

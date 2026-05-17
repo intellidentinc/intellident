@@ -18,22 +18,25 @@ export async function GET(request) {
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
-  const dentistId           = searchParams.get('dentistId')
-  const scheduledAtStr      = searchParams.get('scheduledAt')
-  const serviceId           = searchParams.get('serviceId')
+  const dentistId            = searchParams.get('dentistId')
+  const scheduledAtStr       = searchParams.get('scheduledAt')
+  const serviceIdsParam      = searchParams.get('serviceIds') ?? searchParams.get('serviceId')
   const excludeAppointmentId = searchParams.get('excludeAppointmentId')
 
-  if (!dentistId || !scheduledAtStr || !serviceId) {
+  if (!dentistId || !scheduledAtStr || !serviceIdsParam) {
     return NextResponse.json({ available: true })
   }
 
-  const service = await prisma.service.findFirst({
-    where: { id: serviceId, clinicId, isDeleted: false },
-  })
-  if (!service) return NextResponse.json({ available: true })
+  const serviceIds = serviceIdsParam.split(',').filter(Boolean)
 
+  const services = await prisma.service.findMany({
+    where: { id: { in: serviceIds }, clinicId, isDeleted: false },
+  })
+  if (services.length === 0) return NextResponse.json({ available: true })
+
+  const totalDuration = services.reduce((sum, s) => sum + s.duration + s.bufferTime, 0)
   const scheduledAt = new Date(scheduledAtStr)
-  const endsAt = new Date(scheduledAt.getTime() + (service.duration + service.bufferTime) * 60 * 1000)
+  const endsAt = new Date(scheduledAt.getTime() + totalDuration * 60 * 1000)
 
   const conflict = await prisma.appointment.findFirst({
     where: {
