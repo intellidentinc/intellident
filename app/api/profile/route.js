@@ -38,7 +38,7 @@ export async function PATCH(request) {
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   const firstName     = str(parsed.body.firstName, 100)
-  const middleInitial = str(parsed.body.middleInitial, 10)
+  const middleInitial = str(parsed.body.middleInitial, 100)
   const lastName      = str(parsed.body.lastName, 100)
   const email         = sanitizeEmail(parsed.body.email)
   const phone         = str(parsed.body.phone, 20)

@@ -143,20 +143,16 @@ export default function ProfilePage() {
                 helperText={errors.firstName}
                 required
               />
-              <Box sx={{ width: 100, flexShrink: 0 }}>
-                <Input
-                  id='middle-initial'
-                  label='M.I.'
-                  value={form.middleInitial}
-                  onChange={(e) => {
-                    const val = e.target.value.slice(0, 2).toUpperCase()
-                    setForm((prev) => ({ ...prev, middleInitial: val }))
-                    setErrors((prev) => ({ ...prev, middleInitial: '' }))
-                  }}
-                  placeholder='A.'
-                  slotProps={{ htmlInput: { maxLength: 2 } }}
-                />
-              </Box>
+              <Input
+                id='middle-name'
+                label='Middle Name'
+                value={form.middleInitial}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, middleInitial: e.target.value }))
+                  setErrors((prev) => ({ ...prev, middleInitial: '' }))
+                }}
+                placeholder='e.g. Santos'
+              />
               <Input
                 id='last-name'
                 label='Last Name'
