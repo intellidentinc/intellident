@@ -170,24 +170,28 @@ export async function PATCH(request, { params }) {
       })
 
       if (!existingBilling) {
-        const receiptNumber = await generateReceiptNumber(caller.clinicId)
-        await prisma.billing.create({
-          data: {
-            clinicId:      caller.clinicId,
-            patientId:     updated.patient.id,
-            appointmentId: id,
-            amount:        totalPrice,
-            amountPaid:    0,
-            balance:       totalPrice,
-            status:        'UNPAID',
-            receiptNumber,
-          },
+        await prisma.$transaction(async (tx) => {
+          const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+          await tx.billing.create({
+            data: {
+              clinicId:      caller.clinicId,
+              patientId:     updated.patient.id,
+              appointmentId: id,
+              amount:        totalPrice,
+              amountPaid:    0,
+              balance:       totalPrice,
+              status:        'UNPAID',
+              receiptNumber,
+            },
+          })
         })
       } else if (!existingBilling.receiptNumber) {
-        const receiptNumber = await generateReceiptNumber(caller.clinicId)
-        await prisma.billing.update({
-          where: { id: existingBilling.id },
-          data: { receiptNumber },
+        await prisma.$transaction(async (tx) => {
+          const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+          await tx.billing.update({
+            where: { id: existingBilling.id },
+            data: { receiptNumber },
+          })
         })
       }
     } catch {

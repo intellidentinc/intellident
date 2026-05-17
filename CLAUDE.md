@@ -245,7 +245,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - `Appointment.dentistId` is nullable (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`
 - `patientCode` format: `PAT-{CLINICCODE}-{YYYY}-{#####}`; `appointmentCode`: `APT-{CODE}-{YYYY/MM/DD}-{####}`
 - `PatientRecord` has E2EE fields (`encryptedData`, `dataIv`, `contentHash` for tamper detection)
-- `Billing`/`Payment` schema + full CRUD API + Admin/Patient UI built; PayMongo integrated; webhook not yet registered in dashboard
+- `Billing`/`Payment` schema + full CRUD API + Admin/Patient UI built; PayMongo integrated; webhook registered and end-to-end flow verified
 - `AuditLog` schema + `GET /api/audit-log` (paginated, filtered, CSV export) + full Admin UI built
 - `Notification` model is legacy — system uses `InAppNotification` + Gmail fire-and-forget
 
@@ -368,8 +368,8 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Patient `MyBillingPage` — outstanding bills, Pay Now, receipt download
   - [x] PayMongo checkout session + webhook handler (`/api/webhooks/paymongo`); clinic payment settings
   - [x] Auto-billing creation when appointment marked COMPLETED
-  - [ ] PayMongo webhook not yet registered in dashboard — online payment flow unverified end-to-end
-  - [ ] Reservation fee not yet charged at booking time
+  - [x] PayMongo webhook registered and verified end-to-end
+  - [x] Reservation fee charged at booking — creates billing record + PayMongo checkout session; patient redirected to payment on confirm; best-effort (booking succeeds even if checkout fails)
 - [x] Audit Logging
   - [x] DB schema complete (`AuditLog` model with AuditAction enum, ip/userAgent/metadata fields)
   - [x] `GET /api/audit-log` (paginated, filtered, sortable) + `GET /api/audit-log/export` (CSV, up to 5000 rows)

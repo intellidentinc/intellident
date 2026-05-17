@@ -106,24 +106,26 @@ export async function POST(request) {
   }
 
   const amount = appointment.service?.price ?? 0
-  const receiptNumber = await generateReceiptNumber(caller.clinicId)
 
-  const billing = await prisma.billing.create({
-    data: {
-      clinicId:      caller.clinicId,
-      patientId:     appointment.patientId,
-      appointmentId,
-      amount,
-      amountPaid:    0,
-      balance:       amount,
-      status:        'UNPAID',
-      receiptNumber,
-    },
-    include: {
-      patient:     { select: { id: true, firstName: true, lastName: true, patientCode: true } },
-      appointment: { select: { appointmentCode: true, scheduledAt: true, service: { select: { name: true, price: true } } } },
-      payments:    { where: { isDeleted: false } },
-    },
+  const billing = await prisma.$transaction(async (tx) => {
+    const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+    return tx.billing.create({
+      data: {
+        clinicId:      caller.clinicId,
+        patientId:     appointment.patientId,
+        appointmentId,
+        amount,
+        amountPaid:    0,
+        balance:       amount,
+        status:        'UNPAID',
+        receiptNumber,
+      },
+      include: {
+        patient:     { select: { id: true, firstName: true, lastName: true, patientCode: true } },
+        appointment: { select: { appointmentCode: true, scheduledAt: true, service: { select: { name: true, price: true } } } },
+        payments:    { where: { isDeleted: false } },
+      },
+    })
   })
 
   logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'CREATE', entity: 'Billing', entityId: billing.id, ipAddress: ip, userAgent, metadata: { amount, receiptNumber } })

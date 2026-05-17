@@ -12,12 +12,12 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Dimension | Completion |
 |---|---|
-| System Functionality | ~95% |
+| System Functionality | ~96% |
 | Security Implementation | ~85% |
 
 ---
 
-## 1. System Functionality (~95%)
+## 1. System Functionality (~96%)
 
 ### 1.1 Completed Modules
 
@@ -57,13 +57,13 @@ This report assesses the current completion state of IntelliDent across two dime
 | Appointment Scheduling | 15 | 16 | 94% (rescheduling UI missing) |
 | Notifications & Reminders | 6 | 6 | 100% |
 | Patient Record Management | 6 | 6 | 100% |
-| Billing & Payment | 6 | 8 | 75% (API + UI built; PayMongo webhook unregistered; reservation fee not charged at booking) |
+| Billing & Payment | 8 | 8 | 100% |
 | Audit Logging | 2 | 2 | 100% |
 | Integrity Verification | 2 | 2 | 100% |
 | Virtual Assistant / Chatbot | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | AI Slot Suggestions | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | Reporting & Exports | 0 | 1 | 0% |
-| **Total** | **67** | **71** | **~94%** |
+| **Total** | **68** | **71** | **~96%** |
 
 ---
 
@@ -135,11 +135,10 @@ The billing module was introduced on May 12, 2026. Core infrastructure is in pla
 
 | Issue | Severity | Notes |
 |---|---|---|
-| PayMongo webhook not registered | High | Webhook endpoint (`/api/webhooks/paymongo`) exists but has not been registered in the PayMongo dashboard. Online payments will redirect correctly but the billing record will not update until webhook fires. |
-| Online payment end-to-end flow unverified | High | Full cycle (checkout → PayMongo → webhook → billing update) has not been tested in a deployed environment. |
-| `qr_ph` (GCash / Maya QR) unavailable in test mode | Medium | Code correctly gates `qr_ph` behind live keys. Only card payments are available while using test credentials. |
-| Reservation fee not charged at booking | Medium | `reservationFeeAmount` is saved in clinic settings and stored in DB, but `BookAppointmentModal` and `POST /api/schedules` do not yet initiate a fee charge at booking time. |
-| Receipt number generation not atomic | Low | Uses a `COUNT`-based approach; could produce duplicate receipt numbers under concurrent completions on the same clinic. |
+| ~~PayMongo webhook + end-to-end flow~~ | ~~High~~ | Resolved — webhook registered; signature verification (HMAC-SHA256, test+live), idempotency, Payment create + Billing update in a single transaction, patient notification, and audit log all verified working. |
+| ~~`qr_ph` (GCash / Maya QR) unavailable in test mode~~ | ~~Medium~~ | Resolved — live keys in place; GCash/Maya QR payments working. |
+| ~~Reservation fee not charged at booking~~ | ~~Medium~~ | Resolved — `POST /api/schedules` creates a billing record and PayMongo checkout session when `paymongoEnabled` and `reservationFeeAmount > 0`; `BookAppointmentModal` redirects patient to checkout on confirm; best-effort (booking succeeds even if checkout fails). |
+| ~~Receipt number generation not atomic~~ | ~~Low~~ | Resolved — `generateReceiptNumber` now acquires a PostgreSQL advisory lock (`pg_advisory_xact_lock`) inside a `$transaction`; count and write are atomic per clinic. |
 
 ---
 
@@ -155,8 +154,8 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 4 | ~~Apply `lib/validate.js` sanitization to all non-auth API routes~~ | ✅ Done | — |
 | 5 | ~~Patient-facing notes decrypt/view on My Dental Records page~~ | ✅ Done | — |
 | 6 | Rescheduling flow UI (dedicated modal/form) | ❌ Open | Medium |
-| 7 | Billing & Payment — register PayMongo webhook; verify online flow end-to-end | ⚠️ In Progress | Medium |
-| 8 | Billing & Payment — charge reservation fee at booking | ❌ Open | Medium |
+| 7 | ~~Billing & Payment — register PayMongo webhook; verify online flow end-to-end~~ | ✅ Done | — |
+| 8 | ~~Billing & Payment — charge reservation fee at booking~~ | ✅ Done | — |
 | 9 | Reporting & Exports | ❌ Open | High |
 | 10 | ~~Virtual Assistant / Chatbot~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
 | 11 | ~~AI Slot Suggestions~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
