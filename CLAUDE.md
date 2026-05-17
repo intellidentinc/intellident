@@ -26,7 +26,7 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | File Storage | Supabase Storage (`clinic-logos` bucket) |
 | Email | Gmail SMTP via nodemailer (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `GMAIL_FROM_NAME`) |
 | Cron | Vercel Cron Jobs (every 15 min) → `CRON_SECRET` bearer token |
-| AI | Gemini 2.5 Flash — **testing placeholder only; final AI model not decided** |
+| AI | Gemini 2.5 Flash (current) — slot suggestions (`app/api/ai/slots`) + virtual assistant chatbot (`app/api/ai/chat`); **planned migration to OpenAI — not yet integrated** |
 | Analytics | Vercel Analytics |
 
 ---
@@ -245,8 +245,8 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - `Appointment.dentistId` is nullable (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`
 - `patientCode` format: `PAT-{CLINICCODE}-{YYYY}-{#####}`; `appointmentCode`: `APT-{CODE}-{YYYY/MM/DD}-{####}`
 - `PatientRecord` has E2EE fields (`encryptedData`, `dataIv`, `contentHash` for tamper detection)
-- `Billing`/`Payment` schema complete; API/UI not yet built
-- `AuditLog` schema complete; query UI not yet built
+- `Billing`/`Payment` schema + full CRUD API + Admin/Patient UI built; PayMongo integrated; webhook not yet registered in dashboard
+- `AuditLog` schema + `GET /api/audit-log` (paginated, filtered, CSV export) + full Admin UI built
 - `Notification` model is legacy — system uses `InAppNotification` + Gmail fire-and-forget
 
 **Key enums:** `UserRole`, `AppointmentStatus` (PENDING/CONFIRMED/RESCHEDULED/CANCELLED/COMPLETED/NO_SHOW), `NotificationType`, `AuditAction`, `PaymentStatus`, `RecordStatus`, `ConsentStatus`
@@ -344,7 +344,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Patient: cancel own PENDING or CONFIRMED appointments
   - [x] Dentist: read-only calendar of own appointments (Day / Week view)
   - [x] Dentist: patient records page (patients with CONFIRMED or COMPLETED appointment with them)
-  - [ ] AI slot suggestions (GPT-5)
+  - [x] AI slot suggestions — `app/api/ai/slots`; currently using Gemini 2.5 Flash; planned migration to OpenAI not yet integrated
   - [ ] Rescheduling flow (RESCHEDULED status transition exists; no UI rescheduling form yet)
 - [x] Notifications & Reminders
   - [x] In-app notification bell in page header (all roles)
@@ -353,23 +353,30 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Email notifications via Gmail/nodemailer for all notification types
   - [x] Vercel cron job for 24h + 2h appointment reminders (every 15 min, protected by CRON_SECRET)
   - [x] Mark-read (single + all) functionality
-- [ ] Virtual Assistant / Chatbot
+- [x] Virtual Assistant / Chatbot — multi-turn AI chat via `app/api/ai/chat`; drawer UI at `app/modules/ai-chat/`; currently using Gemini 2.5 Flash; planned migration to OpenAI not yet integrated
 - [x] Patient Record Management
   - [x] DB schema complete (`PatientRecord`, `Attachment` with E2EE fields + `contentHash`)
   - [x] `GET /api/records` — dentist's patient list (paginated, searchable — patients with ≥1 CONFIRMED or COMPLETED appt)
   - [x] Dentist: click patient row → right-side drawer with full record list; add/edit/delete records via `POST/PATCH/DELETE /api/records/[patientId]/[recordId]`
   - [x] Patient: My Dental Records page (`/my-records`) — two tabs: Clinical Records + Visit History; `GET /api/patient/records`; sidebar entry under Health group
-  - [ ] E2EE encryption wired to record notes (currently stored as plaintext in `encryptedData`)
-  - [ ] `contentHash` SHA-256 tamper detection wired to API routes
-- [ ] Billing & Payment Tracking
+  - [x] E2EE encryption wired to record notes — `encryptData`/`decryptData` called in `RecordFormModal.jsx`; server never sees plaintext
+  - [x] `contentHash` SHA-256 tamper detection — computed on write, verified on read in `RecordFormModal.jsx` + `RecordViewModal.jsx`; mismatch shows tamper warning
+- [x] Billing & Payment Tracking
   - [x] DB schema complete (`Billing`, `Payment` models with PaymentStatus enum)
-  - [ ] API routes + UI for billing creation, payment recording, receipt tracking
-- [ ] Audit Logging
+  - [x] Full CRUD API (`GET/POST /api/billing`, `GET/PATCH /api/billing/[id]`, `GET /api/patient/billing`)
+  - [x] Admin/Receptionist billing list + detail drawer; cash payment via `RecordPaymentModal`; PDF receipts
+  - [x] Patient `MyBillingPage` — outstanding bills, Pay Now, receipt download
+  - [x] PayMongo checkout session + webhook handler (`/api/webhooks/paymongo`); clinic payment settings
+  - [x] Auto-billing creation when appointment marked COMPLETED
+  - [ ] PayMongo webhook not yet registered in dashboard — online payment flow unverified end-to-end
+  - [ ] Reservation fee not yet charged at booking time
+- [x] Audit Logging
   - [x] DB schema complete (`AuditLog` model with AuditAction enum, ip/userAgent/metadata fields)
-  - [ ] API routes + UI to query/display audit log (ADMIN only)
-- [ ] Integrity Verification (tamper detection via encrypted hashes)
+  - [x] `GET /api/audit-log` (paginated, filtered, sortable) + `GET /api/audit-log/export` (CSV, up to 5000 rows)
+  - [x] Full Admin UI with expandable rows, action/entity/date/search filters
+- [x] Integrity Verification (tamper detection via encrypted hashes)
   - [x] `PatientRecord.contentHash` field for SHA-256 tamper detection exists in schema
-  - [ ] Wire contentHash computation + verification to API routes
+  - [x] `contentHash` computed on every record write; recomputed and verified on every read; tamper warning on mismatch
 - [ ] Reporting & Exports
 
 ---

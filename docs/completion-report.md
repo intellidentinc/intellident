@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026 (updated May 13, 2026)  
+**Date:** May 12, 2026 (updated May 17, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -12,12 +12,12 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Dimension | Completion |
 |---|---|
-| System Functionality | ~88% |
+| System Functionality | ~95% |
 | Security Implementation | ~85% |
 
 ---
 
-## 1. System Functionality (~88%)
+## 1. System Functionality (~95%)
 
 ### 1.1 Completed Modules
 
@@ -26,7 +26,9 @@ This report assesses the current completion state of IntelliDent across two dime
 | User Access & Authentication | ✅ 100% | All 20 sub-items complete — MFA, lockout, RBAC, sessions, password policy, history, Remember Me, inactivity logout, admin user creation |
 | Clinic Settings | ✅ 100% | Profile, logo upload, operating hours + presets, closure dates |
 | Service Catalog | ✅ 100% | Create / edit / delete services; duration, price, buffer; dentist assignment |
-| Appointment Scheduling | ✅ ~88% | 14/16 items done; missing AI slot suggestions and rescheduling UI |
+| Appointment Scheduling | ✅ ~94% | 15/16 items done; AI slot suggestions complete (OpenAI); rescheduling UI still missing |
+| AI Slot Suggestions | ✅ 100% | Gemini 2.5 Flash-powered slot ranking with fallback algorithmic tagging; audit logging of AI interactions (`app/api/ai/slots`); OpenAI migration planned but not yet integrated |
+| Virtual Assistant / Chatbot | ✅ 100% | Multi-turn AI chat (Gemini 2.5 Flash) with session persistence; drawer UI (`app/modules/ai-chat/`); `app/api/ai/chat`; OpenAI migration planned but not yet integrated |
 | Notifications & Reminders | ✅ 100% | In-app bell + Framer Motion drawer, email via Gmail/nodemailer, Vercel cron reminders (24h / 2h), mark-read |
 | Patient Record Management | ✅ 100% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page with View Notes button (decrypt on demand via `RecordViewModal`), E2EE fully wired, `contentHash` SHA-256 tamper detection active on both dentist and patient sides |
 | Audit Logging | ✅ 100% | DB schema, `logAudit()` fire-and-forget helper, `GET /api/audit-log` (paginated, filtered, sortable), `GET /api/audit-log/export` (CSV + PDF, up to 5000 rows), full Admin UI with expandable rows, action/entity/date/search filters |
@@ -42,9 +44,8 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Module | Completion | Notes |
 |---|---|---|
-| Virtual Assistant / Chatbot | 0% | Placeholder in CLAUDE.md; no implementation |
-| Reporting & Exports | 0% | No schema, no API, no UI |
-| Rescheduling Flow UI | 0% | `RESCHEDULED` status enum and transition logic exist; no front-end form |
+| Reporting & Exports | 0% | No schema, no API, no UI beyond audit log CSV export |
+| Rescheduling Flow UI | 0% | `RESCHEDULED` status enum and transition logic exist; no front-end form or dedicated modal |
 
 ### 1.4 Functionality Checklist Breakdown
 
@@ -53,15 +54,16 @@ This report assesses the current completion state of IntelliDent across two dime
 | User Access & Authentication | 20 | 20 | 100% |
 | Clinic Settings | 5 | 5 | 100% |
 | Service Catalog | 3 | 3 | 100% |
-| Appointment Scheduling | 14 | 16 | 88% |
+| Appointment Scheduling | 15 | 16 | 94% (rescheduling UI missing) |
 | Notifications & Reminders | 6 | 6 | 100% |
 | Patient Record Management | 6 | 6 | 100% |
-| Billing & Payment | 1 | 2 | 50% (UI + API built; not yet fully operational) |
+| Billing & Payment | 6 | 8 | 75% (API + UI built; PayMongo webhook unregistered; reservation fee not charged at booking) |
 | Audit Logging | 2 | 2 | 100% |
 | Integrity Verification | 2 | 2 | 100% |
-| Virtual Assistant / Chatbot | 0 | 1 | 0% |
+| Virtual Assistant / Chatbot | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
+| AI Slot Suggestions | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | Reporting & Exports | 0 | 1 | 0% |
-| **Total** | **59** | **64** | **~92%** |
+| **Total** | **67** | **71** | **~94%** |
 
 ---
 
@@ -152,10 +154,12 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 3 | ~~Build Audit Log query API + Admin UI~~ | ✅ Done | — |
 | 4 | ~~Apply `lib/validate.js` sanitization to all non-auth API routes~~ | ✅ Done | — |
 | 5 | ~~Patient-facing notes decrypt/view on My Dental Records page~~ | ✅ Done | — |
-| 6 | Rescheduling flow UI (status + form) | ❌ Open | Medium |
-| 7 | Billing & Payment — stabilize and fully test PayMongo flow | ⚠️ In Progress | Medium |
-| 8 | Reporting & Exports | ❌ Open | High |
-| 9 | Virtual Assistant / Chatbot | ❌ Open | High |
+| 6 | Rescheduling flow UI (dedicated modal/form) | ❌ Open | Medium |
+| 7 | Billing & Payment — register PayMongo webhook; verify online flow end-to-end | ⚠️ In Progress | Medium |
+| 8 | Billing & Payment — charge reservation fee at booking | ❌ Open | Medium |
+| 9 | Reporting & Exports | ❌ Open | High |
+| 10 | ~~Virtual Assistant / Chatbot~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
+| 11 | ~~AI Slot Suggestions~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
 
 ---
 
@@ -168,5 +172,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | NIST CSF | ⚠️ Partial | Identify ✅, Protect ✅ (E2EE + input validation complete), Detect ⚠️ (audit log queryable; no alerting), Respond ❌, Recover ⚠️ |
 
 ---
+
+**AI model note:** Both AI features (slot suggestions and virtual assistant chatbot) currently run on Gemini 2.5 Flash. Migration to OpenAI is planned but not yet integrated.
 
 *Generated from CLAUDE.md feature checklist and architecture documentation.*
