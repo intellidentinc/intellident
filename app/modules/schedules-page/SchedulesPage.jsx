@@ -12,7 +12,8 @@
  */
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
@@ -44,11 +45,20 @@ const TABS = [
 
 export default function SchedulesPage() {
   const { showToast } = useToast()
+  const searchParams = useSearchParams()
   const [tab, setTab] = useState('upcoming')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [bookOpen, setBookOpen] = useState(false)
   const [cancelTarget, setCancelTarget] = useState(null)
+  const didAutoOpen = useRef(false)
+
+  useEffect(() => {
+    if (!didAutoOpen.current && searchParams.get('book') === '1') {
+      didAutoOpen.current = true
+      setBookOpen(true)
+    }
+  }, [searchParams])
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true)

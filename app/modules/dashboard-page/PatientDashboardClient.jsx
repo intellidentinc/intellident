@@ -167,7 +167,7 @@ export default function PatientDashboardClient({ session, nextAppt, upcoming, co
                   <Typography variant='body2' fontWeight={600} sx={{ color: '#64748b' }}>No upcoming appointments</Typography>
                   <Typography variant='body2' sx={{ color: '#94a3b8', mt: 0.25 }}>Book your next dental visit to get started.</Typography>
                 </Box>
-                <Box component='a' href='schedules' sx={{
+                <Box component='a' href='schedules?book=1' sx={{
                   mt: 0.5, px: 3, py: 1, bgcolor: '#2563eb', color: '#fff',
                   borderRadius: 2, fontWeight: 600, fontSize: '0.8rem',
                   textDecoration: 'none', transition: 'background 0.15s',
@@ -205,7 +205,7 @@ export default function PatientDashboardClient({ session, nextAppt, upcoming, co
               flexWrap: 'wrap',
             }}>
               <Typography variant='body2' sx={{ color: '#64748b' }}>Need to schedule another visit?</Typography>
-              <Box component='a' href='schedules' sx={{
+              <Box component='a' href='schedules?book=1' sx={{
                 px: 2.5, py: 0.875, bgcolor: '#2563eb', color: '#fff',
                 borderRadius: 1.5, fontWeight: 600, fontSize: '0.8rem',
                 textDecoration: 'none', transition: 'background 0.15s',
