@@ -140,6 +140,7 @@ lib/
 ├── notifications.js          # In-app + email notification helpers (see Notification System section)
 ├── email.js                  # Gmail/nodemailer email helpers (auth emails + all appointment notification emails)
 ├── validate.js               # Input sanitization helpers (parseJsonBody, sanitizeEmail, str, secret, bool, hexToken)
+├── rateLimit.js              # DB-backed IP rate limiter — checkRateLimit(key, max, windowSeconds)
 └── utils.js                  # cn() — clsx + tailwind-merge class name helper
 prisma/
 ├── schema.prisma
@@ -226,9 +227,11 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - Password policy: 8+ chars, upper, lower, digit, special — enforced client + server
 - Session: 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`)
 - Account lockout: 5 failed attempts / 5 min → locked 15 min
+- Rate limiting: DB-backed IP rate limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` Prisma model; sign-in 20/15 min, sign-up 10/hour, forgot-password 5/hour, verify-otp 15/15 min
 - Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use
 - Password reset generates fresh E2EE keys (old data inaccessible); change-password re-wraps existing key
 - Password history: cannot reuse last 3
+- MFA (email OTP): code is complete (`MfaOtp` model, `verify-otp` route, `VerifyOtpPage`) but currently disabled in `app/api/auth/sign-in/route.js` (commented out block lines 125–139)
 
 **RBAC:**
 

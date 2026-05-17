@@ -13,7 +13,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Dimension | Completion |
 |---|---|
 | System Functionality | ~100% |
-| Security Implementation | ~85% |
+| Security Implementation | ~92% |
 
 ---
 
@@ -64,13 +64,14 @@ None.
 
 ---
 
-## 2. Security Implementation (~85%)
+## 2. Security Implementation (~92%)
 
 ### 2.1 Security Controls — Implemented
 
 | Control | Status | Details |
 |---|---|---|
-| Multi-Factor Authentication | ✅ Complete | Email OTP — 6-digit, 10-min expiry, 5-attempt limit, bcrypt-hashed; enforced on every sign-in |
+| Multi-Factor Authentication | ⚠️ Code Complete / Disabled | Email OTP — 6-digit, 10-min expiry, 5-attempt limit, bcrypt-hashed; `MfaOtp` model + `verify-otp` route ready; currently disabled in sign-in route (commented out) |
+| Rate Limiting | ✅ Complete | IP-based limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` DB table; sign-in 20/15 min, sign-up 10/hr, forgot-password 5/hr, verify-otp 15/15 min; returns 429 on limit exceeded |
 | Account Lockout | ✅ Complete | 5 failed attempts / 5 min → locked 15 min; configurable via env vars |
 | Session Management | ✅ Complete | 10-min token, 3-day Remember Me, 30-min inactivity auto-logout (`InactivityProvider`) |
 | Password Policy | ✅ Complete | 8+ chars, uppercase, lowercase, digit, special character — enforced client + server |
@@ -89,19 +90,22 @@ None.
 
 | Control | Status | Risk | Details |
 |---|---|---|---|
-| Security Event Reporting | ❌ Not started | Medium | No mechanism to export or report on security events, failed login attempts, or access anomalies. |
+| Security HTTP Headers | ❌ Not implemented | Medium | `next.config.mjs` is empty — no CSP, HSTS, X-Frame-Options, X-Content-Type-Options |
+| AAD in AES-GCM | ❌ Not implemented | Low-Medium | Encrypted records not cryptographically bound to their patient; payload swapping detectable only via contentHash |
+| Security Event Reporting | ❌ Not started | Medium | No mechanism to export or report on failed login attempts or access anomalies beyond the audit log |
 
 ### 2.3 Security Layer Breakdown
 
 | Security Layer | Completion | Notes |
 |---|---|---|
-| Authentication | ~95% | MFA, lockout, sessions, password controls all complete |
+| Authentication | ~98% | Lockout, sessions, password controls, rate limiting all complete; MFA code ready but disabled |
 | Access Control (RBAC + Tenancy) | ~90% | Role enforcement and clinicId scoping solid |
 | Data Protection (E2EE) | ~100% | Fully wired to patient records on both dentist and patient sides; tamper detection active |
-| Input Validation Coverage | ~95% | All auth + non-auth write routes covered via `parseJsonBody` + field-level helpers |
+| Input Validation & Rate Limiting | ~98% | All routes covered; IP rate limits on all auth endpoints |
 | Audit & Monitoring | ~90% | Full query UI and export complete; `logAudit()` called on all major write operations |
 | Integrity Verification | ~90% | SHA-256 `contentHash` computed on write and verified on read for patient records; not yet extended to other data types |
-| **Overall Security** | **~85%** | |
+| Transport & Platform Security | ~70% | No HTTP security headers configured yet |
+| **Overall Security** | **~92%** | |
 
 ---
 
@@ -145,6 +149,9 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 9 | ~~Reporting & Exports~~ | ✅ Done | — |
 | 10 | ~~Virtual Assistant / Chatbot~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
 | 11 | ~~AI Slot Suggestions~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
+| 12 | ~~IP rate limiting on all auth endpoints~~ | ✅ Done | — |
+| 13 | Security HTTP headers (CSP, HSTS, X-Frame-Options) | ⏳ Pending | Low |
+| 14 | AAD in AES-GCM (bind ciphertext to patientId) | ⏳ Pending | Low |
 
 ---
 
@@ -154,7 +161,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 |---|---|---|
 | Philippine Data Privacy Act (RA 10173) | ⚠️ Partial | PHI encrypted at rest via E2EE with tamper detection; no automated breach detection or security event reporting |
 | ISO/IEC 27001 | ⚠️ Partial | Access control, authentication, and audit logging strong; incident response controls incomplete |
-| NIST CSF | ⚠️ Partial | Identify ✅, Protect ✅ (E2EE + input validation complete), Detect ⚠️ (audit log queryable; no alerting), Respond ❌, Recover ⚠️ |
+| NIST CSF | ⚠️ Partial | Identify ✅, Protect ✅ (E2EE + input validation + rate limiting complete), Detect ⚠️ (audit log queryable; no alerting), Respond ❌, Recover ⚠️ |
 
 ---
 

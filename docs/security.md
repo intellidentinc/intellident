@@ -43,9 +43,28 @@ Enforced on both client and server (`app/api/auth/sign-up/route.js`):
 - **Remember Me:** extends session to 3 days (`maxAge: 60 * 60 * 24 * 3`) — checkbox on sign-in page
 - **Inactivity logout:** 30 minutes — tracked in `InactivityProvider`; clears master key and redirects to `/sign-in?reason=inactivity`
 
+## Rate Limiting
+
+IP-based rate limits are enforced on all auth endpoints before any database work is performed. Uses `lib/rateLimit.js` backed by the `RateLimit` Prisma model (table: `rate_limits`) — correct across all Vercel function instances.
+
+| Endpoint | Limit | Window | Key format |
+|---|---|---|---|
+| `POST /api/auth/sign-in` | 20 requests | 15 min | `ip:sign-in` |
+| `POST /api/auth/sign-up` | 10 requests | 60 min | `ip:sign-up` |
+| `POST /api/auth/forgot-password` | 5 requests | 60 min | `ip:forgot-password` |
+| `POST /api/auth/verify-otp` | 15 requests | 15 min | `ip:verify-otp` |
+
+On limit exceeded: `429 Too Many Requests`. Rate limit checks complement the per-user account lockout — one protects the account, the other protects the infrastructure.
+
+**Implementation:** `lib/rateLimit.js` → `checkRateLimit(key, maxRequests, windowSeconds)`. Expired entries are cleaned up fire-and-forget on each request. The `windowEnd` column is indexed to keep cleanup queries fast.
+
+---
+
 ## Multi-Factor Authentication (Email OTP)
 
-MFA is enforced for **all users** on every sign-in. After credentials are verified, a 6-digit OTP is emailed and the user must enter it before a session is created.
+> **Status:** Code is fully implemented but currently **disabled** in `app/api/auth/sign-in/route.js` (lines 125–139 are commented out). The `MfaOtp` table, `verify-otp` API, and `VerifyOtpPage` are all in place and ready to re-enable.
+
+When enabled: MFA is enforced for **all users** on every sign-in. After credentials are verified, a 6-digit OTP is emailed and the user must enter it before a session is created.
 
 ### Flow
 
