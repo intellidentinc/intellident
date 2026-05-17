@@ -38,6 +38,7 @@ import FormControl from '@mui/material/FormControl'
 import AddIcon from '@mui/icons-material/Add'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
+import EventRepeatIcon from '@mui/icons-material/EventRepeat'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SearchIcon from '@mui/icons-material/Search'
@@ -477,6 +478,13 @@ export default function AppointmentsPage() {
                                 <EditOutlinedIcon fontSize='small' />
                               </IconButton>
                             </Tooltip>
+                            {row.status === 'CONFIRMED' && (
+                              <Tooltip title='Reschedule'>
+                                <IconButton size='small' onClick={() => setRescheduleTarget(row)} sx={{ cursor: 'pointer', color: '#7c3aed' }}>
+                                  <EventRepeatIcon fontSize='small' />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                             {!isTerminal(row.status) && (
                               <Tooltip title='Cancel'>
                                 <IconButton size='small' onClick={() => setCancelTarget(row)} sx={{ cursor: 'pointer', color: '#b91c1c' }}>
