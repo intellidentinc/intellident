@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -11,7 +12,7 @@ import dayjs from 'dayjs'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import AppointmentCalendar from '@/app/modules/appointments-page/AppointmentCalendar'
+const AppointmentCalendar = dynamic(() => import('@/app/modules/appointments-page/AppointmentCalendar'), { ssr: false })
 import ScheduleEventModal from './ScheduleEventModal'
 
 const VIEWS = [

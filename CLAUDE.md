@@ -48,6 +48,11 @@ app/
 │   │   ├── schedule/page.jsx       # DENTIST — their own calendar
 │   │   ├── schedules/page.jsx      # PATIENT — book + view own appointments
 │   │   ├── records/page.jsx        # DENTIST — patient records
+│   │   ├── my-records/page.jsx     # PATIENT — My Dental Records (E2EE decrypt on demand)
+│   │   ├── my-billing/page.jsx     # PATIENT — My Bills + Pay Now + receipt download
+│   │   ├── billing/page.jsx        # ADMIN + RECEPTIONIST — billing list + payments
+│   │   ├── audit-log/page.jsx      # ADMIN — audit log query + CSV/PDF export
+│   │   ├── reports/page.jsx        # ADMIN — reports (appointments, revenue, patients) + CSV/PDF export
 │   │   ├── patients/page.jsx
 │   │   ├── services/page.jsx
 │   │   ├── users/page.jsx
@@ -58,15 +63,23 @@ app/
 ├── api/
 │   ├── auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password, verify-otp)
 │   │                         # Note: sign-up creates EmailVerification (not User); verify creates the User + profile
-│   ├── users/                # User list + PATCH role / DELETE (ADMIN only)
+│   ├── users/                # User list + PATCH role / DELETE / activate (ADMIN only)
 │   ├── patients/             # GET (paginated) + POST (RECEPTIONIST); [id]/ PATCH + DELETE
 │   ├── services/             # GET + POST (ADMIN); [id]/ PATCH + DELETE; dentists/ GET
 │   ├── profile/              # GET + PATCH (any authenticated user)
 │   ├── appointments/         # See Appointments API section below
 │   ├── schedules/            # Patient-facing booking API (PATIENT role); [id]/ PATCH cancel; slots/ GET
 │   ├── schedule/             # Dentist's own schedule API (DENTIST role only)
-│   ├── records/              # GET patient list for dentist (DENTIST role only)
+│   ├── records/              # DENTIST: GET patient list; [patientId]/[recordId]/ POST + PATCH + DELETE (E2EE)
+│   ├── billing/              # GET + POST (ADMIN/RECEPTIONIST); [id]/ GET + PATCH; [id]/checkout/ POST (PayMongo)
+│   ├── audit-log/            # GET paginated + filtered; export/ GET (CSV/PDF, up to 5000 rows) — ADMIN only
+│   ├── reports/              # GET aggregated data (appointments/revenue/patients); export/ GET raw rows — ADMIN only
+│   ├── patient/              # Patient-scoped routes: billing/ GET, records/ GET
 │   ├── notifications/        # GET list + PATCH mark-all-read; [id]/ PATCH mark-one-read
+│   ├── ai/                   # slots/ GET (Gemini slot suggestions); chat/ POST (multi-turn chatbot); risk/ GET (no-show risk)
+│   ├── super/                # enter/ POST + exit/ POST — SuperAdmin clinic switching
+│   ├── webhooks/
+│   │   └── paymongo/         # POST — HMAC-verified PayMongo webhook (idempotent)
 │   ├── cron/
 │   │   └── reminders/        # GET — Vercel cron job; sends 24h + 2h appointment reminders
 │   └── clinics/
@@ -76,7 +89,7 @@ app/
 │       └── [id]/
 │           ├── profile/      # GET + PATCH clinic profile fields (ADMIN)
 │           ├── logo/         # POST logo upload → Supabase Storage (ADMIN)
-│           ├── schedule/     # GET + PATCH operating hours (ADMIN)
+│           ├── schedule/     # GET + PATCH operating hours (ADMIN); presets/ GET + POST + DELETE
 │           └── closures/     # GET + POST closure dates; [closureId]/ DELETE (ADMIN)
 ├── modules/                  # Page-level components (one folder per route)
 │   ├── landing-page/         # Tailwind — public facing
@@ -85,17 +98,24 @@ app/
 │   ├── forgot-password-page/
 │   ├── reset-password-page/
 │   ├── change-password-page/
+│   ├── verify-otp-page/
 │   ├── dashboard-page/       # AppSidebar (with pendingCount badge), DashboardPage (role-aware), SignOutButton
-│   ├── appointments-page/    # AppointmentsPage, AppointmentCalendar, CreateAppointmentModal, AppointmentDetailModal, CancelAppointmentModal
+│   ├── appointments-page/    # AppointmentsPage, AppointmentCalendar, CreateAppointmentModal, AppointmentDetailModal, CancelAppointmentModal, RescheduleAppointmentModal
 │   ├── schedules-page/       # SchedulesPage (patient), BookAppointmentModal, CancelScheduleModal
 │   ├── schedule-page/        # SchedulePage (dentist), ScheduleEventModal
-│   ├── records-page/         # RecordsPage (dentist patient list)
+│   ├── records-page/         # RecordsPage (dentist patient list + RecordFormModal + RecordViewModal with E2EE)
+│   ├── my-records-page/      # MyDentalRecordsPage (patient) — Clinical Records + Visit History tabs
+│   ├── billing-page/         # BillingPage, BillingDetailDrawer, RecordPaymentModal, BillingReceiptDocument
+│   ├── my-billing-page/      # MyBillingPage (patient) — outstanding bills, Pay Now, receipt download
+│   ├── audit-log-page/       # AuditLogPage — filters, expandable rows, CSV + PDF export
+│   ├── reports-page/         # ReportsPage — 3 tabs, date range, stat cards, CSV + PDF export
 │   ├── patients-page/        # PatientsPage, AddPatientModal, EditPatientModal, DeletePatientModal
 │   ├── services-page/        # ServicesPage, ServiceFormModal, DeleteServiceModal
 │   ├── rbac-page/            # RbacPage, AddUserModal, EditRoleModal, DeleteUserModal
 │   ├── profile-page/         # ProfilePage
 │   ├── settings-page/        # SettingsPage, ClinicLogoUpload, ClinicProfileForm, ClinicSchedule, ClinicClosures
 │   ├── super-page/           # SuperPage.jsx — clinic cards + Enter as Admin
+│   ├── ai-chat/              # AIChatButton.jsx, AIChatDrawer.jsx — floating chat button + Framer Motion drawer
 │   └── notifications/        # NotificationBell.jsx, NotificationDrawer.jsx
 ├── providers/                # App-level React context providers
 │   ├── ThemeRegistry.jsx     # MUI + Emotion SSR setup

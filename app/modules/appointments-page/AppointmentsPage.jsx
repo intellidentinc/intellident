@@ -16,6 +16,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Table from '@mui/material/Table'
@@ -46,7 +47,7 @@ import dayjs from 'dayjs'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import AppointmentCalendar from './AppointmentCalendar'
+const AppointmentCalendar = dynamic(() => import('./AppointmentCalendar'), { ssr: false })
 import CreateAppointmentModal from './CreateAppointmentModal'
 import AppointmentDetailModal from './AppointmentDetailModal'
 import CancelAppointmentModal from './CancelAppointmentModal'
