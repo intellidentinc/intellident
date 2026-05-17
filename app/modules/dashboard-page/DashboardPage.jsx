@@ -16,10 +16,12 @@ async function PatientDashboard({ session }) {
   const patient = await prisma.patient.findUnique({ where: { userId: session.userId } })
   const now = new Date()
 
-  const [nextApptRaw, stats] = await Promise.all([
+  const baseWhere = patient ? { patientId: patient.id, clinicId: patient.clinicId, isDeleted: false } : null
+
+  const [nextApptRaw, stats, upcomingCount] = await Promise.all([
     patient
       ? prisma.appointment.findFirst({
-          where: { patientId: patient.id, clinicId: patient.clinicId, isDeleted: false, status: { in: ['PENDING', 'CONFIRMED'] }, scheduledAt: { gte: now } },
+          where: { ...baseWhere, status: { in: ['PENDING', 'CONFIRMED'] }, scheduledAt: { gte: now } },
           include: {
             service: { select: { name: true } },
             dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
@@ -30,10 +32,15 @@ async function PatientDashboard({ session }) {
     patient
       ? prisma.appointment.groupBy({
           by: ['status'],
-          where: { patientId: patient.id, clinicId: patient.clinicId, isDeleted: false },
+          where: baseWhere,
           _count: { id: true },
         })
       : [],
+    patient
+      ? prisma.appointment.count({
+          where: { ...baseWhere, status: { in: ['PENDING', 'CONFIRMED', 'RESCHEDULED'] }, scheduledAt: { gte: now } },
+        })
+      : 0,
   ])
 
   const countByStatus = {}
@@ -51,7 +58,7 @@ async function PatientDashboard({ session }) {
     <PatientDashboardClient
       session={session}
       nextAppt={nextAppt}
-      upcoming={(countByStatus.PENDING ?? 0) + (countByStatus.CONFIRMED ?? 0)}
+      upcoming={upcomingCount}
       completed={countByStatus.COMPLETED ?? 0}
       cancelled={countByStatus.CANCELLED ?? 0}
     />
