@@ -23,6 +23,7 @@ import { prisma } from '@/lib/prisma';
 import { setSession } from '@/lib/auth';
 import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
+import { checkRateLimit } from '@/lib/rateLimit';
 // import { sendMfaOtpEmail } from '@/lib/email'; // MFA: disabled
 
 // Configurable lockout constants (override via env vars)
@@ -33,6 +34,11 @@ const LOCK_DURATION_MS = parseInt(process.env.LOCKOUT_DURATION_MINUTES  ?? '15')
 export async function POST(request) {
   try {
     const { ip, userAgent } = getRequestMeta(request);
+
+    const { allowed } = await checkRateLimit(`${ip}:sign-in`, 20, 15 * 60);
+    if (!allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
 
     const parsed = await parseJsonBody(request);
     if (parsed.error) {

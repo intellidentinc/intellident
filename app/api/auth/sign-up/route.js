@@ -24,9 +24,17 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendVerificationEmail } from '@/lib/email';
 import { parseJsonBody, sanitizeEmail, secret, str } from '@/lib/validate';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { getRequestMeta } from '@/lib/audit';
 
 export async function POST(request) {
   try {
+    const { ip } = getRequestMeta(request);
+    const { allowed } = await checkRateLimit(`${ip}:sign-up`, 10, 60 * 60);
+    if (!allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
     const parsed = await parseJsonBody(request);
     if (parsed.error) {
       return NextResponse.json({ error: parsed.error }, { status: parsed.status });

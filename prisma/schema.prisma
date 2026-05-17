@@ -575,3 +575,14 @@ model ChatMessage {
   @@index([sessionId])
   @@map("chat_messages")
 }
+
+model RateLimit {
+  id        Int      @id @default(autoincrement())
+  key       String
+  count     Int      @default(1)
+  windowEnd DateTime
+
+  @@index([key])
+  @@index([windowEnd])
+  @@map("rate_limits")
+}

@@ -10,12 +10,19 @@ import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { setSession } from '@/lib/auth';
 import { getRequestMeta, logAudit } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const MAX_OTP_ATTEMPTS = 5;
 
 export async function POST(request) {
   try {
     const { ip, userAgent } = getRequestMeta(request);
+
+    const { allowed } = await checkRateLimit(`${ip}:verify-otp`, 15, 15 * 60);
+    if (!allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
     const body = await request.json();
     const { pendingToken, code } = body;
 
