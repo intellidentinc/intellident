@@ -12,12 +12,12 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Dimension | Completion |
 |---|---|
-| System Functionality | ~96% |
+| System Functionality | ~97% |
 | Security Implementation | ~85% |
 
 ---
 
-## 1. System Functionality (~96%)
+## 1. System Functionality (~97%)
 
 ### 1.1 Completed Modules
 
@@ -44,7 +44,7 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Module | Completion | Notes |
 |---|---|---|
-| Reporting & Exports | 0% | No schema, no API, no UI beyond audit log CSV export |
+| Reporting & Exports | 100% | Three-tab report page (Appointments, Revenue, Patients); date range filter; summary stat cards; breakdown tables (by status, service, dentist, month); CSV + PDF export; ADMIN only |
 | Rescheduling Flow UI | 0% | `RESCHEDULED` status enum and transition logic exist; no front-end form or dedicated modal |
 
 ### 1.4 Functionality Checklist Breakdown
@@ -62,8 +62,8 @@ This report assesses the current completion state of IntelliDent across two dime
 | Integrity Verification | 2 | 2 | 100% |
 | Virtual Assistant / Chatbot | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | AI Slot Suggestions | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
-| Reporting & Exports | 0 | 1 | 0% |
-| **Total** | **68** | **71** | **~96%** |
+| Reporting & Exports | 1 | 1 | 100% |
+| **Total** | **69** | **71** | **~97%** |
 
 ---
 
@@ -156,7 +156,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 6 | Rescheduling flow UI (dedicated modal/form) | ❌ Open | Medium |
 | 7 | ~~Billing & Payment — register PayMongo webhook; verify online flow end-to-end~~ | ✅ Done | — |
 | 8 | ~~Billing & Payment — charge reservation fee at booking~~ | ✅ Done | — |
-| 9 | Reporting & Exports | ❌ Open | High |
+| 9 | ~~Reporting & Exports~~ | ✅ Done | — |
 | 10 | ~~Virtual Assistant / Chatbot~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
 | 11 | ~~AI Slot Suggestions~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
 

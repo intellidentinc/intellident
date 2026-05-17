@@ -26,6 +26,7 @@ import {
   Settings,
   Stethoscope,
   User,
+  BarChart2,
 } from 'lucide-react'
 import SignOutButton from './SignOutButton'
 import ExitSuperAdminButton from './ExitSuperAdminButton'
@@ -132,7 +133,8 @@ function buildNavGroups(role, clinicId) {
         {
           label: 'System',
           items: [
-            { label: 'Audit Log', icon: ShieldCheck, href: p('/audit-log') },
+            { label: 'Reports',   icon: BarChart2,   href: p('/reports')    },
+            { label: 'Audit Log', icon: ShieldCheck, href: p('/audit-log')  },
           ],
         },
         {

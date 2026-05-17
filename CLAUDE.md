@@ -377,7 +377,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
 - [x] Integrity Verification (tamper detection via encrypted hashes)
   - [x] `PatientRecord.contentHash` field for SHA-256 tamper detection exists in schema
   - [x] `contentHash` computed on every record write; recomputed and verified on every read; tamper warning on mismatch
-- [ ] Reporting & Exports
+- [x] Reporting & Exports — `app/modules/reports-page/ReportsPage.jsx`; three tabs: Appointments, Revenue, Patients; date range filter; CSV + PDF export; ADMIN only
 
 ---
 

@@ -1,0 +1,89 @@
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { ROLES, isAdmin } from '@/lib/roles'
+
+const MAX_ROWS = 5000
+
+function dateRange(field, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return {}
+  return {
+    [field]: {
+      ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+      ...(dateTo   ? { lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999)) } : {}),
+    },
+  }
+}
+
+export async function GET(request) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const caller = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, clinicId: true },
+  })
+  if (!caller || !isAdmin(caller.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+
+  const { searchParams } = new URL(request.url)
+  const type     = searchParams.get('type')     ?? 'appointments'
+  const dateFrom = searchParams.get('dateFrom') ?? ''
+  const dateTo   = searchParams.get('dateTo')   ?? ''
+
+  if (type === 'appointments') {
+    const rows = await prisma.appointment.findMany({
+      where:   { clinicId, isDeleted: false, ...dateRange('scheduledAt', dateFrom, dateTo) },
+      select: {
+        scheduledAt:     true,
+        appointmentCode: true,
+        status:          true,
+        patient: { select: { firstName: true, lastName: true } },
+        dentist: { select: { user: { select: { firstName: true, lastName: true } } } },
+        service: { select: { name: true } },
+      },
+      orderBy: { scheduledAt: 'desc' },
+      take:    MAX_ROWS,
+    })
+    return NextResponse.json({ rows, type })
+  }
+
+  if (type === 'revenue') {
+    const rows = await prisma.billing.findMany({
+      where:   { clinicId, isDeleted: false, ...dateRange('createdAt', dateFrom, dateTo) },
+      select: {
+        createdAt:     true,
+        receiptNumber: true,
+        amount:        true,
+        amountPaid:    true,
+        balance:       true,
+        status:        true,
+        patient:     { select: { firstName: true, lastName: true } },
+        appointment: { select: { service: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take:    MAX_ROWS,
+    })
+    return NextResponse.json({ rows, type })
+  }
+
+  if (type === 'patients') {
+    const rows = await prisma.patient.findMany({
+      where:   { clinicId, isDeleted: false, ...dateRange('createdAt', dateFrom, dateTo) },
+      select: {
+        patientCode: true,
+        firstName:   true,
+        lastName:    true,
+        gender:      true,
+        dateOfBirth: true,
+        createdAt:   true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take:    MAX_ROWS,
+    })
+    return NextResponse.json({ rows, type })
+  }
+
+  return NextResponse.json({ error: 'Invalid report type' }, { status: 400 })
+}
