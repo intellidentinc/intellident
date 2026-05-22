@@ -44,3 +44,7 @@ next-env.d.ts
 
 # claude skill
 .claude
+
+# security related files
+docs/security-findings.md
+docs/security-testing-plan.md
