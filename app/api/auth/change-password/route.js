@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
+import { getSession, clearSession } from '@/lib/auth';
 import { sendPasswordChangedEmail } from '@/lib/email';
 import { parseJsonBody, secret } from '@/lib/validate';
 
@@ -37,7 +37,7 @@ export async function POST(request) {
     }
 
     const user = await prisma.user.findUnique({ where: { id: session.userId } });
-    if (!user || user.isDeleted) {
+    if (!user || user.isDeleted || !user.isActive) {
       return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     }
 
@@ -66,6 +66,9 @@ export async function POST(request) {
     });
 
     await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName });
+
+    // Invalidate the current session so the client must re-authenticate
+    await clearSession();
 
     return NextResponse.json({ message: 'Password changed successfully.' });
   } catch (error) {

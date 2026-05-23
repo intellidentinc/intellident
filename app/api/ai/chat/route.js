@@ -5,12 +5,25 @@ import { chatWithTools } from '@/lib/gemini'
 import { buildSystemPrompt } from '@/lib/ai-prompt'
 import { getToolsForRole, buildExecutor } from '@/lib/ai-tools'
 
+async function getCaller(session) {
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, clinicId: true },
+  })
+  if (!user) return null
+  const clinicId = user.clinicId ?? session.clinicId
+  return { ...user, clinicId }
+}
+
 export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const caller = await getCaller(session)
+  if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const sessions = await prisma.chatSession.findMany({
-    where: { userId: session.userId, clinicId: session.clinicId, isDeleted: false },
+    where: { userId: session.userId, clinicId: caller.clinicId, isDeleted: false },
     orderBy: { updatedAt: 'desc' },
     take: 30,
     select: { id: true, title: true, createdAt: true, updatedAt: true },
@@ -23,6 +36,9 @@ export async function POST(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const caller = await getCaller(session)
+  if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   let body
   try {
     body = await request.json()
@@ -32,25 +48,27 @@ export async function POST(request) {
 
   const { message, sessionId } = body
   if (!message?.trim()) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+  if (message.trim().length > 2000) return NextResponse.json({ error: 'Message too long (max 2000 characters)' }, { status: 400 })
 
   // Get or create chat session
   let chatSession
   if (sessionId) {
     chatSession = await prisma.chatSession.findFirst({
-      where: { id: sessionId, userId: session.userId, clinicId: session.clinicId, isDeleted: false },
+      where: { id: sessionId, userId: session.userId, clinicId: caller.clinicId, isDeleted: false },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     })
     if (!chatSession) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
   } else {
     chatSession = await prisma.chatSession.create({
-      data: { userId: session.userId, clinicId: session.clinicId, title: message.slice(0, 80) },
+      data: { userId: session.userId, clinicId: caller.clinicId, title: message.slice(0, 80) },
       include: { messages: true },
     })
   }
 
+  const callerForPrompt = { ...session, role: caller.role, clinicId: caller.clinicId }
   const [systemPrompt, tools] = await Promise.all([
-    buildSystemPrompt(session),
-    Promise.resolve(getToolsForRole(session.role)),
+    buildSystemPrompt(callerForPrompt),
+    Promise.resolve(getToolsForRole(caller.role)),
   ])
 
   let aiText
@@ -60,7 +78,7 @@ export async function POST(request) {
       chatSession.messages,
       message.trim(),
       tools,
-      buildExecutor(session),
+      buildExecutor({ ...session, clinicId: caller.clinicId }),
     )
     // Strip any leaked tool-call narration Gemini occasionally adds
     aiText = aiText
@@ -90,7 +108,7 @@ export async function POST(request) {
   await prisma.auditLog.create({
     data: {
       userId: session.userId,
-      clinicId: session.clinicId,
+      clinicId: caller.clinicId,
       action: 'AI_INTERACTION',
       entity: 'ChatSession',
       entityId: chatSession.id,

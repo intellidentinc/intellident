@@ -44,8 +44,8 @@ export async function GET(request) {
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
-  const page      = parseInt(searchParams.get('page') ?? '0', 10)
-  const pageSize  = parseInt(searchParams.get('pageSize') ?? '10', 10)
+  const page      = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10))
+  const pageSize  = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '10', 10)))
   const sortField = searchParams.get('sortField') ?? 'scheduledAt'
   const sortOrder = searchParams.get('sortOrder') ?? 'desc'
   const status    = searchParams.get('status')

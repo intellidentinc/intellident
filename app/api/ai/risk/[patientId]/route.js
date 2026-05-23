@@ -8,11 +8,16 @@ export async function GET(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Staff only (role 1–3)
-  if (session.role > 3) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const caller = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true, clinicId: true },
+  })
+
+  // Staff only (role 1–3); role comes from DB, not the cookie
+  if (!caller || caller.role > 3) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { patientId } = await params
-  const clinicId = session.clinicId
+  const clinicId = caller.clinicId
 
   // Verify patient belongs to this clinic
   const patient = await prisma.patient.findFirst({
