@@ -60,6 +60,9 @@ export async function GET(request) {
           firstName: pending.firstName,
           middleInitial: pending.middleInitial || null,
           lastName: pending.lastName,
+          phone: pending.phone || null,
+          address: pending.address || null,
+          dateOfBirth: pending.dateOfBirth || null,
           wrappedKey: pending.wrappedKey,
           keySalt: pending.keySalt,
           clinicId: pending.clinicId || null,
@@ -73,6 +76,9 @@ export async function GET(request) {
             clinicId: newUser.clinicId,
             firstName: newUser.firstName || '',
             lastName: newUser.lastName || '',
+            phone: pending.phone || null,
+            dateOfBirth: pending.dateOfBirth || null,
+            address: pending.address || null,
           },
         });
       }

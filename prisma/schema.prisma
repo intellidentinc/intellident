@@ -177,6 +177,9 @@ model EmailVerification {
   firstName     String?
   middleInitial String?
   lastName      String?
+  phone      String?
+  address    String?
+  dateOfBirth DateTime?
   password   String
   wrappedKey String
   keySalt    String

@@ -46,6 +46,9 @@ export async function POST(request) {
     const firstName = str(body.firstName, 100) ?? null;
     const middleInitial = str(body.middleInitial, 5) ?? null;
     const lastName = str(body.lastName, 100) ?? null;
+    const phone = str(body.phone, 20) ?? null;
+    const address = body.address && typeof body.address === 'object' ? JSON.stringify(body.address) : null;
+    const dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
     const wrappedKey = secret(body.wrappedKey, 128);
     const keySalt = secret(body.keySalt, 64);
     const clinicId = str(body.clinicId, 50) ?? null;
@@ -55,6 +58,13 @@ export async function POST(request) {
         { error: 'Email, password, and clinic are required' },
         { status: 400 }
       );
+    }
+
+    if (!phone) {
+      return NextResponse.json({ error: 'Mobile number is required' }, { status: 400 });
+    }
+    if (!/^\+63\d{10}$/.test(phone)) {
+      return NextResponse.json({ error: 'Mobile must be +63XXXXXXXXXX (10 digits after +63)' }, { status: 400 });
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -94,6 +104,9 @@ export async function POST(request) {
         firstName: firstName || null,
         middleInitial: middleInitial || null,
         lastName: lastName || null,
+        phone: phone || null,
+        address: address || null,
+        dateOfBirth: dateOfBirth || null,
         password: hashedPassword,
         wrappedKey,
         keySalt,
