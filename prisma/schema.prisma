@@ -93,6 +93,7 @@ model Clinic {
   email     String?
   reservationFeeAmount Float   @default(0)
   paymongoEnabled      Boolean @default(false)
+  isEnabled Boolean   @default(true)
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

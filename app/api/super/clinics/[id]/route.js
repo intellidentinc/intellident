@@ -41,7 +41,7 @@ export async function PATCH(request, { params }) {
       address: address && typeof address === 'object' ? JSON.stringify(address) : null,
       phone: phone || null,
     },
-    select: { id: true, name: true, code: true, address: true, logoUrl: true, email: true, phone: true },
+    select: { id: true, name: true, code: true, address: true, logoUrl: true, email: true, phone: true, isEnabled: true },
   })
 
   return NextResponse.json(clinic)

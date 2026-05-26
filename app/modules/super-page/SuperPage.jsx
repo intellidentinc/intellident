@@ -10,7 +10,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Divider from '@mui/material/Divider'
 import { DeleteOutlined } from '@mui/icons-material'
-import { Stethoscope, MapPin, Mail, Phone, LogIn, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Stethoscope, MapPin, Mail, Phone, LogIn, Plus, Pencil, Trash2, Power } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
@@ -36,6 +36,10 @@ export default function SuperPage({ clinics: initialClinics }) {
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  // Toggle dialog
+  const [toggleTarget, setToggleTarget] = useState(null)
+  const [toggleLoading, setToggleLoading] = useState(false)
 
   async function handleEnter(clinicId) {
     setEntering(clinicId)
@@ -129,6 +133,35 @@ export default function SuperPage({ clinics: initialClinics }) {
     setDeleteTarget(null)
   }
 
+  function openToggle(clinic) {
+    setToggleTarget(clinic)
+  }
+
+  function closeToggle() {
+    setToggleTarget(null)
+  }
+
+  async function handleToggle() {
+    if (!toggleTarget) return
+    setToggleLoading(true)
+    try {
+      const res = await fetch(`/api/super/clinics/${toggleTarget.id}/toggle`, { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json()
+        showToast(data.error || 'Failed to update clinic', 'error')
+        return
+      }
+      const data = await res.json()
+      setClinics((prev) => prev.map((c) => (c.id === toggleTarget.id ? data : c)))
+      showToast(data.isEnabled ? 'Clinic enabled' : 'Clinic disabled', 'success')
+      setToggleTarget(null)
+    } catch {
+      showToast('Something went wrong', 'error')
+    } finally {
+      setToggleLoading(false)
+    }
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return
     setDeleteLoading(true)
@@ -196,6 +229,7 @@ export default function SuperPage({ clinics: initialClinics }) {
               onEnter={() => handleEnter(clinic.id)}
               onEdit={() => openEdit(clinic)}
               onDelete={() => openDelete(clinic)}
+              onToggle={() => openToggle(clinic)}
             />
           ))}
         </Box>
@@ -313,16 +347,84 @@ export default function SuperPage({ clinics: initialClinics }) {
           </Button>
         </Box>
       </Dialog>
+
+      {/* Toggle Enable/Disable Confirmation Dialog */}
+      <Dialog
+        open={!!toggleTarget}
+        onClose={closeToggle}
+        maxWidth='xs'
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(0,0,0,0.10)' } } }}
+      >
+        <Box sx={{ px: 3, pt: 3, pb: 2, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+          <Box
+            sx={{
+              width: 36, height: 36, borderRadius: 2,
+              bgcolor: toggleTarget?.isEnabled ? '#fef9c3' : '#dcfce7',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, mt: 0.25,
+            }}
+          >
+            <Power size={18} color={toggleTarget?.isEnabled ? '#854d0e' : '#15803d'} />
+          </Box>
+          <Box>
+            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+              {toggleTarget?.isEnabled ? 'Disable Clinic' : 'Enable Clinic'}
+            </Typography>
+            <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
+              {toggleTarget?.isEnabled
+                ? 'Users of this clinic will be blocked from signing in.'
+                : 'Users of this clinic will be able to sign in again.'}
+            </Typography>
+          </Box>
+        </Box>
+
+        <Divider />
+
+        <Box sx={{ px: 3, py: 2.5 }}>
+          <Typography variant='body2' color='text.secondary' lineHeight={1.7}>
+            {toggleTarget?.isEnabled ? 'Disable' : 'Enable'}{' '}
+            <Typography component='span' variant='body2' fontWeight={600} color='text.primary'>
+              {toggleTarget?.name}
+            </Typography>
+            {toggleTarget?.isEnabled
+              ? '? Clinic staff and patients will lose access until re-enabled.'
+              : '? Clinic staff and patients will regain access.'}
+          </Typography>
+        </Box>
+
+        <Divider />
+
+        <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          <Button variant='outlined' onClick={closeToggle} disabled={toggleLoading}>
+            Cancel
+          </Button>
+          <Button
+            variant='contained'
+            loading={toggleLoading}
+            onClick={handleToggle}
+            sx={toggleTarget?.isEnabled
+              ? { bgcolor: '#d97706', '&:hover': { bgcolor: '#b45309' } }
+              : { bgcolor: '#16a34a', '&:hover': { bgcolor: '#15803d' } }
+            }
+          >
+            {toggleTarget?.isEnabled ? 'Disable' : 'Enable'}
+          </Button>
+        </Box>
+      </Dialog>
     </Box>
   )
 }
 
-function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete }) {
+function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
   return (
     <Box
       sx={{
-        bgcolor: '#fff', border: '1px solid', borderColor: 'divider', borderRadius: 3,
+        bgcolor: clinic.isEnabled ? '#fff' : '#f8fafc',
+        border: '1px solid',
+        borderColor: clinic.isEnabled ? 'divider' : '#e2e8f0',
+        borderRadius: 3,
         p: 3, display: 'flex', flexDirection: 'column', gap: 1.5,
+        opacity: clinic.isEnabled ? 1 : 0.75,
         transition: 'box-shadow 0.15s', '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.07)' },
       }}
     >
@@ -330,25 +432,32 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete }) {
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           {clinic.logoUrl ? (
-            <img src={clinic.logoUrl} alt='logo' style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />
+            <img src={clinic.logoUrl} alt='logo' style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', filter: clinic.isEnabled ? 'none' : 'grayscale(60%)' }} />
           ) : (
-            <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Stethoscope size={20} color='#2563eb' />
+            <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: clinic.isEnabled ? '#dbeafe' : '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Stethoscope size={20} color={clinic.isEnabled ? '#2563eb' : '#94a3b8'} />
             </Box>
           )}
           <Box>
             <Typography variant='subtitle2' fontWeight={700} color='text.primary' lineHeight={1.3}>
               {clinic.name}
             </Typography>
-            {clinic.code && (
-              <Typography variant='caption' sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', px: 1, py: 0.25, borderRadius: 1, fontWeight: 600, fontSize: '0.68rem' }}>
-                {clinic.code}
-              </Typography>
-            )}
+            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.25 }}>
+              {clinic.code && (
+                <Typography variant='caption' sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', px: 1, py: 0.25, borderRadius: 1, fontWeight: 600, fontSize: '0.68rem' }}>
+                  {clinic.code}
+                </Typography>
+              )}
+              {!clinic.isEnabled && (
+                <Typography variant='caption' sx={{ bgcolor: '#fee2e2', color: '#b91c1c', px: 1, py: 0.25, borderRadius: 1, fontWeight: 600, fontSize: '0.68rem' }}>
+                  Disabled
+                </Typography>
+              )}
+            </Box>
           </Box>
         </Box>
 
-        {/* Edit / Delete icon buttons */}
+        {/* Edit / Toggle / Delete icon buttons */}
         <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
           <Box
             component='button'
@@ -360,6 +469,18 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete }) {
             }}
           >
             <Pencil size={15} />
+          </Box>
+          <Box
+            component='button'
+            onClick={onToggle}
+            title={clinic.isEnabled ? 'Disable clinic' : 'Enable clinic'}
+            sx={{
+              border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5,
+              color: '#64748b', display: 'flex', alignItems: 'center',
+              '&:hover': { bgcolor: clinic.isEnabled ? '#fef9c3' : '#dcfce7', color: clinic.isEnabled ? '#854d0e' : '#15803d' },
+            }}
+          >
+            <Power size={15} />
           </Box>
           <Box
             component='button'

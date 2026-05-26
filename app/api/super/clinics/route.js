@@ -50,7 +50,7 @@ export async function POST(request) {
       phone: phone || null,
       code,
     },
-    select: { id: true, name: true, code: true, address: true, logoUrl: true, email: true, phone: true },
+    select: { id: true, name: true, code: true, address: true, logoUrl: true, email: true, phone: true, isEnabled: true },
   })
 
   return NextResponse.json(clinic, { status: 201 })

@@ -73,6 +73,16 @@ export async function POST(request) {
       );
     }
 
+    if (user.clinicId) {
+      const clinic = await prisma.clinic.findUnique({ where: { id: user.clinicId }, select: { isEnabled: true } });
+      if (clinic && !clinic.isEnabled) {
+        return NextResponse.json(
+          { error: 'This clinic has been disabled. Please contact support.' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check if account is currently locked
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       const remainingMinutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
