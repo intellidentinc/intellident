@@ -82,12 +82,11 @@ export async function POST(request) {
       );
     }
 
-    // Check if a verified account already exists — blind response to prevent email enumeration
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
-        { message: 'If this email is not already registered, a verification link will be sent.' },
-        { status: 200 }
+        { error: 'This email is already registered. Please sign in instead.' },
+        { status: 409 }
       );
     }
 

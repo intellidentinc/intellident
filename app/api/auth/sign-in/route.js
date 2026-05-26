@@ -144,6 +144,13 @@ export async function POST(request) {
     // );
     // ------- MFA BLOCK END -------
 
+    if (!user.wrappedKey || !user.keySalt) {
+      return NextResponse.json(
+        { error: 'Account setup is incomplete. Please contact your administrator.' },
+        { status: 500 }
+      );
+    }
+
     await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe);
 
     logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });

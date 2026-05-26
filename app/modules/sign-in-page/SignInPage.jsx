@@ -92,6 +92,9 @@ export default function SignInPage() {
       showToast('Signed in successfully!', 'success');
       router.push(data.clinicId ? `/${data.clinicId}/dashboard` : '/super');
     } catch (err) {
+      // Clear any session the server may have already set so refresh doesn't leave the user
+      // in a broken logged-in state without a master key in memory.
+      fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => {});
       showToast('Failed to sign in. Please try again.', 'error');
       setLoading(false);
     }
