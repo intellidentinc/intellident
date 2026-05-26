@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
+import { sendStaffWelcomeEmail } from '@/lib/email'
 
 export async function GET(request) {
   const session = await getSession()
@@ -129,6 +130,13 @@ export async function POST(request) {
 
     return user
   })
+
+  sendStaffWelcomeEmail({
+    to: newUser.email,
+    firstName: newUser.firstName,
+    role: role === ROLES.DENTIST ? 'Dentist' : 'Receptionist',
+    tempPassword: DEFAULT_PASSWORD,
+  }).catch(() => {})
 
   logAudit({ userId: session.userId, clinicId: clinicId, action: 'CREATE', entity: 'User', entityId: newUser.id, ipAddress: ip, userAgent, metadata: { role, email: newUser.email } })
 
