@@ -26,7 +26,7 @@ async function generateKeyMaterial(password) {
   );
 
   const kek = await globalThis.crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-KW', length: 256 },
     false,
