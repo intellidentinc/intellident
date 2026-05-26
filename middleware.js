@@ -1,9 +1,25 @@
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 const REMEMBER_ME_MAX_AGE = 60 * 60 * 24 * 3; // 3 days
 const DEFAULT_MAX_AGE     = 60 * 10;           // 10 minutes
 
-export function middleware(request) {
+// Public API paths that never require a clinic check
+const PUBLIC_API_PREFIXES = [
+  '/api/auth/',
+  '/api/clinics',
+  '/api/super',
+  '/api/webhooks',
+  '/api/cron',
+];
+
+function isPublicApi(pathname) {
+  return PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+export async function middleware(request) {
   const userCookie = request.cookies.get('user');
   const { pathname } = request.nextUrl;
 
@@ -27,22 +43,42 @@ export function middleware(request) {
     return NextResponse.redirect(new URL('/sign-in', request.url));
   }
 
-  // Sliding window: refresh cookie TTL on every authenticated non-signout request
   if (userCookie && !isSignOut) {
+    let session;
     try {
-      const session = JSON.parse(userCookie.value);
-      const maxAge  = session.rememberMe ? REMEMBER_ME_MAX_AGE : DEFAULT_MAX_AGE;
-      const response = NextResponse.next();
-      response.cookies.set('user', userCookie.value, {
-        httpOnly: true,
-        secure:   process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge,
-      });
-      return response;
+      session = JSON.parse(userCookie.value);
     } catch {
       return NextResponse.next();
     }
+
+    // Block requests for sessions tied to a disabled clinic
+    if (session.clinicId && !session.superAdmin && !isPublicApi(pathname)) {
+      try {
+        const clinic = await prisma.clinic.findUnique({
+          where: { id: session.clinicId },
+          select: { isEnabled: true },
+        });
+        if (clinic && !clinic.isEnabled) {
+          if (pathname.startsWith('/api/')) {
+            return NextResponse.json({ error: 'Clinic is disabled' }, { status: 403 });
+          }
+          return NextResponse.redirect(new URL('/sign-in', request.url));
+        }
+      } catch {
+        // DB error: fail open (let page-level guards handle it)
+      }
+    }
+
+    // Sliding window: refresh cookie TTL on every authenticated non-signout request
+    const maxAge  = session.rememberMe ? REMEMBER_ME_MAX_AGE : DEFAULT_MAX_AGE;
+    const response = NextResponse.next();
+    response.cookies.set('user', userCookie.value, {
+      httpOnly: true,
+      secure:   process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge,
+    });
+    return response;
   }
 
   return NextResponse.next();
@@ -50,7 +86,8 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
-    '/:clinicId/dashboard/:path*',
+    // Clinic-scoped pages (exclude known non-clinic top-level segments)
+    '/((?!api|super|sign-in|sign-up|forgot-password|reset-password|change-password|verify-otp|_next|favicon)[^/]+)/:path*',
     '/sign-in',
     '/sign-up',
     '/api/:path*',

@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
-async function requireSuperAdmin() {
+async function requireSuperAdmin(request) {
   const session = await getSession()
   if (!session) return null
   const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } })
@@ -17,13 +18,27 @@ export async function POST(request, { params }) {
 
   const { id } = await params
 
-  const clinic = await prisma.clinic.findUnique({ where: { id, isDeleted: false }, select: { id: true, isEnabled: true } })
-  if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
+  const existing = await prisma.clinic.findUnique({ where: { id, isDeleted: false }, select: { id: true } })
+  if (!existing) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
 
-  const updated = await prisma.clinic.update({
+  // Atomic toggle — avoids read-then-write race condition
+  await prisma.$executeRaw`UPDATE clinics SET "isEnabled" = NOT "isEnabled" WHERE id = ${id}`
+
+  const updated = await prisma.clinic.findUnique({
     where: { id },
-    data: { isEnabled: !clinic.isEnabled },
     select: { id: true, name: true, code: true, address: true, logoUrl: true, email: true, phone: true, isEnabled: true },
+  })
+
+  const { ip, userAgent } = getRequestMeta(request)
+  logAudit({
+    userId: session.userId,
+    clinicId: id,
+    action: 'UPDATE',
+    entity: 'Clinic',
+    entityId: id,
+    ipAddress: ip,
+    userAgent,
+    metadata: { isEnabled: updated.isEnabled },
   })
 
   return NextResponse.json(updated)

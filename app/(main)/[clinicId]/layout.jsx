@@ -24,7 +24,11 @@ export default async function ClinicLayout({ children, params }) {
     prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true, logoUrl: true, isEnabled: true } }),
   ]);
 
-  if (clinic && !clinic.isEnabled && !session.superAdmin) {
+  if (!clinic) {
+    redirect('/sign-in');
+  }
+
+  if (!clinic.isEnabled && !session.superAdmin) {
     redirect('/sign-in');
   }
 

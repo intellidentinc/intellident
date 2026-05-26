@@ -73,16 +73,6 @@ export async function POST(request) {
       );
     }
 
-    if (user.clinicId) {
-      const clinic = await prisma.clinic.findUnique({ where: { id: user.clinicId }, select: { isEnabled: true } });
-      if (clinic && !clinic.isEnabled) {
-        return NextResponse.json(
-          { error: 'This clinic has been disabled. Please contact support.' },
-          { status: 403 }
-        );
-      }
-    }
-
     // Check if account is currently locked
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       const remainingMinutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
@@ -136,6 +126,17 @@ export async function POST(request) {
       where: { id: user.id },
       data: { failedLoginAttempts: 0, lastFailedAt: null, lockedUntil: null },
     });
+
+    // Check clinic is still active (checked after password validation so lockout still applies)
+    if (user.clinicId) {
+      const clinic = await prisma.clinic.findUnique({ where: { id: user.clinicId }, select: { isEnabled: true } });
+      if (!clinic || !clinic.isEnabled) {
+        return NextResponse.json(
+          { error: 'This clinic has been disabled. Please contact support.' },
+          { status: 403 }
+        );
+      }
+    }
 
     // MFA (OTP) step disabled — skipping OTP generation and proceeding directly to session creation
     // ------- MFA BLOCK START (commented out) -------

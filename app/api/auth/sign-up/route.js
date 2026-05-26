@@ -82,6 +82,11 @@ export async function POST(request) {
       );
     }
 
+    const clinic = await prisma.clinic.findUnique({ where: { id: clinicId, isDeleted: false }, select: { isEnabled: true } });
+    if (!clinic || !clinic.isEnabled) {
+      return NextResponse.json({ error: 'Invalid clinic' }, { status: 400 });
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(

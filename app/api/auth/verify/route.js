@@ -51,6 +51,14 @@ export async function GET(request) {
       return NextResponse.redirect(`${appUrl}/sign-in?verified=already`);
     }
 
+    // Guard: clinic may have been disabled between sign-up and email-link click
+    if (pending.clinicId) {
+      const clinic = await prisma.clinic.findUnique({ where: { id: pending.clinicId, isDeleted: false }, select: { isEnabled: true } });
+      if (!clinic || !clinic.isEnabled) {
+        return NextResponse.redirect(`${appUrl}/sign-in?verified=invalid`);
+      }
+    }
+
     // Create the account now
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
