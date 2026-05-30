@@ -410,13 +410,16 @@ export default function SignUpPage() {
                         />
                       ))}
                     </Box>
+                    <Typography variant="caption" fontWeight={600} sx={{ color: '#94a3b8', mb: 0.25, display: 'block' }}>
+                      At least:
+                    </Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 16px' }}>
                       {[
-                        { label: 'At least 8 characters', met: password.length >= 8 },
-                        { label: 'One uppercase letter', met: /[A-Z]/.test(password) },
-                        { label: 'One lowercase letter', met: /[a-z]/.test(password) },
-                        { label: 'One number', met: /[0-9]/.test(password) },
-                        { label: 'One special character', met: /[^A-Za-z0-9]/.test(password) },
+                        { label: '8 characters', met: password.length >= 8 },
+                        { label: '1 uppercase letter', met: /[A-Z]/.test(password) },
+                        { label: '1 lowercase letter', met: /[a-z]/.test(password) },
+                        { label: '1 number', met: /[0-9]/.test(password) },
+                        { label: '1 special character', met: /[^A-Za-z0-9]/.test(password) },
                       ].map(({ label, met }) => (
                         <Typography
                           key={label}

@@ -152,13 +152,16 @@ function ResetPasswordForm() {
                       <Box key={n} sx={{ flex: 1, height: 4, borderRadius: 2, bgcolor: n <= passwordStrength.score ? passwordStrength.color : '#e2e8f0', transition: 'background-color 0.2s' }} />
                     ))}
                   </Box>
+                  <Typography variant="caption" fontWeight={600} sx={{ color: '#94a3b8', mb: 0.25, display: 'block' }}>
+                    At least:
+                  </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                     {[
-                      { label: 'At least 8 characters',  met: newPassword.length >= 8 },
-                      { label: 'One uppercase letter',   met: /[A-Z]/.test(newPassword) },
-                      { label: 'One lowercase letter',   met: /[a-z]/.test(newPassword) },
-                      { label: 'One number',             met: /[0-9]/.test(newPassword) },
-                      { label: 'One special character',  met: /[^A-Za-z0-9]/.test(newPassword) },
+                      { label: '8 characters',        met: newPassword.length >= 8 },
+                      { label: '1 uppercase letter',  met: /[A-Z]/.test(newPassword) },
+                      { label: '1 lowercase letter',  met: /[a-z]/.test(newPassword) },
+                      { label: '1 number',            met: /[0-9]/.test(newPassword) },
+                      { label: '1 special character', met: /[^A-Za-z0-9]/.test(newPassword) },
                     ].map(({ label, met }) => (
                       <Typography key={label} variant="caption" sx={{ color: met ? '#22c55e' : '#94a3b8', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         {met ? '✓' : '·'} {label}
