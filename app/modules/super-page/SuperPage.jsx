@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import Tabs from '@mui/material/Tabs'
+import Tab from '@mui/material/Tab'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -16,11 +18,13 @@ import Input from '@/components/commons/Input'
 import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
 import { useToast } from '@/app/providers/ToastProvider'
 import SignOutButton from '@/app/modules/dashboard-page/SignOutButton'
+import ApplicationsTab from './ApplicationsTab'
 
 export default function SuperPage({ clinics: initialClinics }) {
   const router = useRouter()
   const { showToast } = useToast()
 
+  const [mainTab, setMainTab] = useState('clinics')
   const [clinics, setClinics] = useState(initialClinics)
   const [entering, setEntering] = useState(null)
 
@@ -206,33 +210,63 @@ export default function SuperPage({ clinics: initialClinics }) {
 
       {/* Content */}
       <Box sx={{ px: { xs: 3, sm: 5 }, py: 5, maxWidth: 1100, mx: 'auto' }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4 }}>
-          <Box>
-            <Typography variant='h5' fontWeight={700} color='text.primary' mb={0.5}>
-              Clinics
-            </Typography>
-            <Typography variant='body2' color='text.secondary'>
-              Select a clinic to enter as Admin.
-            </Typography>
-          </Box>
-          <Button variant='contained' startIcon={<Plus size={16} />} onClick={openCreate}>
-            Create Clinic
-          </Button>
-        </Box>
+        {/* Main tab switcher */}
+        <Tabs
+          value={mainTab}
+          onChange={(_, v) => setMainTab(v)}
+          sx={{ mb: 4, borderBottom: '1px solid', borderColor: 'divider' }}
+        >
+          <Tab label="Clinics" value="clinics" />
+          <Tab label="Applications" value="applications" />
+        </Tabs>
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
-          {clinics.map((clinic) => (
-            <ClinicCard
-              key={clinic.id}
-              clinic={clinic}
-              loading={entering === clinic.id}
-              onEnter={() => handleEnter(clinic.id)}
-              onEdit={() => openEdit(clinic)}
-              onDelete={() => openDelete(clinic)}
-              onToggle={() => openToggle(clinic)}
-            />
-          ))}
-        </Box>
+        {/* Clinics tab */}
+        {mainTab === 'clinics' && (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4 }}>
+              <Box>
+                <Typography variant='h5' fontWeight={700} color='text.primary' mb={0.5}>
+                  Clinics
+                </Typography>
+                <Typography variant='body2' color='text.secondary'>
+                  Select a clinic to enter as Admin.
+                </Typography>
+              </Box>
+              <Button variant='contained' startIcon={<Plus size={16} />} onClick={openCreate}>
+                Create Clinic
+              </Button>
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
+              {clinics.map((clinic) => (
+                <ClinicCard
+                  key={clinic.id}
+                  clinic={clinic}
+                  loading={entering === clinic.id}
+                  onEnter={() => handleEnter(clinic.id)}
+                  onEdit={() => openEdit(clinic)}
+                  onDelete={() => openDelete(clinic)}
+                  onToggle={() => openToggle(clinic)}
+                />
+              ))}
+            </Box>
+          </>
+        )}
+
+        {/* Applications tab */}
+        {mainTab === 'applications' && (
+          <>
+            <Box sx={{ mb: 4 }}>
+              <Typography variant='h5' fontWeight={700} color='text.primary' mb={0.5}>
+                Clinic Applications
+              </Typography>
+              <Typography variant='body2' color='text.secondary'>
+                Review and approve or reject pending clinic registration requests.
+              </Typography>
+            </Box>
+            <ApplicationsTab />
+          </>
+        )}
       </Box>
 
       {/* Create / Edit Modal */}

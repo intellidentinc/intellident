@@ -184,10 +184,16 @@ export default function SignInPage() {
           </Box>
         </Paper>
 
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
+        <Box sx={{ mt: 3, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Link href="/" style={{ color: '#2563eb', fontWeight: 600, fontSize: 14 }}>
             ← Back to Home
           </Link>
+          <Typography variant="caption" color="text.secondary">
+            Need help?{' '}
+            <a href="mailto:intellident.inc@gmail.com" style={{ color: '#2563eb', fontWeight: 600 }}>
+              Contact Support
+            </a>
+          </Typography>
         </Box>
       </Box>
     </Box>

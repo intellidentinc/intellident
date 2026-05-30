@@ -562,6 +562,7 @@ const { data: { publicUrl } } = supabase.storage.from('clinic-logos').getPublicU
 | `GMAIL_FROM_NAME` | Sender display name |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
+| `NEXT_PUBLIC_APP_URL` | Public base URL of the app (e.g. `https://intellident-ai.org`) — used in verification, password-reset, and clinic approval emails |
 | `CRON_SECRET` | Bearer token protecting `/api/cron/reminders`; must match Vercel env var |
 | `LOCKOUT_MAX_ATTEMPTS` | (optional) default 5 |
 | `LOCKOUT_WINDOW_MINUTES` | (optional) default 5 |

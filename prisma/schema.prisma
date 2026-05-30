@@ -80,6 +80,12 @@ enum ConsentStatus {
   REVOKED
 }
 
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model Clinic {
@@ -110,6 +116,7 @@ model Clinic {
   closures         ClinicClosure[]
   schedulePresets  SchedulePreset[]
   chatSessions     ChatSession[]
+  applications     ClinicApplication[]
 
   @@map("clinics")
 }
@@ -191,6 +198,30 @@ model EmailVerification {
   @@index([token])
   @@index([email])
   @@map("email_verifications")
+}
+
+model ClinicApplication {
+  id                 String            @id @default(cuid())
+  clinicName         String
+  businessAddress    String
+  businessPhone      String
+  businessEmail      String
+  contactPersonName  String
+  contactPersonPhone String
+  contactPersonEmail String?
+  birDocuments       String[]          @default([])
+  applicantIds       String[]          @default([])
+  message            String?
+  status             ApplicationStatus @default(PENDING)
+  notes              String?
+  clinicId           String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  clinic Clinic? @relation(fields: [clinicId], references: [id])
+
+  @@index([status])
+  @@map("clinic_applications")
 }
 
 model User {

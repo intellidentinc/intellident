@@ -21,6 +21,7 @@ import {
   wrapMasterKey,
   toBase64,
 } from '@/lib/crypto';
+import ClinicApplicationForm from './ClinicApplicationForm';
 
 function getPasswordStrength(password) {
   if (!password) return { score: 0, label: '', color: '' };
@@ -54,6 +55,7 @@ function SectionLabel({ children }) {
 }
 
 export default function SignUpPage() {
+  const [mode, setMode] = useState('join'); // 'join' | 'apply'
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('+63');
   const [address, setAddress] = useState({ ...EMPTY_ADDRESS });
@@ -201,14 +203,64 @@ export default function SignUpPage() {
           {/* Card header */}
           <Box sx={{ px: { xs: 3, sm: 5 }, pt: 5, pb: 4, borderBottom: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
             <Typography variant="h4" fontWeight={700} color="primary">
-              Create Account
+              {mode === 'join' ? 'Create Account' : 'Register Your Clinic'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Fill in your details to get started
+              {mode === 'join' ? 'Fill in your details to get started' : 'Submit your clinic for review'}
             </Typography>
+
+            {/* Mode toggle */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Box sx={{ display: 'inline-flex', border: '1px solid', borderColor: 'divider', borderRadius: 999, overflow: 'hidden' }}>
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => setMode('join')}
+                  sx={{
+                    px: 2.5, py: 1, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    bgcolor: mode === 'join' ? 'primary.main' : 'transparent',
+                    color: mode === 'join' ? '#fff' : 'text.secondary',
+                    transition: 'all 0.15s',
+                    '&:hover': { bgcolor: mode === 'join' ? 'primary.dark' : 'action.hover' },
+                  }}
+                >
+                  Join a Clinic
+                </Box>
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => setMode('apply')}
+                  sx={{
+                    px: 2.5, py: 1, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    bgcolor: mode === 'apply' ? 'primary.main' : 'transparent',
+                    color: mode === 'apply' ? '#fff' : 'text.secondary',
+                    transition: 'all 0.15s',
+                    '&:hover': { bgcolor: mode === 'apply' ? 'primary.dark' : 'action.hover' },
+                  }}
+                >
+                  Register a Clinic
+                </Box>
+              </Box>
+            </Box>
           </Box>
 
-          <Box
+          {/* Clinic application form */}
+          {mode === 'apply' && (
+            <Box sx={{ px: { xs: 3, sm: 5 }, pt: 4, pb: 5 }}>
+              <ClinicApplicationForm />
+              <Box sx={{ textAlign: 'center', mt: 3 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Already have an account?{' '}
+                  <Link href="/sign-in" style={{ color: '#2563eb', fontWeight: 600 }}>
+                    Sign In
+                  </Link>
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
+          {/* User sign-up form */}
+          {mode === 'join' && <Box
             component="form"
             onSubmit={handleSubmit}
             sx={{ px: { xs: 3, sm: 5 }, pt: 4, pb: 5, display: 'flex', flexDirection: 'column', gap: 4 }}
@@ -416,13 +468,19 @@ export default function SignUpPage() {
               </Typography>
             </Box>
 
-          </Box>
+          </Box>}
         </Paper>
 
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
+        <Box sx={{ mt: 3, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Link href="/" style={{ color: '#2563eb', fontWeight: 600, fontSize: 14 }}>
             ← Back to Home
           </Link>
+          <Typography variant="caption" color="text.secondary">
+            Need help?{' '}
+            <a href="mailto:intellident.inc@gmail.com" style={{ color: '#2563eb', fontWeight: 600 }}>
+              Contact Support
+            </a>
+          </Typography>
         </Box>
 
       </Box>

@@ -27,6 +27,7 @@ import {
   Stethoscope,
   User,
   BarChart2,
+  LifeBuoy,
 } from 'lucide-react'
 import SignOutButton from './SignOutButton'
 import ExitSuperAdminButton from './ExitSuperAdminButton'
@@ -238,6 +239,14 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
             </p>
           </div>
         </div>
+
+        <a
+          href="mailto:intellident.inc@gmail.com"
+          className='flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md text-[11.5px] text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors'
+        >
+          <LifeBuoy size={13} />
+          Contact Support
+        </a>
 
         <SignOutButton />
       </SidebarFooter>
