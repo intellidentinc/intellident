@@ -4,6 +4,30 @@ import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
 import { ROLES, isAdmin } from '@/lib/roles';
 
+const LOGO_SIGNATURES = [
+  { mime: 'image/jpeg', ext: 'jpg', magic: [0xFF, 0xD8, 0xFF] },
+  { mime: 'image/png',  ext: 'png', magic: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
+]
+
+const COMPRESSED_SIGNATURES = [
+  [0x50, 0x4B, 0x03, 0x04],              // ZIP
+  [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07], // RAR
+  [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C], // 7-Zip
+  [0x1F, 0x8B],                           // GZIP
+  [0x42, 0x5A, 0x68],                     // BZIP2
+  [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00], // XZ
+]
+
+function detectLogoType(buf) {
+  for (const sig of LOGO_SIGNATURES)
+    if (sig.magic.every((b, i) => buf[i] === b)) return sig
+  return null
+}
+
+function isCompressed(buf) {
+  return COMPRESSED_SIGNATURES.some(sig => sig.every((b, i) => buf[i] === b))
+}
+
 async function getAdminForClinic(clinicId) {
   const session = await getSession();
   if (!session) return null;
@@ -29,18 +53,20 @@ export async function POST(request, { params }) {
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
-  const allowedTypes = ['image/jpeg', 'image/png'];
-  if (!allowedTypes.includes(file.type)) {
-    return NextResponse.json({ error: 'Only JPG and PNG files are allowed' }, { status: 400 });
-  }
-
   const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-  if (file.size > MAX_SIZE) {
+  if (file.size > MAX_SIZE)
     return NextResponse.json({ error: 'File must be under 5MB' }, { status: 400 });
-  }
 
-  const ext = file.type === 'image/png' ? 'png' : 'jpg';
-  const path = `${id}/${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  if (isCompressed(buffer))
+    return NextResponse.json({ error: 'Compressed files (.zip, .rar, .7z, etc.) are not allowed.' }, { status: 400 });
+
+  const detected = detectLogoType(buffer);
+  if (!detected)
+    return NextResponse.json({ error: 'Only JPG and PNG files are allowed.' }, { status: 400 });
+
+  const path = `${id}/${Date.now()}.${detected.ext}`;
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
@@ -56,12 +82,9 @@ export async function POST(request, { params }) {
     }
   }
 
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
   const { error: uploadError } = await supabase.storage
     .from('clinic-logos')
-    .upload(path, buffer, { contentType: file.type, upsert: false });
+    .upload(path, buffer, { contentType: detected.mime, upsert: false });
 
   if (uploadError) {
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });

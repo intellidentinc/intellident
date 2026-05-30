@@ -20,6 +20,19 @@ function detectType(buf) {
   return null
 }
 
+const COMPRESSED_SIGNATURES = [
+  [0x50, 0x4B, 0x03, 0x04],              // ZIP
+  [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07], // RAR
+  [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C], // 7-Zip
+  [0x1F, 0x8B],                           // GZIP
+  [0x42, 0x5A, 0x68],                     // BZIP2
+  [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00], // XZ
+]
+
+function isCompressed(buf) {
+  return COMPRESSED_SIGNATURES.some(sig => sig.every((b, i) => buf[i] === b))
+}
+
 export async function POST(request) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   const { allowed } = await checkRateLimit(`${ip}:clinic-docs`, 50, 3600)
@@ -43,7 +56,11 @@ export async function POST(request) {
     return NextResponse.json({ error: 'File must be 5 MB or smaller.' }, { status: 400 })
 
   // Read buffer first so we can inspect magic bytes before touching storage
-  const buffer   = Buffer.from(await file.arrayBuffer())
+  const buffer = Buffer.from(await file.arrayBuffer())
+
+  if (isCompressed(buffer))
+    return NextResponse.json({ error: 'Compressed files (.zip, .rar, .7z, etc.) are not allowed.' }, { status: 400 })
+
   const detected = detectType(buffer)
 
   if (!detected)

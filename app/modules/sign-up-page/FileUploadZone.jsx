@@ -10,6 +10,17 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'application/pdf']
 const ACCEPT_ATTR    = '.pdf,.jpg,.jpeg,.png'
 const MAX_SIZE       = 5 * 1024 * 1024 // 5 MB
 
+const COMPRESSED_TYPES = [
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+  'application/gzip',
+  'application/x-tar',
+  'application/x-bzip2',
+  'application/x-xz',
+]
+
 function formatSize(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -29,6 +40,9 @@ export default function FileUploadZone({ label, hint, files, onAdd, onRemove, er
   function processFiles(fileList) {
     setLocalError('')
     const incoming = Array.from(fileList)
+
+    const isCompressedFile = incoming.some(f => COMPRESSED_TYPES.includes(f.type))
+    if (isCompressedFile) { setLocalError('Compressed files (.zip, .rar, .7z, etc.) are not allowed.'); return }
 
     const badType = incoming.some(f => !ACCEPTED_TYPES.includes(f.type))
     if (badType) { setLocalError('Only PDF, JPG, and PNG files are accepted.'); return }
