@@ -5,11 +5,14 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Paper from '@mui/material/Paper'
 import Divider from '@mui/material/Divider'
+import Checkbox from '@mui/material/Checkbox'
+import FormControlLabel from '@mui/material/FormControlLabel'
 import { Check } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
 import FileUploadZone from './FileUploadZone'
+import TermsDialog from './TermsDialog'
 import { useToast } from '@/app/providers/ToastProvider'
 
 const PHONE_RE = /^\+63\d{10}$/
@@ -121,9 +124,11 @@ export default function ClinicApplicationForm() {
   const [birFiles, setBirFiles] = useState([])
   const [idFiles,  setIdFiles]  = useState([])
 
-  const [loading,   setLoading]   = useState(false)
-  const [submitted, setSubmitted] = useState(false)
-  const [errors,    setErrors]    = useState({})
+  const [loading,         setLoading]         = useState(false)
+  const [submitted,       setSubmitted]       = useState(false)
+  const [errors,          setErrors]          = useState({})
+  const [termsAccepted,   setTermsAccepted]   = useState(false)
+  const [termsDialogOpen, setTermsDialogOpen] = useState(false)
 
   function validateStep1() {
     const e = {}
@@ -145,6 +150,7 @@ export default function ClinicApplicationForm() {
     const e = {}
     if (birFiles.length === 0) e.birFiles = 'Please upload at least one BIR document'
     if (idFiles.length  === 0) e.idFiles  = 'Please upload at least one valid ID'
+    if (!termsAccepted)        e.terms    = 'You must accept the Terms of Service and Data Privacy Policy to continue.'
     return e
   }
 
@@ -410,7 +416,53 @@ export default function ClinicApplicationForm() {
             </Box>
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 2, mt: 1 }}>
+          {/* ── Terms & Data Privacy Consent ── */}
+          <Box sx={{
+            p: 2.5,
+            border: '1px solid',
+            borderColor: termsAccepted ? 'primary.main' : errors.terms ? 'error.main' : 'divider',
+            borderRadius: 2,
+            bgcolor: termsAccepted ? '#dbeafe' : errors.terms ? '#fff5f5' : 'background.paper',
+            transition: 'all 0.15s',
+          }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={termsAccepted}
+                  onChange={(e) => { setTermsAccepted(e.target.checked); if (e.target.checked) setErrors(prev => ({ ...prev, terms: undefined })) }}
+                  size="small"
+                  sx={{ color: errors.terms ? 'error.main' : 'text.secondary', '&.Mui-checked': { color: 'primary.main' }, mt: '-2px', alignSelf: 'flex-start' }}
+                />
+              }
+              label={
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  I have read and agree to the{' '}
+                  <Box
+                    component="span"
+                    onClick={(e) => { e.preventDefault(); setTermsDialogOpen(true) }}
+                    sx={{ color: 'primary.main', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Terms of Service &amp; Data Privacy Policy
+                  </Box>
+                  , including the collection and processing of clinic and personal information in
+                  accordance with the{' '}
+                  <strong>Philippine Data Privacy Act of 2012 (RA 10173)</strong>,{' '}
+                  <strong>ISO/IEC 27001</strong> security standards, and the{' '}
+                  <strong>NIST Cybersecurity Framework</strong>.
+                </Typography>
+              }
+              sx={{ alignItems: 'flex-start', mx: 0 }}
+            />
+            {errors.terms && (
+              <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, ml: 4 }}>
+                {errors.terms}
+              </Typography>
+            )}
+          </Box>
+
+          <TermsDialog open={termsDialogOpen} onClose={() => setTermsDialogOpen(false)} />
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 2 }}>
             <Button
               variant="outlined"
               onClick={() => { setStep(1); setErrors({}) }}
@@ -422,6 +474,7 @@ export default function ClinicApplicationForm() {
               variant="contained"
               loading={loading}
               onClick={handleSubmit}
+              disabled={!termsAccepted}
               sx={{ py: 1.5, fontWeight: 600 }}
             >
               Submit Application

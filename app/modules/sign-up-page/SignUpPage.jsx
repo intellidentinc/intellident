@@ -21,7 +21,10 @@ import {
   wrapMasterKey,
   toBase64,
 } from '@/lib/crypto';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import ClinicApplicationForm from './ClinicApplicationForm';
+import TermsDialog from './TermsDialog';
 
 function getPasswordStrength(password) {
   if (!password) return { score: 0, label: '', color: '' };
@@ -72,6 +75,8 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const { showToast } = useToast();
   const passwordStrength = getPasswordStrength(password);
 
@@ -111,6 +116,12 @@ export default function SignUpPage() {
 
     if (!/^\+63\d{10}$/.test(phone)) {
       showToast('Mobile must be +63 followed by 10 digits (e.g. +639123456789)', 'error');
+      setLoading(false);
+      return;
+    }
+
+    if (!termsAccepted) {
+      showToast('You must accept the Terms of Service and Data Privacy Policy to continue.', 'error');
       setLoading(false);
       return;
     }
@@ -455,7 +466,48 @@ export default function SignUpPage() {
               <AddressSelector value={address} onChange={setAddress} />
             </Box>
 
-            <Button type="submit" variant="contained" size="large" loading={loading} fullWidth>
+            {/* ── Terms & Data Privacy Consent ── */}
+            <Box sx={{
+              p: 2.5,
+              border: '1px solid',
+              borderColor: termsAccepted ? 'primary.main' : 'divider',
+              borderRadius: 2,
+              bgcolor: termsAccepted ? '#dbeafe' : 'background.paper',
+              transition: 'all 0.15s',
+            }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    size="small"
+                    sx={{ color: 'text.secondary', '&.Mui-checked': { color: 'primary.main' }, mt: '-2px', alignSelf: 'flex-start' }}
+                  />
+                }
+                label={
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    I have read and agree to the{' '}
+                    <Box
+                      component="span"
+                      onClick={(e) => { e.preventDefault(); setTermsDialogOpen(true); }}
+                      sx={{ color: 'primary.main', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Terms of Service &amp; Data Privacy Policy
+                    </Box>
+                    , including the collection and processing of my personal and health information in
+                    accordance with the{' '}
+                    <strong>Philippine Data Privacy Act of 2012 (RA 10173)</strong>,{' '}
+                    <strong>ISO/IEC 27001</strong> security standards, and the{' '}
+                    <strong>NIST Cybersecurity Framework</strong>.
+                  </Typography>
+                }
+                sx={{ alignItems: 'flex-start', mx: 0 }}
+              />
+            </Box>
+
+            <TermsDialog open={termsDialogOpen} onClose={() => setTermsDialogOpen(false)} />
+
+            <Button type="submit" variant="contained" size="large" loading={loading} fullWidth disabled={!termsAccepted}>
               Create Account
             </Button>
 
