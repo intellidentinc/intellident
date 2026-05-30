@@ -71,11 +71,13 @@ export async function POST(request) {
     Promise.resolve(getToolsForRole(caller.role)),
   ])
 
+  const MAX_HISTORY = 10
+
   let aiText
   try {
     aiText = await chatWithTools(
       systemPrompt,
-      chatSession.messages,
+      chatSession.messages.slice(-MAX_HISTORY),
       message.trim(),
       tools,
       buildExecutor({ ...session, clinicId: caller.clinicId }),
