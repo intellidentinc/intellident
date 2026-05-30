@@ -31,7 +31,9 @@ Safe to run multiple times — skips if the account already exists.
 Super admin signs in through the normal `/sign-in` page. Because their `clinicId` is `null` in the database, the sign-in redirect sends them to `/super` instead of `/{clinicId}/dashboard`.
 
 ### 2. Clinic Picker (`/super`)
-The `/super` page lists all clinics (name, code, address, contact info). Each clinic card has an **"Enter as Admin"** button.
+The `/super` page has two tabs:
+- **Clinics tab** — lists all active clinics (name, code, address, contact info); each card has an "Enter as Admin" button.
+- **Applications tab** — lists all `ClinicApplication` records; Super Admin can approve or reject pending applications. Approving creates a new `Clinic` record in a single transaction and emails the applicant a sign-up link. Rejecting emails the applicant with the optional notes as a reason.
 
 - Route: `app/(main)/super/`
 - Layout: `app/(main)/super/layout.jsx` — guards the route; redirects to `/sign-in` if the session role is not `0`
@@ -90,12 +92,49 @@ The API:
 | `prisma/seed-super.js` | Creates the super admin user |
 | `app/(main)/super/layout.jsx` | Route guard — role 0 only |
 | `app/(main)/super/page.jsx` | Server component — fetches all clinics |
-| `app/modules/super-page/SuperPage.jsx` | Clinic picker UI |
+| `app/modules/super-page/SuperPage.jsx` | Two-tab portal: Clinics + Applications |
+| `app/modules/super-page/ApplicationsTab.jsx` | Clinic application list; approve/reject UI |
 | `app/api/super/enter/route.js` | Sets session clinicId + superAdmin flag |
 | `app/api/super/exit/route.js` | Resets session to super state |
+| `app/api/super/clinic-applications/route.js` | `GET` — list all applications (filterable by status) |
+| `app/api/super/clinic-applications/[id]/route.js` | `PATCH` — approve or reject an application |
+| `app/api/clinic-applications/route.js` | `POST` — public submission (rate-limited: 5/hr per IP) |
+| `app/api/clinic-applications/documents/route.js` | `POST` — Supabase file upload for BIR docs + applicant IDs |
 | `app/modules/dashboard-page/ExitSuperAdminButton.jsx` | "Back to Super Admin" button |
 | `lib/roles.js` | `ROLES.SUPERADMIN = 0` |
 | `lib/auth.js` | `setSession(..., superAdmin)` — stores flag in cookie |
+
+---
+
+## Clinic Application Flow
+
+Clinics that are not yet in the system can request onboarding via the public sign-up page ("Register a Clinic" tab).
+
+### Submission (`POST /api/clinic-applications`)
+- Public endpoint — no session required
+- Rate-limited: 5 submissions per IP per hour
+- Required fields: clinic name, business address, business phone (+63 format), business email, contact person name/phone/email, ≥1 BIR document URL, ≥1 applicant ID URL
+- Documents must be uploaded first via `POST /api/clinic-applications/documents` (rate-limited: 50/hr per IP); only Supabase `clinic-documents` bucket URLs are accepted — arbitrary external URLs are rejected
+- File upload enforces: max 5 MB, JPEG/PNG/PDF only (magic-byte validated), no compressed archives (ZIP/RAR/7-Zip/GZIP/BZIP2/XZ)
+- On success: sends confirmation email to business email via `sendClinicApplicationReceived`
+- Applicant must also accept the Terms of Service before submitting
+
+### Review (`GET /api/super/clinic-applications`)
+Super admin fetches all applications, optionally filtered by `?status=PENDING|APPROVED|REJECTED`.
+
+### Decision (`PATCH /api/super/clinic-applications/[id]`)
+Body: `{ "action": "APPROVE" | "REJECT", "notes": "..." }` (notes only required for REJECT)
+
+**APPROVE:**
+1. Generates a clinic code from the clinic name initials (up to 5 chars)
+2. Creates a `Clinic` record and links it to the `ClinicApplication` in a single DB transaction
+3. Emails applicant with a sign-up link via `sendClinicApplicationApproved`
+
+**REJECT:**
+1. Updates status to `REJECTED`; stores optional notes as rejection reason
+2. Emails applicant with reason via `sendClinicApplicationRejected`
+
+Only PENDING applications can be processed — attempting to re-process returns 409.
 
 ---
 

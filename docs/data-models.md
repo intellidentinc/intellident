@@ -12,6 +12,7 @@ All major models (`User`, `Patient`, `Dentist`, `Receptionist`, `Clinic`, `Servi
 - `Clinic` — multi-tenant root. Holds `name`, `code` (e.g. `MLC`, `KH`, `CAB`), `address`, `email`, `phone`, `landline`, `logoUrl`
 - `ClinicSchedule` — one per clinic; `workingDays String[]` (e.g. `["MON","TUE"]`), `openTime`, `closeTime` (HH:mm strings). Upserted via PATCH.
 - `ClinicClosure` — many per clinic; `date DateTime`, `reason String?` for holidays/maintenance
+- `ClinicApplication` — onboarding request submitted via the public sign-up form; fields: `clinicName`, `businessAddress`, `businessPhone`, `businessEmail`, `contactPersonName`, `contactPersonPhone`, `contactPersonEmail?`, `birDocuments String[]` (Supabase Storage URLs, max 5), `applicantIds String[]` (Supabase Storage URLs, max 5), `message?`, `status` (ApplicationStatus, default `PENDING`), `notes?` (rejection reason), `clinicId?` (set when approved — links to the created `Clinic`). On APPROVE: a `Clinic` record is created atomically in a transaction and the applicant is emailed a sign-up link. On REJECT: the applicant is emailed with the optional rejection notes.
 
 ## User Profiles
 - `Receptionist` — profile extension for `RECEPTIONIST` users (linked via `userId`)
@@ -39,14 +40,15 @@ All major models (`User`, `Patient`, `Dentist`, `Receptionist`, `Clinic`, `Servi
 ## Enums
 
 ```
-UserRole:         PATIENT | RECEPTIONIST | DENTIST | ADMIN
-Gender:           MALE | FEMALE | OTHER | PREFER_NOT_TO_SAY
+UserRole:          PATIENT | RECEPTIONIST | DENTIST | ADMIN
+Gender:            MALE | FEMALE | OTHER | PREFER_NOT_TO_SAY
 AppointmentStatus: PENDING | CONFIRMED | RESCHEDULED | CANCELLED | COMPLETED | NO_SHOW
-RecordStatus:     ACTIVE | ARCHIVED
-PaymentStatus:    UNPAID | PARTIAL | PAID | REFUNDED
-ConsentStatus:    PENDING | GIVEN | REVOKED
+RecordStatus:      ACTIVE | ARCHIVED
+PaymentStatus:     UNPAID | PARTIAL | PAID | REFUNDED
+ConsentStatus:     PENDING | GIVEN | REVOKED
+ApplicationStatus: PENDING | APPROVED | REJECTED  (ClinicApplication only)
 NotificationStatus: PENDING | SENT | FAILED  (legacy Notification model only)
-AuditAction:      LOGIN | LOGOUT | CREATE | UPDATE | DELETE | VIEW | EXPORT | VERIFY
+AuditAction:       LOGIN | LOGOUT | CREATE | UPDATE | DELETE | VIEW | EXPORT | VERIFY
 ```
 
 ## NotificationType Enum

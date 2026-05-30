@@ -53,6 +53,8 @@ IP-based rate limits are enforced on all auth endpoints before any database work
 | `POST /api/auth/sign-up` | 10 requests | 60 min | `ip:sign-up` |
 | `POST /api/auth/forgot-password` | 5 requests | 60 min | `ip:forgot-password` |
 | `POST /api/auth/verify-otp` | 15 requests | 15 min | `ip:verify-otp` |
+| `POST /api/clinic-applications` | 5 requests | 60 min | `ip:clinic-apply` |
+| `POST /api/clinic-applications/documents` | 50 requests | 60 min | `ip:clinic-docs` |
 
 On limit exceeded: `429 Too Many Requests`. Rate limit checks complement the per-user account lockout — one protects the account, the other protects the infrastructure.
 
@@ -158,6 +160,23 @@ Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUn
 - **Lock duration:** 15 minutes
 - Configurable via env vars: `LOCKOUT_MAX_ATTEMPTS`, `LOCKOUT_WINDOW_MINUTES`, `LOCKOUT_DURATION_MINUTES`
 - Resets on successful login
+
+## File Upload Security
+
+Applied to `POST /api/clinic-applications/documents` and `POST /api/clinics/[id]/logo`:
+
+- **Magic-byte validation** — file type is determined from the first bytes of the buffer, not the client-provided `Content-Type` header. Only JPEG (`FF D8 FF`), PNG (`89 50 4E 47 0D 0A 1A 0A`), and PDF (`25 50 44 46`) are accepted.
+- **Compressed archive rejection** — the buffer is scanned for known archive signatures before type detection. ZIP, RAR, 7-Zip, GZIP, BZIP2, and XZ magic bytes all result in a `400` rejection with a descriptive error message. This prevents archive-based payload smuggling.
+- **Size limit** — 5 MB maximum per file.
+- **Extension + content-type from detection** — the `ext` and `contentType` used for Supabase upload come from the magic-byte match, not from the client.
+
+## Terms of Service
+
+Users must explicitly accept the IntelliDent Terms of Service before completing sign-up or submitting a clinic application. The ToS is rendered in a modal (`TermsDialog.jsx`) and the checkbox is required client-side before the form can be submitted. The acceptance is a client-side gate — no separate server-side ToS flag is stored.
+
+## Staff Account Welcome Email
+
+When an ADMIN creates a new staff user via `POST /api/users`, a `sendStaffWelcomeEmail` is sent fire-and-forget to the new user's email address. The email includes their email address, temporary password (`Intellident2026#`), and a reminder to change it on first sign-in.
 
 ## Email Verification on Sign-Up
 - `POST /api/auth/sign-up` → validates input, generates E2EE key material client-side, stores everything in `EmailVerification` record (24h expiry). **Does NOT create a `User` yet.**

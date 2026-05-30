@@ -77,7 +77,8 @@ app/
 │   ├── patient/              # Patient-scoped routes: billing/ GET, records/ GET
 │   ├── notifications/        # GET list + PATCH mark-all-read; [id]/ PATCH mark-one-read
 │   ├── ai/                   # slots/ GET (Gemini slot suggestions); chat/ POST (multi-turn chatbot); risk/ GET (no-show risk)
-│   ├── super/                # enter/ POST + exit/ POST — SuperAdmin clinic switching
+│   ├── super/                # enter/ POST + exit/ POST — SuperAdmin clinic switching; clinic-applications/ GET + [id]/ PATCH (approve/reject)
+│   ├── clinic-applications/  # POST — public submission (rate-limited 5/hr); documents/ POST — Supabase upload (rate-limited 50/hr)
 │   ├── webhooks/
 │   │   └── paymongo/         # POST — HMAC-verified PayMongo webhook (idempotent)
 │   ├── cron/
@@ -94,7 +95,7 @@ app/
 ├── modules/                  # Page-level components (one folder per route)
 │   ├── landing-page/         # Tailwind — public facing
 │   ├── sign-in-page/
-│   ├── sign-up-page/
+│   ├── sign-up-page/         # SignUpPage (join/apply mode toggle), ClinicApplicationForm, FileUploadZone, TermsDialog
 │   ├── forgot-password-page/
 │   ├── reset-password-page/
 │   ├── change-password-page/
@@ -114,7 +115,7 @@ app/
 │   ├── rbac-page/            # RbacPage, AddUserModal, EditRoleModal, DeleteUserModal
 │   ├── profile-page/         # ProfilePage
 │   ├── settings-page/        # SettingsPage, ClinicLogoUpload, ClinicProfileForm, ClinicSchedule, ClinicClosures
-│   ├── super-page/           # SuperPage.jsx — clinic cards + Enter as Admin
+│   ├── super-page/           # SuperPage.jsx — two tabs: Clinics + Applications; ApplicationsTab.jsx for onboarding review
 │   ├── ai-chat/              # AIChatButton.jsx, AIChatDrawer.jsx — floating chat button + Framer Motion drawer
 │   └── notifications/        # NotificationBell.jsx, NotificationDrawer.jsx
 ├── providers/                # App-level React context providers
@@ -138,7 +139,7 @@ lib/
 ├── crypto.js                 # Web Crypto API helpers (E2EE)
 ├── supabase.js               # Supabase client (service role — server-side only)
 ├── notifications.js          # In-app + email notification helpers (see Notification System section)
-├── email.js                  # Gmail/nodemailer email helpers (auth emails + all appointment notification emails)
+├── email.js                  # Gmail/nodemailer email helpers (auth emails + appointment notifications + staff welcome + clinic application emails)
 ├── validate.js               # Input sanitization helpers (parseJsonBody, sanitizeEmail, str, secret, bool, hexToken)
 ├── rateLimit.js              # DB-backed IP rate limiter — checkRateLimit(key, max, windowSeconds)
 └── utils.js                  # cn() — clsx + tailwind-merge class name helper
@@ -227,7 +228,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - Password policy: 8+ chars, upper, lower, digit, special — enforced client + server
 - Session: 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`)
 - Account lockout: 5 failed attempts / 5 min → locked 15 min
-- Rate limiting: DB-backed IP rate limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` Prisma model; sign-in 20/15 min, sign-up 10/hour, forgot-password 5/hour, verify-otp 15/15 min
+- Rate limiting: DB-backed IP rate limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` Prisma model; sign-in 20/15 min, sign-up 10/hour, forgot-password 5/hour, verify-otp 15/15 min; clinic-apply 5/hour, clinic-docs 50/hour
 - Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use
 - Password reset generates fresh E2EE keys (old data inaccessible); change-password re-wraps existing key
 - Password history: cannot reuse last 3
@@ -272,7 +273,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - `AuditLog` schema + `GET /api/audit-log` (paginated, filtered, CSV export) + full Admin UI built
 - `Notification` model is legacy — system uses `InAppNotification` + Gmail fire-and-forget
 
-**Key enums:** `UserRole`, `AppointmentStatus` (PENDING/CONFIRMED/RESCHEDULED/CANCELLED/COMPLETED/NO_SHOW), `NotificationType`, `AuditAction`, `PaymentStatus`, `RecordStatus`, `ConsentStatus`
+**Key enums:** `UserRole`, `AppointmentStatus` (PENDING/CONFIRMED/RESCHEDULED/CANCELLED/COMPLETED/NO_SHOW), `ApplicationStatus` (PENDING/APPROVED/REJECTED), `NotificationType`, `AuditAction`, `PaymentStatus`, `RecordStatus`, `ConsentStatus`
 
 ---
 
@@ -401,6 +402,16 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] `PatientRecord.contentHash` field for SHA-256 tamper detection exists in schema
   - [x] `contentHash` computed on every record write; recomputed and verified on every read; tamper warning on mismatch
 - [x] Reporting & Exports — `app/modules/reports-page/ReportsPage.jsx`; three tabs: Appointments, Revenue, Patients; date range filter; CSV + PDF export; ADMIN only
+- [x] Clinic Onboarding
+  - [x] Public application form — `ClinicApplicationForm.jsx`; multi-field with document upload (`FileUploadZone.jsx`)
+  - [x] Document upload — `POST /api/clinic-applications/documents`; Supabase `clinic-documents` bucket; magic-byte type detection; compressed archive rejection; 5 MB limit; rate-limited 50/hr
+  - [x] Application submission — `POST /api/clinic-applications`; rate-limited 5/hr; requires BIR docs + applicant IDs + all contact fields in +63 format
+  - [x] Terms of Service acceptance required on sign-up and clinic application (`TermsDialog.jsx`)
+  - [x] Super admin Applications tab — `ApplicationsTab.jsx` in `SuperPage.jsx`; filterable by status
+  - [x] Approve → auto-creates `Clinic` record (atomic DB transaction) + emails applicant sign-up link
+  - [x] Reject → emails applicant with optional rejection notes
+  - [x] Submission confirmation email via `sendClinicApplicationReceived`
+  - [x] Staff welcome email on admin-created accounts — `sendStaffWelcomeEmail` fire-and-forget on `POST /api/users`
 
 ---
 

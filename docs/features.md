@@ -33,7 +33,9 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Edit user role | `[x]` | Admin only |
 | Delete user (soft delete) | `[x]` | Auto-logout if self |
 | Activate / deactivate user | `[x]` | Blocked at sign-in when inactive |
-| Create user (admin) | `[x]` | Default password `Intellident2026#`, E2EE key generated client-side |
+| Create user (admin) | `[x]` | Default password `Intellident2026#`, E2EE key generated client-side; welcome email sent via `sendStaffWelcomeEmail` |
+| Staff account welcome email | `[x]` | Sent on admin-created accounts; contains email + temp password |
+| Terms of Service on registration | `[x]` | Required acceptance checkbox + modal (`TermsDialog.jsx`) on sign-up and clinic application |
 | hCaptcha on login | `[ ]` | Planned — `@hcaptcha/react-hcaptcha`, needs site key + secret key in env |
 
 ---
@@ -77,8 +79,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Patient: view own appointments | `[x]` | Upcoming + past |
 | Patient: cancel own appointments | `[x]` | PENDING or CONFIRMED only |
 | Dentist: read-only calendar | `[x]` | Day / Week view |
-| Rescheduling flow | `[ ]` | Status exists; no UI form yet |
-| AI slot suggestions | `[ ]` | Planned — GPT-5 |
+| Rescheduling flow | `[x]` | `RescheduleAppointmentModal`; real-time conflict check; reason field |
+| AI slot suggestions | `[x]` | Gemini 2.5 Flash; fallback algorithmic tagging; OpenAI migration planned |
 
 ---
 
@@ -106,8 +108,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Dentist: edit record | `[x]` | Title, notes, status; `PATCH /api/records/[patientId]/[recordId]` |
 | Dentist: delete record | `[x]` | Soft delete; `DELETE /api/records/[patientId]/[recordId]` |
 | Patient: My Dental Records page | `[x]` | `/my-records`; Clinical Records + Visit History tabs |
-| E2EE for record notes | `[ ]` | Currently stored as plaintext in `encryptedData` — needs proper AES-GCM wiring |
-| `contentHash` tamper detection | `[ ]` | Field exists; SHA-256 compute + verify not wired to API yet |
+| E2EE for record notes | `[x]` | AES-GCM-256 wired in `RecordFormModal.jsx`; server never sees plaintext |
+| `contentHash` tamper detection | `[x]` | SHA-256 computed on write, verified on read; tamper warning shown on mismatch |
 
 ---
 
@@ -116,9 +118,15 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Feature | Status | Notes |
 |---|---|---|
 | DB schema | `[x]` | `Billing`, `Payment`, `PaymentStatus` enum |
-| Billing creation | `[ ]` | API + UI not built |
-| Payment recording | `[ ]` | |
-| Receipt tracking | `[ ]` | |
+| Full CRUD API | `[x]` | `GET/POST /api/billing`, `GET/PATCH /api/billing/[id]` |
+| Admin/Receptionist billing UI | `[x]` | `BillingPage`, `BillingDetailDrawer`, `RecordPaymentModal` |
+| PDF receipts | `[x]` | `BillingReceiptDocument` via `@react-pdf/renderer` |
+| Patient billing page | `[x]` | `MyBillingPage` — outstanding bills, Pay Now, receipt download |
+| PayMongo checkout | `[x]` | `POST /api/billing/[id]/checkout`; GCash/Maya QR working |
+| PayMongo webhook | `[x]` | `/api/webhooks/paymongo`; HMAC-verified; idempotent |
+| Auto-billing on COMPLETED | `[x]` | Billing record created when appointment marked COMPLETED |
+| Reservation fee at booking | `[x]` | `POST /api/schedules` — best-effort checkout on confirm |
+| Receipt number generation | `[x]` | Atomic via PostgreSQL advisory lock |
 
 ---
 
@@ -127,7 +135,23 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Feature | Status | Notes |
 |---|---|---|
 | DB schema | `[x]` | `AuditLog`, `AuditAction` enum |
-| Audit log UI | `[ ]` | Admin-only query/display page not built |
+| Audit log API | `[x]` | `GET /api/audit-log` (paginated, filtered, sortable) + CSV/PDF export |
+| Audit log UI | `[x]` | Admin-only; expandable rows, action/entity/date/search filters |
+
+---
+
+## Clinic Onboarding
+
+| Feature | Status | Notes |
+|---|---|---|
+| Clinic application form (public) | `[x]` | `POST /api/clinic-applications`; rate-limited 5/hr per IP |
+| Document upload for applications | `[x]` | `POST /api/clinic-applications/documents`; magic-byte validation; compressed file rejection |
+| Terms of Service on application | `[x]` | Required acceptance before submission |
+| Super admin application review | `[x]` | `ApplicationsTab.jsx` in SuperPage; approve + reject UI |
+| Approve → auto-create clinic | `[x]` | Atomic DB transaction creates `Clinic` + links application |
+| Approval email | `[x]` | `sendClinicApplicationApproved` — sends sign-up link |
+| Rejection email | `[x]` | `sendClinicApplicationRejected` — sends optional rejection reason |
+| Application submission email | `[x]` | `sendClinicApplicationReceived` — confirmation to applicant |
 
 ---
 
@@ -135,9 +159,10 @@ Track of all features built, in-progress, and pending. Update this file as featu
 
 | Feature | Status | Notes |
 |---|---|---|
-| Virtual Assistant / Chatbot | `[ ]` | Planned |
-| Reporting & Exports | `[ ]` | Planned |
-| Integrity verification (tamper detection) | `[-]` | Schema field exists; not wired |
+| Virtual Assistant / Chatbot | `[x]` | Gemini 2.5 Flash; multi-turn; session-persistent; drawer UI |
+| Reporting & Exports | `[x]` | Three-tab (Appointments, Revenue, Patients); CSV + PDF; ADMIN only |
+| Integrity verification (tamper detection) | `[x]` | `contentHash` SHA-256 on every record write; verified on read |
+| Compressed file upload rejection | `[x]` | Magic-byte detection for ZIP/RAR/7z/GZIP/BZIP2/XZ on all upload endpoints |
 
 ---
 
@@ -152,3 +177,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | 2026-05-05 | Added dentist record management (create/edit/delete via drawer) |
 | 2026-05-05 | Fixed sign-up auto-login — now redirects to sign-in after verification |
 | 2026-05-05 | Fixed `/verify-otp` and `/reset-password` Suspense + `force-dynamic` for Vercel build |
+| 2026-05-27 | Added staff welcome email (`sendStaffWelcomeEmail`) on admin-created accounts |
+| 2026-05-31 | Added AI token limits to Gemini helper (`lib/gemini.js`) |
+| 2026-05-31 | Added clinic onboarding — application form, document upload, super admin review, approve/reject flow |
+| 2026-05-31 | Added Terms of Service acceptance to sign-up and clinic application |
+| 2026-05-31 | Added compressed file upload rejection (magic-byte scan) to all upload endpoints |

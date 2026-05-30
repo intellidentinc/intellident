@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026 (updated May 18, 2026)  
+**Date:** May 12, 2026 (updated May 31, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -35,6 +35,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Integrity Verification | ✅ 100% | `contentHash` SHA-256 computed on every record write, verified on every read — active on both dentist (`RecordFormModal`) and patient (`RecordViewModal`) sides |
 | Billing & Payment Tracking | ✅ 100% | Full CRUD API; Admin/Receptionist billing list + detail drawer; cash payment via `RecordPaymentModal`; PDF receipts; PayMongo checkout + webhook (registered, end-to-end verified); GCash/Maya QR working (live keys); reservation fee charged at booking; auto-billing on COMPLETED; patient `MyBillingPage`; receipt number generation atomic (PostgreSQL advisory lock) |
 | Reporting & Exports | ✅ 100% | Three-tab report page (Appointments, Revenue, Patients); date range filter; summary stat cards; breakdown tables by status, service, dentist, and month; CSV + PDF export; ADMIN only |
+| Clinic Onboarding | ✅ 100% | Public application form with BIR document + applicant ID upload; Terms of Service acceptance; magic-byte file validation + compressed archive rejection; Super Admin review tab (approve/reject); approval auto-creates `Clinic` record; email notifications for submission/approval/rejection |
 
 ### 1.2 Partially Completed Modules
 
@@ -48,7 +49,7 @@ None.
 
 | Category | Done | Total | % |
 |---|---|---|---|
-| User Access & Authentication | 20 | 20 | 100% |
+| User Access & Authentication | 22 | 22 | 100% |
 | Clinic Settings | 5 | 5 | 100% |
 | Service Catalog | 3 | 3 | 100% |
 | Appointment Scheduling | 16 | 16 | 100% |
@@ -60,7 +61,8 @@ None.
 | Virtual Assistant / Chatbot | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | AI Slot Suggestions | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
 | Reporting & Exports | 1 | 1 | 100% |
-| **Total** | **71** | **71** | **100%** |
+| Clinic Onboarding | 9 | 9 | 100% |
+| **Total** | **82** | **82** | **100%** |
 
 ---
 
