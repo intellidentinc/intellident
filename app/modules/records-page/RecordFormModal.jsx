@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Dialog from '@mui/material/Dialog'
 import Box from '@mui/material/Box'
@@ -12,29 +12,55 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import FormControl from '@mui/material/FormControl'
 import FormLabel from '@mui/material/FormLabel'
+import IconButton from '@mui/material/IconButton'
+import Chip from '@mui/material/Chip'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import { useToast } from '@/app/providers/ToastProvider'
 import { useCrypto } from '@/app/providers/CryptoProvider'
 import { encryptData, decryptData, toBase64 } from '@/lib/crypto'
-import { ArticleOutlined, LockOutlined } from '@mui/icons-material'
+import {
+  ArticleOutlined,
+  LockOutlined,
+  AttachFileOutlined,
+  DeleteOutlined,
+  InsertDriveFileOutlined,
+  PictureAsPdfOutlined,
+  ImageOutlined,
+} from '@mui/icons-material'
 
 const EMPTY_FORM = { title: '', notes: '', status: 'ACTIVE' }
 const EMPTY_ERRORS = { title: '', notes: '' }
+
+function FileTypeIcon({ mimeType }) {
+  if (mimeType === 'application/pdf') return <PictureAsPdfOutlined sx={{ fontSize: 16, color: '#dc2626' }} />
+  if (mimeType?.startsWith('image/')) return <ImageOutlined sx={{ fontSize: 16, color: '#2563eb' }} />
+  return <InsertDriveFileOutlined sx={{ fontSize: 16, color: '#64748b' }} />
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 export default function RecordFormModal({ open, patientId, record, onClose, onSuccess }) {
   const router = useRouter()
   const { showToast } = useToast()
   const { masterKey } = useCrypto()
+  const fileInputRef = useRef(null)
+
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState(EMPTY_ERRORS)
   const [loading, setLoading] = useState(false)
   const [decrypting, setDecrypting] = useState(false)
   const [keyMissing, setKeyMissing] = useState(false)
+  const [attachments, setAttachments] = useState([])
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [deletingId, setDeletingId] = useState(null)
 
   const isEdit = !!record
 
-  // Fetch and decrypt notes when opening in edit mode
   useEffect(() => {
     if (!open || !record) return
     setKeyMissing(false)
@@ -49,7 +75,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
         const res = await fetch(`/api/records/${patientId}/${record.id}`)
         if (!res.ok) throw new Error()
         const data = await res.json()
-        const { encryptedData, dataIv, contentHash, title, status } = data.record
+        const { encryptedData, dataIv, contentHash, title, status, attachments: atts } = data.record
 
         let notes = ''
         try {
@@ -60,7 +86,6 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
           return
         }
 
-        // Tamper detection
         const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(notes))
         const recomputed = toBase64(hashBuf)
         if (recomputed !== contentHash) {
@@ -68,6 +93,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
         }
 
         setForm({ title, notes, status: status ?? 'ACTIVE' })
+        setAttachments(atts ?? [])
       } catch {
         showToast('Failed to load record', 'error')
         onClose()
@@ -95,6 +121,53 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     return valid
   }
 
+  function handleFileSelect(e) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    const valid = files.filter((f) => {
+      if (f.size > 5 * 1024 * 1024) {
+        showToast(`${f.name} exceeds the 5 MB limit`, 'error')
+        return false
+      }
+      return true
+    })
+    setPendingFiles((prev) => [...prev, ...valid])
+    e.target.value = ''
+  }
+
+  function removePending(index) {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function deleteAttachment(attachmentId) {
+    setDeletingId(attachmentId)
+    try {
+      const res = await fetch(`/api/records/${patientId}/${record.id}/attachments/${attachmentId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId))
+    } catch {
+      showToast('Failed to delete attachment', 'error')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  async function uploadPendingFiles(savedRecordId) {
+    for (const file of pendingFiles) {
+      const fd = new FormData()
+      fd.append('file', file)
+      try {
+        const res = await fetch(`/api/records/${patientId}/${savedRecordId}/attachments`, { method: 'POST', body: fd })
+        if (!res.ok) {
+          const data = await res.json()
+          showToast(`Failed to upload ${file.name}: ${data.error ?? 'Unknown error'}`, 'error')
+        }
+      } catch {
+        showToast(`Failed to upload ${file.name}`, 'error')
+      }
+    }
+  }
+
   async function handleSubmit() {
     if (!validate()) return
     if (!masterKey) {
@@ -103,11 +176,8 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     }
     setLoading(true)
     try {
-      // Compute SHA-256 of plaintext for tamper detection
       const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(form.notes))
       const contentHash = toBase64(hashBuf)
-
-      // Encrypt notes with master key
       const { ciphertext: encryptedData, iv: dataIv } = await encryptData(masterKey, form.notes)
 
       const body = { title: form.title.trim(), encryptedData, dataIv, contentHash }
@@ -126,6 +196,13 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
         return
       }
 
+      const saved = await res.json()
+      const savedId = isEdit ? record.id : saved.id
+
+      if (pendingFiles.length > 0) {
+        await uploadPendingFiles(savedId)
+      }
+
       showToast(isEdit ? 'Record updated' : 'Record created', 'success')
       handleClose()
       onSuccess()
@@ -141,6 +218,8 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     setForm(EMPTY_FORM)
     setErrors(EMPTY_ERRORS)
     setKeyMissing(false)
+    setAttachments([])
+    setPendingFiles([])
     onClose()
   }
 
@@ -257,6 +336,109 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
             </FormControl>
           </Box>
         )}
+
+        {/* Attachments */}
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant='body2' fontWeight={500} color='text.primary'>
+              Attachments
+            </Typography>
+            <Button
+              variant='outlined'
+              size='small'
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading || decrypting}
+              sx={{ minWidth: 'auto', px: 1.5, py: 0.5, fontSize: '0.75rem' }}
+            >
+              <AttachFileOutlined sx={{ fontSize: 14, mr: 0.5 }} />
+              Add file
+            </Button>
+            <input
+              ref={fileInputRef}
+              type='file'
+              multiple
+              accept='.jpg,.jpeg,.png,.pdf'
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+            />
+          </Box>
+
+          {/* Existing attachments (edit mode) */}
+          {attachments.length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: pendingFiles.length > 0 ? 1 : 0 }}>
+              {attachments.map((att) => (
+                <Box
+                  key={att.id}
+                  sx={{
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    p: 1, borderRadius: 1.5, bgcolor: '#f8fafc',
+                    border: '1px solid', borderColor: '#e2e8f0',
+                  }}
+                >
+                  <FileTypeIcon mimeType={att.mimeType} />
+                  <Typography
+                    variant='caption'
+                    color='text.primary'
+                    sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {att.signedUrl
+                      ? <a href={att.signedUrl} target='_blank' rel='noreferrer' style={{ color: '#2563eb', textDecoration: 'none' }}>{att.fileName}</a>
+                      : att.fileName
+                    }
+                  </Typography>
+                  <IconButton
+                    size='small'
+                    disabled={deletingId === att.id}
+                    onClick={() => deleteAttachment(att.id)}
+                    sx={{ p: 0.5, color: '#94a3b8', '&:hover': { color: '#dc2626' } }}
+                  >
+                    {deletingId === att.id
+                      ? <CircularProgress size={12} />
+                      : <DeleteOutlined sx={{ fontSize: 14 }} />
+                    }
+                  </IconButton>
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {/* Pending (not yet uploaded) files */}
+          {pendingFiles.length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+              {pendingFiles.map((file, idx) => (
+                <Box
+                  key={idx}
+                  sx={{
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    p: 1, borderRadius: 1.5, bgcolor: '#eff6ff',
+                    border: '1px dashed', borderColor: '#93c5fd',
+                  }}
+                >
+                  <InsertDriveFileOutlined sx={{ fontSize: 16, color: '#2563eb' }} />
+                  <Typography variant='caption' color='text.primary' sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {file.name}
+                  </Typography>
+                  <Typography variant='caption' color='text.secondary' sx={{ flexShrink: 0 }}>
+                    {formatBytes(file.size)}
+                  </Typography>
+                  <IconButton
+                    size='small'
+                    onClick={() => removePending(idx)}
+                    sx={{ p: 0.5, color: '#94a3b8', '&:hover': { color: '#dc2626' } }}
+                  >
+                    <DeleteOutlined sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {attachments.length === 0 && pendingFiles.length === 0 && (
+            <Typography variant='caption' color='text.secondary'>
+              No attachments. Accepted formats: JPG, PNG, PDF (max 5 MB each).
+            </Typography>
+          )}
+        </Box>
       </Box>
 
       <Divider />

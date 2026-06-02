@@ -3,8 +3,9 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-const REMEMBER_ME_MAX_AGE = 60 * 60 * 24 * 3; // 3 days
-const DEFAULT_MAX_AGE     = 60 * 10;           // 10 minutes
+const REMEMBER_ME_MAX_AGE    = 60 * 60 * 24 * 3;       // 3 days
+const DEFAULT_MAX_AGE        = 60 * 10;                // 10 minutes
+const SESSION_HARD_LIMIT_MS  = 8 * 60 * 60 * 1000;    // 8-hour absolute cap
 
 // Public API paths that never require a clinic check
 const PUBLIC_API_PREFIXES = [
@@ -51,6 +52,30 @@ export async function middleware(request) {
       return NextResponse.next();
     }
 
+    // Hard 8-hour cap — force re-login regardless of sliding renewal
+    if (!session.sessionCreatedAt || Date.now() - session.sessionCreatedAt > SESSION_HARD_LIMIT_MS) {
+      if (pathname.startsWith('/api/')) {
+        const res = NextResponse.json({ error: 'Session expired' }, { status: 401 })
+        res.cookies.delete('user')
+        return res
+      }
+      const res = NextResponse.redirect(new URL('/sign-in', request.url))
+      res.cookies.delete('user')
+      return res
+    }
+
+    // Terms of service gate — sessions created before acceptance are confined to /accept-terms
+    if (session.requiresTerms) {
+      const isAcceptTermsPage = pathname === '/accept-terms'
+      const isAcceptTermsApi  = pathname === '/api/auth/accept-terms'
+      if (!isAcceptTermsPage && !isAcceptTermsApi) {
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json({ error: 'Please accept the Terms of Service to continue.' }, { status: 403 })
+        }
+        return NextResponse.redirect(new URL('/accept-terms', request.url))
+      }
+    }
+
     // Block requests for sessions tied to a disabled clinic
     if (session.clinicId && !session.superAdmin && !isPublicApi(pathname)) {
       try {
@@ -90,6 +115,7 @@ export const config = {
     '/((?!api|super|sign-in|sign-up|forgot-password|reset-password|change-password|verify-otp|_next|favicon)[^/]+)/:path*',
     '/sign-in',
     '/sign-up',
+    '/accept-terms',
     '/api/:path*',
   ],
 };

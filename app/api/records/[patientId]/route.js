@@ -47,7 +47,10 @@ export async function GET(request, { params }) {
   const records = await prisma.patientRecord.findMany({
     where: { patientId, clinicId: dentist.clinicId, isDeleted: false },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
+    select: {
+      id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true,
+      _count: { select: { attachments: { where: { isDeleted: false } } } }
+    }
   })
 
   return NextResponse.json({ patient, records })

@@ -167,7 +167,8 @@ export async function POST(request) {
       );
     }
 
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe);
+    const requiresTerms = !user.termsAcceptedAt;
+    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe, false, requiresTerms);
 
     logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });
 
@@ -183,6 +184,7 @@ export async function POST(request) {
         clinicId: user.clinicId,
         wrappedKey: user.wrappedKey,
         keySalt: user.keySalt,
+        ...(requiresTerms && { requiresTerms: true }),
         ...(mustChangePassword && { mustChangePassword: true }),
         ...(passwordExpired && { passwordExpired: true }),
       },

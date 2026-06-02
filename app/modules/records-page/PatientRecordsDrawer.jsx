@@ -12,7 +12,7 @@ import IconButton from '@mui/material/IconButton'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 import Tooltip from '@mui/material/Tooltip'
-import { X, Plus, Pencil, Trash2, FileText } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, FileText, Paperclip } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import RecordFormModal from './RecordFormModal'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -142,6 +142,14 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                           <Typography variant='body2' fontWeight={600}>{rec.title}</Typography>
                           <Chip label={chip.label} size='small' sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.7rem' }} />
+                          {rec._count?.attachments > 0 && (
+                            <Chip
+                              icon={<Paperclip size={10} />}
+                              label={rec._count.attachments}
+                              size='small'
+                              sx={{ bgcolor: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: '0.7rem', '& .MuiChip-icon': { color: '#2563eb' } }}
+                            />
+                          )}
                         </Box>
                         <Typography variant='caption' color='text.disabled'>
                           {dayjs(rec.createdAt).format('MMM D, YYYY')}

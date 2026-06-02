@@ -90,6 +90,13 @@ export default function SignInPage() {
       // Store master key in memory for the session
       setMasterKey(masterKey);
       showToast('Signed in successfully!', 'success');
+      if (data.requiresTerms) {
+        const params = new URLSearchParams()
+        if (data.clinicId) params.set('clinicId', data.clinicId)
+        if (data.mustChangePassword) params.set('mustChange', '1')
+        router.push(`/accept-terms?${params.toString()}`);
+        return;
+      }
       if (data.mustChangePassword) {
         router.push('/change-password?reason=first-login');
         return;

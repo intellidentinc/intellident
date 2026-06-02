@@ -5,6 +5,26 @@ import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
+import { sendPatientClaimEmail } from '@/lib/email'
+
+function generatePatientPassword() {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const lower = 'abcdefghijklmnopqrstuvwxyz'
+  const digit = '0123456789'
+  const special = '!@#$%^&*'
+  const all = upper + lower + digit + special
+  const required = [
+    upper[Math.floor(Math.random() * upper.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    digit[Math.floor(Math.random() * digit.length)],
+    special[Math.floor(Math.random() * special.length)],
+  ]
+  const length = 8 + Math.floor(Math.random() * 5)
+  for (let i = required.length; i < length; i++) {
+    required.push(all[Math.floor(Math.random() * all.length)])
+  }
+  return required.sort(() => Math.random() - 0.5).join('')
+}
 
 export async function GET(request) {
   const session = await getSession()
@@ -95,8 +115,8 @@ export async function POST(request) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 400 })
   }
 
-  const DEFAULT_PASSWORD = 'Intellident2026#'
-  const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 10)
+  const tempPassword = generatePatientPassword()
+  const hashedPassword = await bcrypt.hash(tempPassword, 10)
 
   const newPatient = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -111,6 +131,7 @@ export async function POST(request) {
         wrappedKey,
         keySalt,
         clinicId: caller.clinicId,
+        mustChangePassword: true,
       },
     })
 
@@ -137,6 +158,16 @@ export async function POST(request) {
   })
 
   logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'Patient', entityId: newPatient.id, ipAddress: ip, userAgent, metadata: { patientCode: newPatient.patientCode } })
+
+  const clinic = await prisma.clinic.findUnique({ where: { id: caller.clinicId }, select: { name: true } })
+  sendPatientClaimEmail({
+    to: email.trim().toLowerCase(),
+    firstName: firstName.trim(),
+    patientCode: newPatient.patientCode,
+    tempPassword,
+    clinicName: clinic?.name ?? 'your clinic',
+    signInUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/sign-in`,
+  }).catch(() => {})
 
   return NextResponse.json({ id: newPatient.id }, { status: 201 })
 }

@@ -3,6 +3,9 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { parseJsonBody, str, secret } from '@/lib/validate'
+import { supabase } from '@/lib/supabase'
+
+const ATTACHMENT_BUCKET = 'record-attachments'
 
 async function getDentistForClinic(session) {
   const caller = await prisma.user.findUnique({
@@ -32,11 +35,22 @@ export async function GET(request, { params }) {
 
   const record = await prisma.patientRecord.findFirst({
     where: { id: recordId, patientId, clinicId: dentist.clinicId, isDeleted: false },
-    select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
+    select: {
+      id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true,
+      attachments: { where: { isDeleted: false }, select: { id: true, fileName: true, mimeType: true, fileUrl: true, createdAt: true }, orderBy: { createdAt: 'asc' } }
+    }
   })
   if (!record) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
 
-  return NextResponse.json({ record })
+  // Generate 1-hour signed URLs for each attachment
+  const attachments = await Promise.all(
+    record.attachments.map(async (att) => {
+      const { data } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrl(att.fileUrl, 3600)
+      return { id: att.id, fileName: att.fileName, mimeType: att.mimeType, signedUrl: data?.signedUrl ?? null, createdAt: att.createdAt }
+    })
+  )
+
+  return NextResponse.json({ record: { ...record, attachments } })
 }
 
 // PATCH /api/records/[patientId]/[recordId]
