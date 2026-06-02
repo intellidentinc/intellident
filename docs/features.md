@@ -80,7 +80,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Patient: cancel own appointments | `[x]` | PENDING or CONFIRMED only |
 | Dentist: read-only calendar | `[x]` | Day / Week view |
 | Rescheduling flow | `[x]` | `RescheduleAppointmentModal`; real-time conflict check; reason field |
-| AI slot suggestions | `[x]` | Gemini 2.5 Flash; fallback algorithmic tagging; OpenAI migration planned |
+| AI slot suggestions | `[x]` | gpt-5 via `lib/ai.js`; fallback algorithmic tagging if AI call fails |
 
 ---
 
@@ -159,7 +159,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 
 | Feature | Status | Notes |
 |---|---|---|
-| Virtual Assistant / Chatbot | `[x]` | Gemini 2.5 Flash; multi-turn; session-persistent; drawer UI |
+| Virtual Assistant / Chatbot | `[x]` | gpt-5 via `lib/ai.js`; multi-turn; role-aware tools; system prompt cached 5 min; session-persistent; drawer UI |
 | Reporting & Exports | `[x]` | Three-tab (Appointments, Revenue, Patients); CSV + PDF; ADMIN only |
 | Integrity verification (tamper detection) | `[x]` | `contentHash` SHA-256 on every record write; verified on read |
 | Compressed file upload rejection | `[x]` | Magic-byte detection for ZIP/RAR/7z/GZIP/BZIP2/XZ on all upload endpoints |
@@ -178,7 +178,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | 2026-05-05 | Fixed sign-up auto-login — now redirects to sign-in after verification |
 | 2026-05-05 | Fixed `/verify-otp` and `/reset-password` Suspense + `force-dynamic` for Vercel build |
 | 2026-05-27 | Added staff welcome email (`sendStaffWelcomeEmail`) on admin-created accounts |
-| 2026-05-31 | Added AI token limits to Gemini helper (`lib/gemini.js`) |
+| 2026-06-03 | Migrated AI from Gemini 2.5 Flash to OpenAI gpt-5 (`lib/ai.js`); system prompt caching; history window 5 msgs; `max_completion_tokens: 300` |
 | 2026-05-31 | Added clinic onboarding — application form, document upload, super admin review, approve/reject flow |
 | 2026-05-31 | Added Terms of Service acceptance to sign-up and clinic application |
 | 2026-05-31 | Added compressed file upload rejection (magic-byte scan) to all upload endpoints |

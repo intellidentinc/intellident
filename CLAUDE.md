@@ -26,7 +26,7 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | File Storage | Supabase Storage (`clinic-logos` bucket) |
 | Email | Gmail SMTP via nodemailer (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `GMAIL_FROM_NAME`) |
 | Cron | Vercel Cron Jobs (every 15 min) → `CRON_SECRET` bearer token |
-| AI | Gemini 2.5 Flash (current) — slot suggestions (`app/api/ai/slots`) + virtual assistant chatbot (`app/api/ai/chat`); **planned migration to OpenAI — not yet integrated** |
+| AI | OpenAI gpt-5 — slot suggestions (`app/api/ai/slots`) + virtual assistant chatbot (`app/api/ai/chat`); helper: `lib/ai.js` |
 | Analytics | Vercel Analytics |
 
 ---
@@ -76,7 +76,7 @@ app/
 │   ├── reports/              # GET aggregated data (appointments/revenue/patients); export/ GET raw rows — ADMIN only
 │   ├── patient/              # Patient-scoped routes: billing/ GET, records/ GET
 │   ├── notifications/        # GET list + PATCH mark-all-read; [id]/ PATCH mark-one-read
-│   ├── ai/                   # slots/ GET (Gemini slot suggestions); chat/ POST (multi-turn chatbot); risk/ GET (no-show risk)
+│   ├── ai/                   # slots/ GET (AI slot suggestions); chat/ POST (multi-turn chatbot); risk/ GET (no-show risk)
 │   ├── super/                # enter/ POST + exit/ POST — SuperAdmin clinic switching; clinic-applications/ GET + [id]/ PATCH (approve/reject)
 │   ├── clinic-applications/  # POST — public submission (rate-limited 5/hr); documents/ POST — Supabase upload (rate-limited 50/hr)
 │   ├── webhooks/
@@ -368,7 +368,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Patient: cancel own PENDING or CONFIRMED appointments
   - [x] Dentist: read-only calendar of own appointments (Day / Week view)
   - [x] Dentist: patient records page (patients with CONFIRMED or COMPLETED appointment with them)
-  - [x] AI slot suggestions — `app/api/ai/slots`; currently using Gemini 2.5 Flash; planned migration to OpenAI not yet integrated
+  - [x] AI slot suggestions — `app/api/ai/slots`; gpt-5 via `generateJSON()` in `lib/ai.js`; fallback algorithmic tagging if AI call fails
   - [x] Rescheduling flow — `RescheduleAppointmentModal` with dentist/date/time picker, real-time conflict check, reason field; "Reschedule" button on `AppointmentDetailModal` for CONFIRMED appointments; creates new CONFIRMED appointment then patches original to RESCHEDULED
 - [x] Notifications & Reminders
   - [x] In-app notification bell in page header (all roles)
@@ -377,7 +377,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Email notifications via Gmail/nodemailer for all notification types
   - [x] Vercel cron job for 24h + 2h appointment reminders (every 15 min, protected by CRON_SECRET)
   - [x] Mark-read (single + all) functionality
-- [x] Virtual Assistant / Chatbot — multi-turn AI chat via `app/api/ai/chat`; drawer UI at `app/modules/ai-chat/`; currently using Gemini 2.5 Flash; planned migration to OpenAI not yet integrated
+- [x] Virtual Assistant / Chatbot — multi-turn AI chat via `app/api/ai/chat`; drawer UI at `app/modules/ai-chat/`; gpt-5 via `chatWithTools()` in `lib/ai.js`; role-aware tools + system prompt caching
 - [x] Patient Record Management
   - [x] DB schema complete (`PatientRecord`, `Attachment` with E2EE fields + `contentHash`)
   - [x] `GET /api/records` — dentist's patient list (paginated, searchable — patients with ≥1 CONFIRMED or COMPLETED appt)
@@ -575,6 +575,7 @@ const { data: { publicUrl } } = supabase.storage.from('clinic-logos').getPublicU
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
 | `NEXT_PUBLIC_APP_URL` | Public base URL of the app (e.g. `https://intellident-ai.org`) — used in verification, password-reset, and clinic approval emails |
 | `CRON_SECRET` | Bearer token protecting `/api/cron/reminders`; must match Vercel env var |
+| `OPENAI_API_KEY` | OpenAI API key — used by `lib/ai.js` for chat and slot recommendations |
 | `LOCKOUT_MAX_ATTEMPTS` | (optional) default 5 |
 | `LOCKOUT_WINDOW_MINUTES` | (optional) default 5 |
 | `LOCKOUT_DURATION_MINUTES` | (optional) default 15 |

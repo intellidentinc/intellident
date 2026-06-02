@@ -2,7 +2,7 @@
 
 ## Overview
 
-IntelliDent integrates **Google Gemini 2.5 Flash** (free tier) to provide three AI capabilities:
+IntelliDent integrates **OpenAI gpt-5** to provide three AI capabilities:
 
 1. **AI Chatbot** — a role-aware conversational assistant accessible to all authenticated users
 2. **Slot Recommendations** — AI-ranked appointment time slots with explanation tags
@@ -16,10 +16,10 @@ All AI outputs are **suggestions only**. Staff must confirm any changes. Every A
 
 | Item | Value |
 |---|---|
-| Model | `gemini-2.5-flash` (Google Gemini free tier) |
-| SDK | `@google/generative-ai` v0.24+ |
-| Env var | `GEMINI_API_KEY` |
-| Helper | `lib/gemini.js` |
+| Model | `gpt-5` (OpenAI) |
+| SDK | `openai` |
+| Env var | `OPENAI_API_KEY` |
+| Helper | `lib/ai.js` |
 
 ---
 
@@ -37,7 +37,7 @@ All AI outputs are **suggestions only**. Staff must confirm any changes. Every A
 
 ### Role-aware context injection
 
-Every request to Gemini includes a system prompt built server-side from the authenticated user's session. The injected context differs by role:
+Every request includes a system prompt built server-side from the authenticated user's session. The injected context differs by role:
 
 | Role | Context injected |
 |---|---|
@@ -45,7 +45,7 @@ Every request to Gemini includes a system prompt built server-side from the auth
 | `PATIENT` (4) | Patient's own upcoming appointments (next 5, PENDING + CONFIRMED) |
 | `DENTIST` / `RECEPTIONIST` / `ADMIN` (1–3) | Staff-level guidance; no individual patient data |
 
-The system prompt explicitly instructs Gemini to **never disclose other patients' data** and to label all suggestions as non-confirmed.
+The system prompt explicitly instructs the model to **never disclose other patients' data** and to label all suggestions as non-confirmed.
 
 ### Chat history schema
 
@@ -113,7 +113,7 @@ Available in two places:
 Each suggestion shows:
 - The time (`9:00 AM`)
 - An **explanation tag**: `"Earliest available"`, `"Best match"`, `"Morning available"`, `"Afternoon available"`, `"Lowest conflict risk"`, `"Flexible option"`
-- A one-sentence reason from Gemini
+- A one-sentence reason from the AI
 
 A disclaimer reads: *"AI suggestions only — staff confirmation required."*
 
@@ -121,9 +121,9 @@ A disclaimer reads: *"AI suggestions only — staff confirmation required."*
 
 1. Generates available 30-min slots using the same logic as `/api/schedules/slots` (respects working days, closures, open/close hours, same-day 30-min buffer)
 2. For a specific dentist, removes slots that conflict with existing non-cancelled appointments
-3. Passes the slot list + service name + date to Gemini with a structured JSON prompt
-4. Gemini returns the top 3–5 slots ranked by suitability
-5. Falls back to algorithmic tagging (earliest / mid-morning / afternoon) if Gemini fails
+3. Passes the slot list + service name + date to gpt-5 with a structured JSON prompt
+4. The model returns the top 3–5 slots ranked by suitability
+5. Falls back to algorithmic tagging (earliest / mid-morning / afternoon) if the AI call fails
 
 ### API route
 
@@ -210,19 +210,21 @@ These are UI suggestions only — no automated action is taken.
 
 ---
 
-## `lib/gemini.js` API
+## `lib/ai.js` API
 
 ```js
-import { chatWithHistory, generateJSON } from '@/lib/gemini'
+import { chatWithTools, generateJSON } from '@/lib/ai'
 
-// Multi-turn chat with a system prompt and prior history
-const reply = await chatWithHistory(systemPrompt, messages, userMessage)
+// Multi-turn chat with system prompt, history, and role-aware tools
+const reply = await chatWithTools(systemPrompt, messages, userMessage, tools, executeFunction)
 // messages: [{ role: 'USER' | 'ASSISTANT', content: string }, ...]
-// returns: string (Gemini's reply)
+// tools: OpenAI-format tool array (from getToolsForRole in lib/ai-tools.js)
+// executeFunction: async (name, args) => any — called per tool call round
+// returns: string (model's final reply after all tool rounds complete)
 
-// Single structured JSON generation
+// Structured JSON generation (used by slot recommendations)
 const data = await generateJSON(prompt)
-// returns: parsed JSON object — throws if Gemini returns invalid JSON
+// returns: parsed JSON object — throws if model returns invalid JSON
 ```
 
 ---
@@ -231,7 +233,7 @@ const data = await generateJSON(prompt)
 
 ```
 lib/
-└── gemini.js                              Gemini client + chatWithHistory + generateJSON
+└── ai.js                                  OpenAI client + chatWithTools + generateJSON
 
 app/api/ai/
 ├── chat/route.js                          GET (list sessions) + POST (send message)
@@ -261,7 +263,7 @@ app/modules/schedules-page/
 
 | Variable | Required | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | Yes | Google AI Studio API key (get one at aistudio.google.com/apikey) |
+| `OPENAI_API_KEY` | Yes | OpenAI API key (platform.openai.com → API keys) |
 | `NOSHOW_RISK_THRESHOLD` | No | Integer; no-show count that triggers High Risk (default: `2`) |
 
 ---

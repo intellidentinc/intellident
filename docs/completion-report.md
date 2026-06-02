@@ -27,8 +27,8 @@ This report assesses the current completion state of IntelliDent across two dime
 | Clinic Settings | ✅ 100% | Profile, logo upload, operating hours + presets, closure dates |
 | Service Catalog | ✅ 100% | Create / edit / delete services; duration, price, buffer; dentist assignment |
 | Appointment Scheduling | ✅ 100% | All 16 items complete — scheduling, calendar, conflict detection, status transitions, AI slot suggestions, patient self-booking, dentist calendar, rescheduling flow UI |
-| AI Slot Suggestions | ✅ 100% | Gemini 2.5 Flash-powered slot ranking with fallback algorithmic tagging; audit logging of AI interactions (`app/api/ai/slots`); OpenAI migration planned but not yet integrated |
-| Virtual Assistant / Chatbot | ✅ 100% | Multi-turn AI chat (Gemini 2.5 Flash) with session persistence; drawer UI (`app/modules/ai-chat/`); `app/api/ai/chat`; OpenAI migration planned but not yet integrated |
+| AI Slot Suggestions | ✅ 100% | gpt-5-powered slot ranking with fallback algorithmic tagging; audit logging of AI interactions (`app/api/ai/slots`) |
+| Virtual Assistant / Chatbot | ✅ 100% | Multi-turn AI chat (gpt-5) with session persistence; role-aware tools; system prompt caching; drawer UI (`app/modules/ai-chat/`); `app/api/ai/chat` |
 | Notifications & Reminders | ✅ 100% | In-app bell + Framer Motion drawer, email via Gmail/nodemailer, Vercel cron reminders (24h / 2h), mark-read |
 | Patient Record Management | ✅ 100% | DB schema, dentist record drawer UI (add/edit/delete via `RecordFormModal`), patient My Dental Records page with View Notes button (decrypt on demand via `RecordViewModal`), E2EE fully wired, `contentHash` SHA-256 tamper detection active on both dentist and patient sides |
 | Audit Logging | ✅ 100% | DB schema, `logAudit()` fire-and-forget helper, `GET /api/audit-log` (paginated, filtered, sortable), `GET /api/audit-log/export` (CSV + PDF, up to 5000 rows), full Admin UI with expandable rows, action/entity/date/search filters |
@@ -58,8 +58,8 @@ None.
 | Billing & Payment | 8 | 8 | 100% |
 | Audit Logging | 2 | 2 | 100% |
 | Integrity Verification | 2 | 2 | 100% |
-| Virtual Assistant / Chatbot | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
-| AI Slot Suggestions | 1 | 1 | 100% (Gemini; OpenAI migration pending) |
+| Virtual Assistant / Chatbot | 1 | 1 | 100% (OpenAI gpt-5) |
+| AI Slot Suggestions | 1 | 1 | 100% (OpenAI gpt-5) |
 | Reporting & Exports | 1 | 1 | 100% |
 | Clinic Onboarding | 9 | 9 | 100% |
 | **Total** | **82** | **82** | **100%** |
@@ -149,8 +149,8 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 7 | ~~Billing & Payment — register PayMongo webhook; verify online flow end-to-end~~ | ✅ Done | — |
 | 8 | ~~Billing & Payment — charge reservation fee at booking~~ | ✅ Done | — |
 | 9 | ~~Reporting & Exports~~ | ✅ Done | — |
-| 10 | ~~Virtual Assistant / Chatbot~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
-| 11 | ~~AI Slot Suggestions~~ (Gemini; OpenAI migration pending) | ✅ Done | — |
+| 10 | ~~Virtual Assistant / Chatbot~~ (OpenAI gpt-5) | ✅ Done | — |
+| 11 | ~~AI Slot Suggestions~~ (OpenAI gpt-5) | ✅ Done | — |
 | 12 | ~~IP rate limiting on all auth endpoints~~ | ✅ Done | — |
 | 13 | Security HTTP headers (CSP, HSTS, X-Frame-Options) | ⏳ Pending | Low |
 | 14 | AAD in AES-GCM (bind ciphertext to patientId) | ⏳ Pending | Low |
@@ -167,6 +167,6 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 
 ---
 
-**AI model note:** Both AI features (slot suggestions and virtual assistant chatbot) currently run on Gemini 2.5 Flash. Migration to OpenAI is planned but not yet integrated.
+**AI model note:** Both AI features (slot suggestions and virtual assistant chatbot) run on OpenAI gpt-5 via `lib/ai.js`. Migrated from Gemini 2.5 Flash on 2026-06-03.
 
 *Generated from CLAUDE.md feature checklist and architecture documentation.*

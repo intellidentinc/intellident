@@ -82,7 +82,7 @@ export async function POST(request) {
       tools,
       buildExecutor({ ...session, clinicId: caller.clinicId }),
     )
-    // Strip any leaked tool-call narration Gemini occasionally adds
+    // Strip any leaked tool-call narration the model occasionally adds
     aiText = aiText
       .replace(/calling tool[^\n.]*/gi, '')
       .replace(/retrieving (data|information)[^\n.]*/gi, '')

@@ -214,7 +214,7 @@ export default function TermsDialog({ open, onClose, initialTab = 'terms' }) {
             'Supabase Storage — clinic logo and file storage',
             'PayMongo — payment processing for dental service fees (PCI-DSS compliant)',
             'Google (Gmail SMTP) — transactional email delivery for notifications',
-            'Google Gemini API — AI-powered appointment suggestions and chatbot responses (no personal health data is transmitted)',
+            'OpenAI API — AI-powered appointment suggestions and chatbot responses (no personal health data is transmitted)',
             'Vercel — application hosting and serverless compute',
           ]} />
         </Section>
