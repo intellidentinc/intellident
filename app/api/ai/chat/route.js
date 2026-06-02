@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { chatWithTools } from '@/lib/gemini'
+import { chatWithTools } from '@/lib/ai'
 import { buildSystemPrompt } from '@/lib/ai-prompt'
 import { getToolsForRole, buildExecutor } from '@/lib/ai-tools'
 
@@ -71,7 +71,7 @@ export async function POST(request) {
     Promise.resolve(getToolsForRole(caller.role)),
   ])
 
-  const MAX_HISTORY = 10
+  const MAX_HISTORY = 5
 
   let aiText
   try {
@@ -114,7 +114,7 @@ export async function POST(request) {
       action: 'AI_INTERACTION',
       entity: 'ChatSession',
       entityId: chatSession.id,
-      metadata: { messageLength: message.trim().length, toolsAvailable: tools.map((t) => t.name) },
+      metadata: { messageLength: message.trim().length, toolsAvailable: tools.map((t) => t.function.name) },
     },
   })
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateJSON } from '@/lib/gemini'
+import { generateJSON } from '@/lib/ai'
 import dayjs from 'dayjs'
 
 // Generate time slots identical to /api/schedules/slots logic
@@ -100,7 +100,7 @@ export async function GET(request) {
 
   if (slots.length === 0) return NextResponse.json({ suggestions: [] })
 
-  // Use Gemini to rank and tag top 5 slots
+  // Use AI to rank and tag top 5 slots
   const prompt = `You are a scheduling assistant for a dental clinic. Given these available appointment slots for ${date.format('dddd, MMMM D, YYYY')}, select the best 3–5 slots and assign each a short explanation tag.
 
 Available slots: ${slots.join(', ')}
