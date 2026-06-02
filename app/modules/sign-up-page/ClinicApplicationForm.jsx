@@ -128,6 +128,7 @@ export default function ClinicApplicationForm() {
   const [submitted,       setSubmitted]       = useState(false)
   const [errors,          setErrors]          = useState({})
   const [termsAccepted,   setTermsAccepted]   = useState(false)
+  const [termsAcceptedAt, setTermsAcceptedAt] = useState(null)
   const [termsDialogOpen, setTermsDialogOpen] = useState(false)
 
   function validateStep1() {
@@ -190,6 +191,7 @@ export default function ClinicApplicationForm() {
           message: message.trim() || null,
           birDocuments: birUrls,
           applicantIds:  idUrls,
+          termsAcceptedAt,
         }),
       })
 
@@ -429,7 +431,7 @@ export default function ClinicApplicationForm() {
               control={
                 <Checkbox
                   checked={termsAccepted}
-                  onChange={(e) => { setTermsAccepted(e.target.checked); if (e.target.checked) setErrors(prev => ({ ...prev, terms: undefined })) }}
+                  onChange={(e) => { setTermsAccepted(e.target.checked); setTermsAcceptedAt(e.target.checked ? new Date().toISOString() : null); if (e.target.checked) setErrors(prev => ({ ...prev, terms: undefined })) }}
                   size="small"
                   sx={{ color: errors.terms ? 'error.main' : 'text.secondary', '&.Mui-checked': { color: 'primary.main' }, mt: '-2px', alignSelf: 'flex-start' }}
                 />

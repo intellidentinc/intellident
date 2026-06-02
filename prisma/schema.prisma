@@ -193,6 +193,7 @@ model EmailVerification {
   wrappedKey String
   keySalt    String
   clinicId   String?
+  termsAcceptedAt DateTime?
   expiresAt  DateTime
   createdAt  DateTime @default(now())
 
@@ -216,6 +217,7 @@ model ClinicApplication {
   status             ApplicationStatus @default(PENDING)
   notes              String?
   clinicId           String?
+  termsAcceptedAt    DateTime?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -249,6 +251,7 @@ model User {
   username              String?   @unique
   mustChangePassword    Boolean   @default(false)
   passwordExpiresAt     DateTime?
+  termsAcceptedAt       DateTime?
   createdAt             DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?

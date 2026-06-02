@@ -76,6 +76,7 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
   const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const { showToast } = useToast();
   const passwordStrength = getPasswordStrength(password);
@@ -136,7 +137,7 @@ export default function SignUpPage() {
       const response = await fetch('/api/auth/sign-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, phone, address, dateOfBirth: dateOfBirth || undefined, password, firstName, middleInitial: middleInitial || undefined, lastName, wrappedKey, keySalt, clinicId }),
+        body: JSON.stringify({ email, phone, address, dateOfBirth: dateOfBirth || undefined, password, firstName, middleInitial: middleInitial || undefined, lastName, wrappedKey, keySalt, clinicId, termsAcceptedAt }),
       });
 
       const data = await response.json();
@@ -482,7 +483,7 @@ export default function SignUpPage() {
                 control={
                   <Checkbox
                     checked={termsAccepted}
-                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    onChange={(e) => { setTermsAccepted(e.target.checked); setTermsAcceptedAt(e.target.checked ? new Date().toISOString() : null); }}
                     size="small"
                     sx={{ color: 'text.secondary', '&.Mui-checked': { color: 'primary.main' }, mt: '-2px', alignSelf: 'flex-start' }}
                   />

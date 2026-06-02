@@ -74,6 +74,7 @@ export async function GET(request) {
           wrappedKey: pending.wrappedKey,
           keySalt: pending.keySalt,
           clinicId: pending.clinicId || null,
+          termsAcceptedAt: pending.termsAcceptedAt || null,
         },
       });
 

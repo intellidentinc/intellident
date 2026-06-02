@@ -52,6 +52,8 @@ export async function POST(request) {
     const wrappedKey = secret(body.wrappedKey, 128);
     const keySalt = secret(body.keySalt, 64);
     const clinicId = str(body.clinicId, 50) ?? null;
+    const termsAcceptedAtRaw = str(body.termsAcceptedAt, 30);
+    const termsAcceptedAt = termsAcceptedAtRaw ? new Date(termsAcceptedAtRaw) : null;
 
     if (!email || !password || !clinicId) {
       return NextResponse.json(
@@ -78,6 +80,13 @@ export async function POST(request) {
     if (!wrappedKey || !keySalt) {
       return NextResponse.json(
         { error: 'Encryption key material is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!termsAcceptedAt || isNaN(termsAcceptedAt.getTime())) {
+      return NextResponse.json(
+        { error: 'You must accept the Terms of Service and Data Privacy Policy to continue.' },
         { status: 400 }
       );
     }
@@ -115,6 +124,7 @@ export async function POST(request) {
         wrappedKey,
         keySalt,
         clinicId: clinicId || null,
+        termsAcceptedAt,
         expiresAt,
       },
     });

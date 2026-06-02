@@ -41,6 +41,8 @@ export async function POST(request) {
   const contactPersonPhone  = str(body.contactPersonPhone, 20)
   const contactPersonEmail  = sanitizeEmail(body.contactPersonEmail) ?? null
   const message             = str(body.message, 500) ?? null
+  const termsAcceptedAtRaw  = str(body.termsAcceptedAt, 30)
+  const termsAcceptedAt     = termsAcceptedAtRaw ? new Date(termsAcceptedAtRaw) : null
   const birDocuments = Array.isArray(body.birDocuments)
     ? body.birDocuments.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
     : []
@@ -64,10 +66,13 @@ export async function POST(request) {
   if (!PHONE_RE.test(contactPersonPhone)) {
     return NextResponse.json({ error: 'Contact person phone must be in +63XXXXXXXXXX format' }, { status: 400 })
   }
+  if (!termsAcceptedAt || isNaN(termsAcceptedAt.getTime())) {
+    return NextResponse.json({ error: 'You must accept the Terms of Service and Data Privacy Policy to continue.' }, { status: 400 })
+  }
 
   try {
     await prisma.clinicApplication.create({
-      data: { clinicName, businessAddress, businessPhone, businessEmail, contactPersonName, contactPersonPhone, contactPersonEmail, birDocuments, applicantIds, message },
+      data: { clinicName, businessAddress, businessPhone, businessEmail, contactPersonName, contactPersonPhone, contactPersonEmail, birDocuments, applicantIds, message, termsAcceptedAt },
     })
 
     sendClinicApplicationReceived({
