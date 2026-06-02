@@ -240,13 +240,10 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
           </div>
         </div>
 
-        <a
-          href="mailto:intellident.inc@gmail.com"
-          className='flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md text-[11.5px] text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors'
-        >
+        <div className='flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md text-[11.5px] text-sidebar-foreground/55'>
           <LifeBuoy size={13} />
-          Contact Support
-        </a>
+          <span>intellident.inc@gmail.com</span>
+        </div>
 
         <SignOutButton />
       </SidebarFooter>

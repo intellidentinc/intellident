@@ -189,10 +189,8 @@ export default function SignInPage() {
             ← Back to Home
           </Link>
           <Typography variant="caption" color="text.secondary">
-            Need help?{' '}
-            <a href="mailto:intellident.inc@gmail.com" style={{ color: '#2563eb', fontWeight: 600 }}>
-              Contact Support
-            </a>
+            Need help? Contact us at{' '}
+            <span style={{ color: '#2563eb', fontWeight: 600 }}>intellident.inc@gmail.com</span>
           </Typography>
         </Box>
       </Box>
