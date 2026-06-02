@@ -9,7 +9,7 @@ import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import Tooltip from '@mui/material/Tooltip'
-import { X, Plus, Send, Bot, Trash2, MessageSquare } from 'lucide-react'
+import { X, Plus, Send, Bot, Trash2, MessageSquare, ShieldAlert } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 const QUICK_PROMPTS_BY_ROLE = {
@@ -356,6 +356,27 @@ export default function AIChatDrawer({ open, onClose, role }) {
                 </Typography>
               </Box>
 
+              {/* Security reminder */}
+              <Box
+                sx={{
+                  width: '100%',
+                  maxWidth: 320,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1,
+                  px: 1.5,
+                  py: 1.25,
+                  bgcolor: '#fefce8',
+                  border: '1px solid #fde047',
+                  borderRadius: 2,
+                }}
+              >
+                <ShieldAlert size={14} color='#a16207' style={{ flexShrink: 0, marginTop: 2 }} />
+                <Typography variant='caption' sx={{ color: '#713f12', lineHeight: 1.55 }}>
+                  <strong>Never share</strong> passwords, credit/debit card numbers, or sensitive personal information in this chat.
+                </Typography>
+              </Box>
+
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, width: '100%', maxWidth: 280 }}>
                 {quickPrompts.map((q) => (
                   <Box
@@ -534,7 +555,7 @@ export default function AIChatDrawer({ open, onClose, role }) {
         {/* Disclaimer */}
         <Box sx={{ px: 2, pb: 1.25, bgcolor: '#fff' }}>
           <Typography variant='caption' color='text.disabled' sx={{ fontSize: '0.68rem', lineHeight: 1.4, display: 'block', textAlign: 'center' }}>
-            IntelliDent AI can make mistakes. Always verify important information with clinic staff.
+            Do not share passwords, card numbers, or sensitive personal info. · AI can make mistakes — verify with clinic staff.
           </Typography>
         </Box>
       </Box>
