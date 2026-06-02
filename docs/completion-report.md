@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026 (updated May 31, 2026)  
+**Date:** May 12, 2026 (updated June 3, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -23,7 +23,7 @@ This report assesses the current completion state of IntelliDent across two dime
 
 | Module | Status | Notes |
 |---|---|---|
-| User Access & Authentication | ✅ 100% | All 20 sub-items complete — MFA, lockout, RBAC, sessions, password policy, history, Remember Me, inactivity logout, admin user creation |
+| User Access & Authentication | ✅ 100% | All 24 sub-items complete — MFA, lockout, RBAC, sessions, password policy, history, Remember Me, inactivity logout, admin user creation, first-login forced password change, random temp passwords, auto-generated usernames, 90-day admin password expiry |
 | Clinic Settings | ✅ 100% | Profile, logo upload, operating hours + presets, closure dates |
 | Service Catalog | ✅ 100% | Create / edit / delete services; duration, price, buffer; dentist assignment |
 | Appointment Scheduling | ✅ 100% | All 16 items complete — scheduling, calendar, conflict detection, status transitions, AI slot suggestions, patient self-booking, dentist calendar, rescheduling flow UI |
@@ -49,8 +49,8 @@ None.
 
 | Category | Done | Total | % |
 |---|---|---|---|
-| User Access & Authentication | 22 | 22 | 100% |
-| Clinic Settings | 5 | 5 | 100% |
+| User Access & Authentication | 26 | 26 | 100% |
+| Clinic Settings | 6 | 6 | 100% |
 | Service Catalog | 3 | 3 | 100% |
 | Appointment Scheduling | 16 | 16 | 100% |
 | Notifications & Reminders | 6 | 6 | 100% |
@@ -62,7 +62,7 @@ None.
 | AI Slot Suggestions | 1 | 1 | 100% (OpenAI gpt-5) |
 | Reporting & Exports | 1 | 1 | 100% |
 | Clinic Onboarding | 9 | 9 | 100% |
-| **Total** | **82** | **82** | **100%** |
+| **Total** | **87** | **87** | **100%** |
 
 ---
 
@@ -100,7 +100,7 @@ None.
 
 | Security Layer | Completion | Notes |
 |---|---|---|
-| Authentication | ~98% | Lockout, sessions, password controls, rate limiting all complete; MFA code ready but disabled |
+| Authentication | ~99% | Lockout, sessions, password controls, rate limiting all complete; MFA code ready but disabled; first-login forced change, password expiry, and random temp passwords added |
 | Access Control (RBAC + Tenancy) | ~90% | Role enforcement and clinicId scoping solid |
 | Data Protection (E2EE) | ~100% | Fully wired to patient records on both dentist and patient sides; tamper detection active |
 | Input Validation & Rate Limiting | ~98% | All routes covered; IP rate limits on all auth endpoints |

@@ -265,6 +265,10 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 **Key patterns:**
 - Soft delete on all major models (`isDeleted Boolean` + `deletedAt`) — all queries filter `isDeleted: false`
 - `User` has `isActive Boolean @default(true)` — deactivated users remain visible in the users table but are blocked at sign-in (403); `isActive` is toggled via `PATCH /api/users/[id]` with `{ isActive: boolean }`
+- `User` has `username String? @unique` — auto-generated as `{CLINICCODE}-{LASTNAME}-{####}` for admin-created staff; shown in user table, profile, and welcome email; not used for sign-in
+- `User` has `mustChangePassword Boolean @default(false)` — set `true` on admin-created staff; sign-in returns flag; client redirects to `/change-password?reason=first-login`; cleared on successful change
+- `User` has `passwordExpiresAt DateTime?` — set to `now + 90 days` for ADMIN accounts on password change when clinic has `passwordExpiryEnabled`
+- `Clinic` has `passwordExpiryEnabled Boolean @default(false)` — per-clinic toggle in Settings; enables 90-day password expiry for ADMIN accounts
 - `User` is not created on sign-up; `EmailVerification` record holds pending data until email verified
 - `Appointment.dentistId` is nullable (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`
 - `patientCode` format: `PAT-{CLINICCODE}-{YYYY}-{#####}`; `appointmentCode`: `APT-{CODE}-{YYYY/MM/DD}-{####}`
@@ -314,7 +318,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
 
 **Dashboard** (`DashboardPage.jsx`, server component): role-aware stat cards + recent appointments, all queries scoped to `clinicId`
 
-**Settings** (ADMIN, `/settings`): `ClinicLogoUpload` (Supabase), `ClinicProfileForm`, `ClinicSchedule` (working days/hours), `ClinicClosures`
+**Settings** (ADMIN, `/settings`): `ClinicLogoUpload` (Supabase), `ClinicProfileForm`, `ClinicSchedule` (working days/hours), `ClinicClosures`, `ClinicPaymentSettings` (PayMongo), `ClinicPasswordSettings` (90-day admin password expiry toggle)
 
 **Dentist Records** (DENTIST, `/records`): patients with ≥1 CONFIRMED/COMPLETED appt with that dentist; paginated + searchable
 
@@ -339,7 +343,10 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Edit user role
   - [x] Delete user (soft delete; auto-logout if self)
   - [x] Activate / deactivate user — `isActive Boolean @default(true)` on `User`; deactivated users are shown in the table (with a Status chip) but blocked at sign-in with a 403; PATCH `/api/users/[id]` handles both role updates and `isActive` toggle; deactivating self clears session
-  - [x] Create user (admin-set, default password `Intellident2026#`, E2EE key generated client-side, creates Dentist/Receptionist profile)
+  - [x] Create user (admin-set, random temp password generated server-side, E2EE key generated client-side, creates Dentist/Receptionist profile)
+  - [x] First-login forced password change — `mustChangePassword: true` set on admin-created staff; sign-in intercepts and redirects to `/change-password?reason=first-login`; flag cleared on successful change
+  - [x] Auto-generated username — `{CLINICCODE}-{LASTNAME}-{####}` with collision-safe increment; stored in `User.username`; shown in user table, profile, and welcome email
+  - [x] Auto-generated random temporary password — 8–12 chars meeting full policy; replaces hardcoded `Intellident2026#`
   - [x] Middle initial field — `User.middleInitial String?` on schema; flows through sign-up, profile edit, and admin user creation
   - [x] Confirm password field on sign-up — client-side match validation + submit-time guard
   - [x] Sign-up no longer auto-logs in after email verification — redirects to `/sign-in?verified=success` only
@@ -349,6 +356,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Operating hours (working days + open/close time)
   - [x] Operating hours presets — `SchedulePreset` model; CRUD via `GET/POST /api/clinics/[id]/schedule/presets` + `DELETE /api/clinics/[id]/schedule/presets/[presetId]`; apply preset fills fields without saving; applied indicator on card
   - [x] Clinic closure dates (holidays/maintenance)
+  - [x] Admin password expiry toggle — `Clinic.passwordExpiryEnabled`; MUI Switch in Settings → Password Policy (`ClinicPasswordSettings.jsx`); when enabled, ADMIN accounts get `passwordExpiresAt = now + 90 days` on each password change; expired accounts redirected to `/change-password?reason=expired` at sign-in
 - [x] Service Catalog (ADMIN)
   - [x] Create / edit / delete dental services
   - [x] Duration, price, buffer time per service

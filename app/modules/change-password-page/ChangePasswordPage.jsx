@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
+import Alert from '@mui/material/Alert';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import { Eye, EyeOff } from 'lucide-react';
@@ -36,6 +37,8 @@ function getPasswordStrength(password) {
 
 export default function ChangePasswordPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get('reason');
   const { showToast } = useToast();
   const { masterKey } = useCrypto();
 
@@ -89,7 +92,11 @@ export default function ChangePasswordPage() {
       }
 
       showToast('Password changed successfully!', 'success');
-      router.back();
+      if (reason) {
+        router.push('/sign-in?changed=true');
+      } else {
+        router.back();
+      }
     } catch {
       showToast('Failed to change password. Please try again.', 'error');
     } finally {
@@ -108,6 +115,17 @@ export default function ChangePasswordPage() {
             Enter your current password and choose a new one
           </Typography>
         </Box>
+
+        {reason === 'first-login' && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            You must set a new password before you can continue.
+          </Alert>
+        )}
+        {reason === 'expired' && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            Your password has expired. Please set a new one to continue.
+          </Alert>
+        )}
 
         <Paper elevation={3} sx={{ p: 4 }}>
           <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

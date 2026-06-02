@@ -174,9 +174,27 @@ Applied to `POST /api/clinic-applications/documents` and `POST /api/clinics/[id]
 
 Users must explicitly accept the IntelliDent Terms of Service before completing sign-up or submitting a clinic application. The ToS is rendered in a modal (`TermsDialog.jsx`) and the checkbox is required client-side before the form can be submitted. The acceptance is a client-side gate — no separate server-side ToS flag is stored.
 
-## Staff Account Welcome Email
+## Staff Account Creation Security
 
-When an ADMIN creates a new staff user via `POST /api/users`, a `sendStaffWelcomeEmail` is sent fire-and-forget to the new user's email address. The email includes their email address, temporary password (`Intellident2026#`), and a reminder to change it on first sign-in.
+When an ADMIN creates a new staff user (Dentist or Receptionist) via `POST /api/users`:
+
+- **Random temporary password** — an 8–12 character password meeting the full policy (upper, lower, digit, special) is generated server-side using `generateStaffPassword()` in `app/api/users/route.js`. The hardcoded `Intellident2026#` default is no longer used.
+- **Auto-generated username** — a username in the format `{CLINICCODE}-{LASTNAME}-{####}` (e.g. `MLC-DELA CRUZ-0001`) is generated with collision-safe incrementing and stored in `User.username`. Displayed in the user management table, profile page, and welcome email.
+- **First-login forced password change** — `mustChangePassword: true` is set on the `User` record at creation. On sign-in, the route checks this flag and includes `mustChangePassword: true` in the response. `SignInPage.jsx` intercepts this and redirects to `/change-password?reason=first-login` before reaching the dashboard. The `change-password` route always sets `mustChangePassword: false` on any successful password update, preventing a redirect loop.
+- **Welcome email** — `sendStaffWelcomeEmail` sends the new user's email address, username, and randomly generated temporary password. The warning message now reads: *"You will be required to change your password on your first sign-in before you can access the system."*
+
+## Admin Password Expiry
+
+An optional 90-day password expiry policy can be enabled per clinic:
+
+- **Toggle** — `Clinic.passwordExpiryEnabled Boolean` (default `false`). Controlled via the "Password Policy" section in Clinic Settings (`ClinicPasswordSettings.jsx`). Saved via `PATCH /api/clinics/[id]/profile` with `{ passwordExpiryEnabled: true/false }`.
+- **Enforcement** — only applies to users with `role === ADMIN (1)`. At sign-in, after successful credential validation, the route checks: if the clinic has `passwordExpiryEnabled` and the user's `passwordExpiresAt` is in the past, the response includes `passwordExpired: true`. `SignInPage.jsx` intercepts this and redirects to `/change-password?reason=expired`.
+- **Renewal** — when an ADMIN user successfully changes their password via `POST /api/auth/change-password`, the route checks the clinic's `passwordExpiryEnabled`. If enabled, it sets `passwordExpiresAt = now + 90 days` on the user record. No expiry is set for non-ADMIN users or when the feature is disabled.
+- **First-time enforcement** — `passwordExpiresAt` is `null` by default and is only set after the first password change. A `null` value is never treated as expired; the check is only triggered once a date has been recorded.
+
+## Staff Account Welcome Email (Legacy Note)
+
+The welcome email previously showed the hardcoded password `Intellident2026#`. As of 2026-06-03 the email shows the randomly generated password and the auto-generated username. The email template (`sendStaffWelcomeEmail` in `lib/email.js`) accepts `{ to, firstName, role, tempPassword, username }`.
 
 ## Email Verification on Sign-Up
 - `POST /api/auth/sign-up` → validates input, generates E2EE key material client-side, stores everything in `EmailVerification` record (24h expiry). **Does NOT create a `User` yet.**
@@ -187,7 +205,8 @@ When an ADMIN creates a new staff user via `POST /api/users`, a `sendStaffWelcom
 ## Password Reset & Change
 - **Forgot password:** `POST /api/auth/forgot-password` → generates one-time token (10 min expiry), sends reset link via email. Always returns 200 to prevent email enumeration.
 - **Reset password:** `POST /api/auth/reset-password` → validates token, enforces policy, checks history, generates fresh E2EE key material (old encrypted data is intentionally inaccessible), sends confirmation email.
-- **Change password (authenticated):** `POST /api/auth/change-password` → requires current password verification, re-wraps existing master key with new KEK (encrypted data stays accessible), sends confirmation email.
+- **Change password (authenticated):** `POST /api/auth/change-password` → requires current password verification, re-wraps existing master key with new KEK (encrypted data stays accessible), sends confirmation email. Always clears `mustChangePassword: false`. For ADMIN accounts when the clinic has `passwordExpiryEnabled`, sets `passwordExpiresAt = now + 90 days`.
+- **Forced change redirect:** if `mustChangePassword` is `true` or `passwordExpired` is `true` on sign-in response, `SignInPage.jsx` redirects to `/change-password?reason=first-login` or `/change-password?reason=expired` respectively. After a successful forced change, the user is redirected to `/sign-in?changed=true` and must re-authenticate.
 - **Password history:** last 3 hashed passwords stored in `User.passwordHistory String[]`; new password cannot match any of them.
 - Reset token model: `PasswordResetToken` (token, email, expiresAt, usedAt)
 - Email notifications sent via `sendPasswordResetEmail` and `sendPasswordChangedEmail` in `lib/email.js`

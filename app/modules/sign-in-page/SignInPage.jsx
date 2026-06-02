@@ -90,6 +90,14 @@ export default function SignInPage() {
       // Store master key in memory for the session
       setMasterKey(masterKey);
       showToast('Signed in successfully!', 'success');
+      if (data.mustChangePassword) {
+        router.push('/change-password?reason=first-login');
+        return;
+      }
+      if (data.passwordExpired) {
+        router.push('/change-password?reason=expired');
+        return;
+      }
       router.push(data.clinicId ? `/${data.clinicId}/dashboard` : '/super');
     } catch (err) {
       // Clear any session the server may have already set so refresh doesn't leave the user

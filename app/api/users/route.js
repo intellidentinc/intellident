@@ -7,6 +7,37 @@ import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
 import { sendStaffWelcomeEmail } from '@/lib/email'
 
+function generateStaffPassword() {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const lower = 'abcdefghijklmnopqrstuvwxyz'
+  const digit = '0123456789'
+  const special = '!@#$%^&*'
+  const all = upper + lower + digit + special
+  const required = [
+    upper[Math.floor(Math.random() * upper.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    digit[Math.floor(Math.random() * digit.length)],
+    special[Math.floor(Math.random() * special.length)],
+  ]
+  const length = 8 + Math.floor(Math.random() * 5)
+  for (let i = required.length; i < length; i++) {
+    required.push(all[Math.floor(Math.random() * all.length)])
+  }
+  return required.sort(() => Math.random() - 0.5).join('')
+}
+
+async function generateUsername(lastName, clinicCode, tx) {
+  const base = lastName.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 20)
+  const prefix = `${clinicCode}-${base}-`
+  const existing = await tx.user.findMany({
+    where: { username: { startsWith: prefix } },
+    select: { username: true },
+  })
+  const nums = existing.map(u => parseInt(u.username.split('-').pop())).filter(n => !isNaN(n))
+  const next = (nums.length > 0 ? Math.max(...nums) : 0) + 1
+  return `${prefix}${String(next).padStart(4, '0')}`
+}
+
 export async function GET(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -51,7 +82,7 @@ export async function GET(request) {
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
-      select: { id: true, firstName: true, lastName: true, email: true, role: true, isActive: true, createdAt: true },
+      select: { id: true, firstName: true, lastName: true, email: true, role: true, isActive: true, username: true, createdAt: true },
       orderBy: { [safeSortField]: safeSortOrder },
       skip: page * pageSize,
       take: pageSize
@@ -102,10 +133,16 @@ export async function POST(request) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 400 })
   }
 
-  const DEFAULT_PASSWORD = 'Intellident2026#'
-  const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 10)
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { code: true } })
+  if (!clinic?.code) {
+    return NextResponse.json({ error: 'Clinic not found' }, { status: 400 })
+  }
+
+  const tempPassword = generateStaffPassword()
+  const hashedPassword = await bcrypt.hash(tempPassword, 10)
 
   const newUser = await prisma.$transaction(async (tx) => {
+    const username = await generateUsername(lastName, clinic.code, tx)
     const user = await tx.user.create({
       data: {
         email,
@@ -118,7 +155,9 @@ export async function POST(request) {
         role,
         wrappedKey,
         keySalt,
-        clinicId: clinicId,
+        clinicId,
+        username,
+        mustChangePassword: true,
       }
     })
 
@@ -135,7 +174,8 @@ export async function POST(request) {
     to: newUser.email,
     firstName: newUser.firstName,
     role: role === ROLES.DENTIST ? 'Dentist' : 'Receptionist',
-    tempPassword: DEFAULT_PASSWORD,
+    tempPassword,
+    username: newUser.username,
   }).catch(() => {})
 
   logAudit({ userId: session.userId, clinicId: clinicId, action: 'CREATE', entity: 'User', entityId: newUser.id, ipAddress: ip, userAgent, metadata: { role, email: newUser.email } })

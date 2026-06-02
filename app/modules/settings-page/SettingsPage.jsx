@@ -13,6 +13,7 @@ import ClinicProfileForm from './ClinicProfileForm'
 import ClinicSchedule from './ClinicSchedule'
 import ClinicClosures from './ClinicClosures'
 import ClinicPaymentSettings from './ClinicPaymentSettings'
+import ClinicPasswordSettings from './ClinicPasswordSettings'
 import { EMPTY_ADDRESS } from '@/components/commons/AddressSelector'
 
 function validate(form) {
@@ -184,6 +185,17 @@ export default function SettingsPage() {
         </Typography>
 
         <ClinicPaymentSettings clinicId={clinicId} />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant='h6' fontWeight={700} color='text.primary' gutterBottom>
+          Password Policy
+        </Typography>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+          Configure password expiry requirements for Admin accounts.
+        </Typography>
+
+        <ClinicPasswordSettings clinicId={clinicId} />
       </Box>
     </SidebarInset>
   )

@@ -33,8 +33,11 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Edit user role | `[x]` | Admin only |
 | Delete user (soft delete) | `[x]` | Auto-logout if self |
 | Activate / deactivate user | `[x]` | Blocked at sign-in when inactive |
-| Create user (admin) | `[x]` | Default password `Intellident2026#`, E2EE key generated client-side; welcome email sent via `sendStaffWelcomeEmail` |
-| Staff account welcome email | `[x]` | Sent on admin-created accounts; contains email + temp password |
+| Create user (admin) | `[x]` | Random temporary password generated server-side; auto-generated username `{CLINICCODE}-{LASTNAME}-{####}`; `mustChangePassword: true` set on creation; E2EE key generated client-side; welcome email sent via `sendStaffWelcomeEmail` |
+| Staff account welcome email | `[x]` | Sent on admin-created accounts; contains email, username, and randomly generated temp password |
+| First-login forced password change | `[x]` | Staff accounts have `mustChangePassword: true`; sign-in returns flag → client redirects to `/change-password?reason=first-login`; flag cleared on successful change |
+| Auto-generated username | `[x]` | Format `{CLINICCODE}-{LASTNAME}-{####}` with collision-safe increment; stored in `User.username`; shown in user table, profile, and welcome email |
+| Admin password expiry (90-day) | `[x]` | Per-clinic toggle in Settings → Password Policy; `Clinic.passwordExpiryEnabled`; ADMIN accounts get `passwordExpiresAt = now + 90 days` on each password change; expired accounts redirected to `/change-password?reason=expired` on sign-in |
 | Terms of Service on registration | `[x]` | Required acceptance checkbox + modal (`TermsDialog.jsx`) on sign-up and clinic application |
 | hCaptcha on login | `[ ]` | Planned — `@hcaptcha/react-hcaptcha`, needs site key + secret key in env |
 
@@ -49,6 +52,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Operating hours | `[x]` | Working days + open/close time |
 | Operating hours presets | `[x]` | `SchedulePreset` model; save/apply/delete presets; applied indicator |
 | Clinic closure dates | `[x]` | Holidays/maintenance dates |
+| Password expiry policy toggle | `[x]` | `Clinic.passwordExpiryEnabled`; MUI Switch in Settings → Password Policy section; applies to ADMIN role accounts |
 
 ---
 
@@ -178,6 +182,10 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | 2026-05-05 | Fixed sign-up auto-login — now redirects to sign-in after verification |
 | 2026-05-05 | Fixed `/verify-otp` and `/reset-password` Suspense + `force-dynamic` for Vercel build |
 | 2026-05-27 | Added staff welcome email (`sendStaffWelcomeEmail`) on admin-created accounts |
+| 2026-06-03 | Added first-login forced password change for admin-created staff accounts (`mustChangePassword` flag) |
+| 2026-06-03 | Replaced hardcoded `Intellident2026#` with randomly generated 8–12 char temporary password on staff account creation |
+| 2026-06-03 | Added auto-generated username (`{CLINICCODE}-{LASTNAME}-{####}`) for Dentist/Receptionist accounts; shown in user table, profile, and welcome email |
+| 2026-06-03 | Added Admin password expiry — 90-day optional toggle per clinic; ADMIN accounts get `passwordExpiresAt` set on each password change; expired accounts intercepted at sign-in |
 | 2026-06-03 | Migrated AI from Gemini 2.5 Flash to OpenAI gpt-5 (`lib/ai.js`); system prompt caching; history window 5 msgs; `max_completion_tokens: 300` |
 | 2026-05-31 | Added clinic onboarding — application form, document upload, super admin review, approve/reject flow |
 | 2026-05-31 | Added Terms of Service acceptance to sign-up and clinic application |

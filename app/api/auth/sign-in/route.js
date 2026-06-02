@@ -21,6 +21,7 @@ import bcrypt from 'bcrypt';
 // import crypto from 'crypto'; // MFA: not needed while OTP is disabled
 import { prisma } from '@/lib/prisma';
 import { setSession } from '@/lib/auth';
+import { ROLES } from '@/lib/roles';
 import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -128,8 +129,12 @@ export async function POST(request) {
     });
 
     // Check clinic is still active (checked after password validation so lockout still applies)
+    let clinic = null;
     if (user.clinicId) {
-      const clinic = await prisma.clinic.findUnique({ where: { id: user.clinicId }, select: { isEnabled: true } });
+      clinic = await prisma.clinic.findUnique({
+        where: { id: user.clinicId },
+        select: { isEnabled: true, passwordExpiryEnabled: true },
+      });
       if (!clinic || !clinic.isEnabled) {
         return NextResponse.json(
           { error: 'This clinic has been disabled. Please contact support.' },
@@ -166,11 +171,20 @@ export async function POST(request) {
 
     logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });
 
+    const mustChangePassword = user.mustChangePassword ?? false;
+    const passwordExpired =
+      user.role === ROLES.ADMIN &&
+      clinic?.passwordExpiryEnabled === true &&
+      user.passwordExpiresAt instanceof Date &&
+      user.passwordExpiresAt < new Date();
+
     return NextResponse.json(
       {
         clinicId: user.clinicId,
         wrappedKey: user.wrappedKey,
         keySalt: user.keySalt,
+        ...(mustChangePassword && { mustChangePassword: true }),
+        ...(passwordExpired && { passwordExpired: true }),
       },
       { status: 200 }
     );

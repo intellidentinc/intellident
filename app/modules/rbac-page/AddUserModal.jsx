@@ -173,7 +173,7 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
             Add New User
           </Typography>
           <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
-            Default password: <strong>Intellident2026#</strong>
+            A secure temporary password will be emailed to the user.
           </Typography>
         </Box>
       </Box>

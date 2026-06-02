@@ -9,7 +9,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { firstName: true, middleInitial: true, lastName: true, email: true, phone: true, address: true, dateOfBirth: true, gender: true, isDeleted: true }
+    select: { firstName: true, middleInitial: true, lastName: true, email: true, phone: true, address: true, dateOfBirth: true, gender: true, username: true, isDeleted: true }
   })
 
   if (!user || user.isDeleted) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -27,7 +27,8 @@ export async function GET() {
     phone: user.phone,
     address: parsedAddress,
     dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString().split('T')[0] : '',
-    gender: user.gender ?? ''
+    gender: user.gender ?? '',
+    username: user.username ?? null,
   })
 }
 

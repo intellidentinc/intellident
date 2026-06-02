@@ -30,6 +30,7 @@ import { ROLES, ROLE_LABELS } from '@/lib/roles'
 
 const HEAD_CELLS = [
   { id: 'firstName', label: 'Name', sortable: true },
+  { id: 'username', label: 'Username', sortable: false },
   { id: 'email', label: 'Email', sortable: true },
   { id: 'role', label: 'Role', sortable: false, align: 'center' },
   { id: 'status', label: 'Status', sortable: false, align: 'center' },
@@ -223,7 +224,7 @@ export default function RbacPage() {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={5} align='center' sx={{ py: 6 }}>
+                    <TableCell colSpan={6} align='center' sx={{ py: 6 }}>
                       <CircularProgress size={28} sx={{ color: '#2563eb' }} />
                     </TableCell>
                   </TableRow>
@@ -231,7 +232,7 @@ export default function RbacPage() {
 
                 {!loading && rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} align='center' sx={{ py: 6 }}>
+                    <TableCell colSpan={6} align='center' sx={{ py: 6 }}>
                       <Typography variant='body2' color='text.disabled'>
                         No users found
                       </Typography>
@@ -251,6 +252,10 @@ export default function RbacPage() {
                   >
                     <TableCell sx={{ fontWeight: 500, color: '#334155' }}>
                       {`${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || '—'}
+                    </TableCell>
+
+                    <TableCell sx={{ color: '#64748b', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                      {row.username ?? '—'}
                     </TableCell>
 
                     <TableCell sx={{ color: '#334155' }}>

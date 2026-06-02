@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession, clearSession } from '@/lib/auth';
 import { sendPasswordChangedEmail } from '@/lib/email';
 import { parseJsonBody, secret } from '@/lib/validate';
+import { ROLES } from '@/lib/roles';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -60,9 +61,27 @@ export async function POST(request) {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     const newHistory = [user.password, ...user.passwordHistory].slice(0, 3);
 
+    let clinicExpiryEnabled = false;
+    if (user.role === ROLES.ADMIN && user.clinicId) {
+      const clinic = await prisma.clinic.findUnique({
+        where: { id: user.clinicId },
+        select: { passwordExpiryEnabled: true },
+      });
+      clinicExpiryEnabled = clinic?.passwordExpiryEnabled ?? false;
+    }
+
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashedPassword, passwordHistory: newHistory, wrappedKey, keySalt },
+      data: {
+        password: hashedPassword,
+        passwordHistory: newHistory,
+        wrappedKey,
+        keySalt,
+        mustChangePassword: false,
+        ...(user.role === ROLES.ADMIN && clinicExpiryEnabled
+          ? { passwordExpiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) }
+          : {}),
+      },
     });
 
     await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName });

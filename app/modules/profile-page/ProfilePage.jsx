@@ -49,6 +49,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ firstName: '', middleInitial: '', lastName: '', email: '', phone: '+63', address: { ...EMPTY_ADDRESS }, dateOfBirth: '', gender: '' })
   const [errors, setErrors] = useState({})
+  const [username, setUsername] = useState(null)
 
   useEffect(() => {
     fetch('/api/profile')
@@ -66,6 +67,7 @@ export default function ProfilePage() {
           dateOfBirth: data.dateOfBirth ?? '',
           gender: data.gender ?? ''
         })
+        if (data.username) setUsername(data.username)
       })
       .catch(() => showToast('Failed to load profile', 'error'))
       .finally(() => setLoading(false))
@@ -132,6 +134,15 @@ export default function ProfilePage() {
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {username && (
+              <Input
+                id='username'
+                label='Username'
+                value={username}
+                disabled
+                helperText='System-generated — not editable'
+              />
+            )}
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Input
                 id='first-name'

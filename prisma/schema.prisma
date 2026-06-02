@@ -97,8 +97,9 @@ model Clinic {
   landline  String?
   logoUrl   String?
   email     String?
-  reservationFeeAmount Float   @default(0)
-  paymongoEnabled      Boolean @default(false)
+  reservationFeeAmount  Float   @default(0)
+  paymongoEnabled       Boolean @default(false)
+  passwordExpiryEnabled Boolean @default(false)
   isEnabled Boolean   @default(true)
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
@@ -243,9 +244,12 @@ model User {
   failedLoginAttempts Int       @default(0)
   lastFailedAt        DateTime?
   lockedUntil         DateTime?
-  isDeleted           Boolean   @default(false)
-  isActive            Boolean   @default(true)
-  createdAt           DateTime  @default(now())
+  isDeleted             Boolean   @default(false)
+  isActive              Boolean   @default(true)
+  username              String?   @unique
+  mustChangePassword    Boolean   @default(false)
+  passwordExpiresAt     DateTime?
+  createdAt             DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
 

@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
   })
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -54,6 +54,18 @@ export async function PATCH(request, { params }) {
 
   // Payment settings (optional fields — only updated when present)
   const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body
+  const hasPasswordExpiry = 'passwordExpiryEnabled' in parsed.body
+
+  if (hasPasswordExpiry) {
+    // Password expiry toggle update
+    const passwordExpiryEnabled = parsed.body.passwordExpiryEnabled === true
+    const clinic = await prisma.clinic.update({
+      where: { id },
+      data: { passwordExpiryEnabled },
+      select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
+    })
+    return NextResponse.json(clinic)
+  }
 
   if (!hasPaymentFields) {
     // Regular clinic profile update
@@ -73,7 +85,7 @@ export async function PATCH(request, { params }) {
         phone: phone || null,
         landline: landline || null
       },
-      select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true }
+      select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
     })
     return NextResponse.json(clinic)
   }
@@ -86,7 +98,7 @@ export async function PATCH(request, { params }) {
   const clinic = await prisma.clinic.update({
     where: { id },
     data: { paymongoEnabled, reservationFeeAmount },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
   })
 
   return NextResponse.json(clinic)
