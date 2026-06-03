@@ -23,5 +23,7 @@ export async function GET() {
     orderBy: { user: { firstName: 'asc' } }
   })
 
-  return NextResponse.json({ dentists })
+  const res = NextResponse.json({ dentists })
+  res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600')
+  return res
 }

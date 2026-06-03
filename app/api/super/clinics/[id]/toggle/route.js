@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
@@ -23,6 +24,7 @@ export async function POST(request, { params }) {
 
   // Atomic toggle — avoids read-then-write race condition
   await prisma.$executeRaw`UPDATE clinics SET "isEnabled" = NOT "isEnabled" WHERE id = ${id}`
+  revalidateTag('clinic-enabled');
 
   const updated = await prisma.clinic.findUnique({
     where: { id },

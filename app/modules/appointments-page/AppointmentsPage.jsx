@@ -148,8 +148,13 @@ export default function AppointmentsPage() {
 
   // Load filter options once
   useEffect(() => {
-    fetch('/api/services/dentists').then(r => r.ok ? r.json() : { dentists: [] }).then(d => setAllDentists(d.dentists ?? []))
-    fetch('/api/appointments/services').then(r => r.ok ? r.json() : { services: [] }).then(d => setAllServices(d.services ?? []))
+    Promise.all([
+      fetch('/api/services/dentists').then(r => r.ok ? r.json() : { dentists: [] }),
+      fetch('/api/appointments/services').then(r => r.ok ? r.json() : { services: [] }),
+    ]).then(([dentistsData, servicesData]) => {
+      setAllDentists(dentistsData.dentists ?? [])
+      setAllServices(servicesData.services ?? [])
+    }).catch(() => {})
   }, [])
 
   // ── Calendar fetch ──────────────────────────────────────────────────────────

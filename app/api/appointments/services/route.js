@@ -23,5 +23,7 @@ export async function GET() {
     orderBy: { name: 'asc' },
   })
 
-  return NextResponse.json({ services })
+  const res = NextResponse.json({ services })
+  res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600')
+  return res
 }

@@ -1,7 +1,20 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+
+const getClinicEnabled = unstable_cache(
+  async (clinicId) => {
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: clinicId },
+      select: { isEnabled: true },
+    });
+    return clinic?.isEnabled ?? null;
+  },
+  ['clinic-enabled'],
+  { revalidate: 60, tags: ['clinic-enabled'] }
+);
 
 const REMEMBER_ME_MAX_AGE    = 60 * 60 * 24 * 3;       // 3 days
 const DEFAULT_MAX_AGE        = 60 * 10;                // 10 minutes
@@ -79,11 +92,8 @@ export async function middleware(request) {
     // Block requests for sessions tied to a disabled clinic
     if (session.clinicId && !session.superAdmin && !isPublicApi(pathname)) {
       try {
-        const clinic = await prisma.clinic.findUnique({
-          where: { id: session.clinicId },
-          select: { isEnabled: true },
-        });
-        if (clinic && !clinic.isEnabled) {
+        const isEnabled = await getClinicEnabled(session.clinicId);
+        if (isEnabled === false) {
           if (pathname.startsWith('/api/')) {
             return NextResponse.json({ error: 'Clinic is disabled' }, { status: 403 });
           }

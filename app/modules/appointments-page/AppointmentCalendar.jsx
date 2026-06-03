@@ -14,6 +14,7 @@
  */
 'use client'
 
+import { memo, useMemo } from 'react'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { Calendar, dayjsLocalizer } from 'react-big-calendar'
 import Box from '@mui/material/Box'
@@ -80,14 +81,14 @@ function dayPropGetter() {
   }
 }
 
-export default function AppointmentCalendar({ appointments, view, date, onNavigate, onView, onRangeChange, onSelectEvent, onSelectSlot }) {
-  const events = appointments.map((a) => ({
+export default memo(function AppointmentCalendar({ appointments, view, date, onNavigate, onView, onRangeChange, onSelectEvent, onSelectSlot }) {
+  const events = useMemo(() => appointments.map((a) => ({
     id: a.id,
     title: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : '—',
     start: new Date(a.scheduledAt),
     end:   new Date(a.endsAt),
     resource: a,
-  }))
+  })), [appointments])
 
   return (
     <Box
@@ -140,4 +141,4 @@ export default function AppointmentCalendar({ appointments, view, date, onNaviga
       />
     </Box>
   )
-}
+})
