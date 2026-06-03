@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/audit-purge",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/health",
-      "schedule": "*/5 * * * *"
     }
   ]
 }
