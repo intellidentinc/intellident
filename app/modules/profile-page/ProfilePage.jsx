@@ -12,6 +12,7 @@ import { useToast } from '@/app/providers/ToastProvider'
 import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
 import AddressSelector, { EMPTY_ADDRESS } from '@/components/commons/AddressSelector'
+import DataRightsDialog from './DataRightsDialog'
 
 const GENDER_OPTIONS = [
   { value: 'MALE', label: 'Male' },
@@ -50,6 +51,8 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ firstName: '', middleInitial: '', lastName: '', email: '', phone: '+63', address: { ...EMPTY_ADDRESS }, dateOfBirth: '', gender: '' })
   const [errors, setErrors] = useState({})
   const [username, setUsername] = useState(null)
+  const [role, setRole] = useState(null)
+  const [dataRightsOpen, setDataRightsOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/profile')
@@ -68,6 +71,7 @@ export default function ProfilePage() {
           gender: data.gender ?? ''
         })
         if (data.username) setUsername(data.username)
+        if (data.role !== undefined) setRole(data.role)
       })
       .catch(() => showToast('Failed to load profile', 'error'))
       .finally(() => setLoading(false))
@@ -252,9 +256,28 @@ export default function ProfilePage() {
                 Save Changes
               </Button>
             </Box>
+
+            {role === 4 && (
+              <>
+                <Divider sx={{ my: 1 }} />
+                <Box>
+                  <Typography variant='subtitle1' fontWeight={600} color='text.primary' gutterBottom>
+                    Data Rights
+                  </Typography>
+                  <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
+                    Under the Philippine Data Privacy Act, you may request access to, correction of, or deletion of your personal data.
+                  </Typography>
+                  <Button variant='outlined' onClick={() => setDataRightsOpen(true)}>
+                    Submit a Data Rights Request
+                  </Button>
+                </Box>
+              </>
+            )}
           </Box>
         )}
       </Box>
+
+      <DataRightsDialog open={dataRightsOpen} onClose={() => setDataRightsOpen(false)} />
     </SidebarInset>
   )
 }

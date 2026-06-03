@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
   })
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -52,40 +52,48 @@ export async function PATCH(request, { params }) {
   const phone    = str(parsed.body.phone, 20)
   const landline = str(parsed.body.landline, 20)
 
-  // Payment settings (optional fields — only updated when present)
+  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
+
   const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body
   const hasPasswordExpiry = 'passwordExpiryEnabled' in parsed.body
+  const hasNotifConfig = 'notifConfig' in parsed.body || 'reminder1Hours' in parsed.body || 'reminder2Hours' in parsed.body
+  const hasAuditRetention = 'auditLogRetentionDays' in parsed.body
 
   if (hasPasswordExpiry) {
-    // Password expiry toggle update
     const passwordExpiryEnabled = parsed.body.passwordExpiryEnabled === true
-    const clinic = await prisma.clinic.update({
-      where: { id },
-      data: { passwordExpiryEnabled },
-      select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
-    })
+    const clinic = await prisma.clinic.update({ where: { id }, data: { passwordExpiryEnabled }, select: FULL_SELECT })
+    return NextResponse.json(clinic)
+  }
+
+  if (hasNotifConfig) {
+    const r1 = parseInt(parsed.body.reminder1Hours, 10)
+    const r2 = parseInt(parsed.body.reminder2Hours, 10)
+    const data = {}
+    if ('notifConfig' in parsed.body) data.notifConfig = parsed.body.notifConfig ?? null
+    if (!isNaN(r1) && r1 > 0) data.reminder1Hours = r1
+    if (!isNaN(r2) && r2 > 0) data.reminder2Hours = r2
+    const clinic = await prisma.clinic.update({ where: { id }, data, select: FULL_SELECT })
+    return NextResponse.json(clinic)
+  }
+
+  if (hasAuditRetention) {
+    const raw = parsed.body.auditLogRetentionDays
+    const auditLogRetentionDays = raw === null ? null : (parseInt(raw, 10) > 0 ? parseInt(raw, 10) : null)
+    const clinic = await prisma.clinic.update({ where: { id }, data: { auditLogRetentionDays }, select: FULL_SELECT })
     return NextResponse.json(clinic)
   }
 
   if (!hasPaymentFields) {
-    // Regular clinic profile update
     if (!name) return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
     if (!address || typeof address !== 'object' || !address.cityMuni) return NextResponse.json({ error: 'Address is required' }, { status: 400 })
     if (!email) return NextResponse.json({ error: 'Email is required or has an invalid format' }, { status: 400 })
     if (phone && !/^\+639\d{9}$/.test(phone)) {
       return NextResponse.json({ error: 'Mobile must be in +63XXXXXXXXXX format (11 digits after +63)' }, { status: 400 })
     }
-
     const clinic = await prisma.clinic.update({
       where: { id },
-      data: {
-        name,
-        address: address && typeof address === 'object' ? JSON.stringify(address) : null,
-        email,
-        phone: phone || null,
-        landline: landline || null
-      },
-      select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
+      data: { name, address: address && typeof address === 'object' ? JSON.stringify(address) : null, email, phone: phone || null, landline: landline || null },
+      select: FULL_SELECT
     })
     return NextResponse.json(clinic)
   }
@@ -94,12 +102,6 @@ export async function PATCH(request, { params }) {
   const paymongoEnabled = parsed.body.paymongoEnabled === true
   const rawFee = parseFloat(parsed.body.reservationFeeAmount)
   const reservationFeeAmount = isNaN(rawFee) || rawFee < 0 ? 0 : rawFee
-
-  const clinic = await prisma.clinic.update({
-    where: { id },
-    data: { paymongoEnabled, reservationFeeAmount },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true }
-  })
-
+  const clinic = await prisma.clinic.update({ where: { id }, data: { paymongoEnabled, reservationFeeAmount }, select: FULL_SELECT })
   return NextResponse.json(clinic)
 }

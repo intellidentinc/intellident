@@ -5,27 +5,11 @@ import { sendAppointmentReminder } from '@/lib/notifications'
 /**
  * GET /api/cron/reminders — Vercel Cron Job (every 15 minutes)
  *
- * Key features implemented here:
- *
- * 1. Bearer Token Auth
- *    Protected by CRON_SECRET env var. Only Vercel's cron runner (or a request
- *    with the correct Authorization header) can trigger this endpoint.
- *
- * 2. Idempotent Reminder Delivery
- *    Uses reminderSent24h / reminderSent2h boolean flags on the Appointment model.
- *    Each appointment only receives each reminder once, even if the cron fires
- *    multiple times within the ±30-minute detection window.
- *
- * 3. Dual-Channel Notification
- *    Each reminder sends both an in-app notification (bell) and a Gmail email
- *    via sendAppointmentReminder in lib/notifications.js.
- *
- * Detection windows (±30 min around each threshold):
- *   - 24h reminder: scheduledAt between (now + 23.5h) and (now + 24.5h)
- *   - 2h  reminder: scheduledAt between (now + 1.5h)  and (now + 2.5h)
+ * Per-clinic reminder intervals: reads reminder1Hours / reminder2Hours from each
+ * Clinic record (defaults: 24h / 2h). Respects notifConfig per-type toggles.
+ * Idempotency: reminderSent24h / reminderSent2h flags prevent duplicate sends.
  */
 export async function GET(request) {
-  // Protect the endpoint — only Vercel cron or requests with the correct secret
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,68 +17,67 @@ export async function GET(request) {
 
   const now = new Date()
 
-  // ── 24-hour window ───────────────────────────────────────────────────────────
-  const window24Start = new Date(now.getTime() + 23.5 * 60 * 60 * 1000)
-  const window24End   = new Date(now.getTime() + 24.5 * 60 * 60 * 1000)
-
-  const due24h = await prisma.appointment.findMany({
-    where: {
-      status: 'CONFIRMED',
-      isDeleted: false,
-      reminderSent24h: false,
-      scheduledAt: { gte: window24Start, lte: window24End },
-    },
-    include: {
-      service: { select: { name: true } },
-      patient: {
-        include: {
-          user: { select: { id: true, email: true, firstName: true } },
-        },
-      },
-    },
+  const clinics = await prisma.clinic.findMany({
+    where: { isDeleted: false, isEnabled: true },
+    select: { id: true, reminder1Hours: true, reminder2Hours: true, notifConfig: true },
   })
 
-  // ── 2-hour window ────────────────────────────────────────────────────────────
-  const window2Start = new Date(now.getTime() + 1.5 * 60 * 60 * 1000)
-  const window2End   = new Date(now.getTime() + 2.5 * 60 * 60 * 1000)
+  let sent1 = 0
+  let sent2 = 0
 
-  const due2h = await prisma.appointment.findMany({
-    where: {
-      status: 'CONFIRMED',
-      isDeleted: false,
-      reminderSent2h: false,
-      scheduledAt: { gte: window2Start, lte: window2End },
-    },
-    include: {
-      service: { select: { name: true } },
-      patient: {
-        include: {
-          user: { select: { id: true, email: true, firstName: true } },
-        },
+  for (const clinic of clinics) {
+    const h1 = clinic.reminder1Hours ?? 24
+    const h2 = clinic.reminder2Hours ?? 2
+    const half = 0.5 * 60 * 60 * 1000
+
+    // ── First reminder window ────────────────────────────────────────────────
+    const w1Start = new Date(now.getTime() + h1 * 60 * 60 * 1000 - half)
+    const w1End   = new Date(now.getTime() + h1 * 60 * 60 * 1000 + half)
+
+    const due1 = await prisma.appointment.findMany({
+      where: {
+        clinicId: clinic.id,
+        status: 'CONFIRMED',
+        isDeleted: false,
+        reminderSent24h: false,
+        scheduledAt: { gte: w1Start, lte: w1End },
       },
-    },
-  })
-
-  // Process 24h reminders
-  for (const appt of due24h) {
-    await sendAppointmentReminder({ appointment: appt, hoursAhead: 24 })
-    await prisma.appointment.update({
-      where: { id: appt.id },
-      data: { reminderSent24h: true },
+      include: {
+        service: { select: { name: true } },
+        patient: { include: { user: { select: { id: true, email: true, firstName: true } } } },
+      },
     })
+
+    for (const appt of due1) {
+      await sendAppointmentReminder({ appointment: appt, hoursAhead: h1, notifConfig: clinic.notifConfig })
+      await prisma.appointment.update({ where: { id: appt.id }, data: { reminderSent24h: true } })
+      sent1++
+    }
+
+    // ── Second reminder window ───────────────────────────────────────────────
+    const w2Start = new Date(now.getTime() + h2 * 60 * 60 * 1000 - half)
+    const w2End   = new Date(now.getTime() + h2 * 60 * 60 * 1000 + half)
+
+    const due2 = await prisma.appointment.findMany({
+      where: {
+        clinicId: clinic.id,
+        status: 'CONFIRMED',
+        isDeleted: false,
+        reminderSent2h: false,
+        scheduledAt: { gte: w2Start, lte: w2End },
+      },
+      include: {
+        service: { select: { name: true } },
+        patient: { include: { user: { select: { id: true, email: true, firstName: true } } } },
+      },
+    })
+
+    for (const appt of due2) {
+      await sendAppointmentReminder({ appointment: appt, hoursAhead: h2, notifConfig: clinic.notifConfig })
+      await prisma.appointment.update({ where: { id: appt.id }, data: { reminderSent2h: true } })
+      sent2++
+    }
   }
 
-  // Process 2h reminders
-  for (const appt of due2h) {
-    await sendAppointmentReminder({ appointment: appt, hoursAhead: 2 })
-    await prisma.appointment.update({
-      where: { id: appt.id },
-      data: { reminderSent2h: true },
-    })
-  }
-
-  return NextResponse.json({
-    sent24h: due24h.length,
-    sent2h: due2h.length,
-  })
+  return NextResponse.json({ sent1, sent2 })
 }

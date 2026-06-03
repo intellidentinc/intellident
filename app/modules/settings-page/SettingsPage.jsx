@@ -14,6 +14,8 @@ import ClinicSchedule from './ClinicSchedule'
 import ClinicClosures from './ClinicClosures'
 import ClinicPaymentSettings from './ClinicPaymentSettings'
 import ClinicPasswordSettings from './ClinicPasswordSettings'
+import ClinicNotificationSettings from './ClinicNotificationSettings'
+import ClinicAuditRetentionSettings from './ClinicAuditRetentionSettings'
 import { EMPTY_ADDRESS } from '@/components/commons/AddressSelector'
 
 function validate(form) {
@@ -196,6 +198,28 @@ export default function SettingsPage() {
         </Typography>
 
         <ClinicPasswordSettings clinicId={clinicId} />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant='h6' fontWeight={700} color='text.primary' gutterBottom>
+          Notification Settings
+        </Typography>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+          Configure reminder intervals and toggle in-app / email notifications per event type.
+        </Typography>
+
+        <ClinicNotificationSettings clinicId={clinicId} />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant='h6' fontWeight={700} color='text.primary' gutterBottom>
+          Audit Log Retention
+        </Typography>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+          Automatically purge audit logs older than a set number of days. Useful for storage management and compliance.
+        </Typography>
+
+        <ClinicAuditRetentionSettings clinicId={clinicId} />
       </Box>
     </SidebarInset>
   )

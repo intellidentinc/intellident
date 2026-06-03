@@ -75,7 +75,8 @@ export async function PATCH(request, { params }) {
   }
 
   const existing = await prisma.patientRecord.findFirst({
-    where: { id: recordId, patientId, clinicId: dentist.clinicId, isDeleted: false }
+    where: { id: recordId, patientId, clinicId: dentist.clinicId, isDeleted: false },
+    select: { id: true, title: true, status: true },
   })
   if (!existing) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
 
@@ -91,6 +92,17 @@ export async function PATCH(request, { params }) {
     },
     select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
   })
+
+  // Build and store field-level diff (fire-and-forget)
+  const diff = {}
+  if (title !== undefined && title !== existing.title) diff.title = { old: existing.title, new: title }
+  if (status !== undefined && validStatuses.includes(status) && status !== existing.status) diff.status = { old: existing.status, new: status }
+  if (parsed.body.notesChanged === true) diff.notesChanged = true
+  if (Object.keys(diff).length > 0) {
+    prisma.recordHistory.create({
+      data: { recordId, userId: session.userId, diff },
+    }).catch(() => {})
+  }
 
   return NextResponse.json(record)
 }

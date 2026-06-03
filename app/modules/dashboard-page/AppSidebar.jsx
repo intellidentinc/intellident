@@ -28,6 +28,7 @@ import {
   User,
   BarChart2,
   LifeBuoy,
+  FileSearch,
 } from 'lucide-react'
 import SignOutButton from './SignOutButton'
 import ExitSuperAdminButton from './ExitSuperAdminButton'
@@ -134,8 +135,9 @@ function buildNavGroups(role, clinicId) {
         {
           label: 'System',
           items: [
-            { label: 'Reports',   icon: BarChart2,   href: p('/reports')    },
-            { label: 'Audit Log', icon: ShieldCheck, href: p('/audit-log')  },
+            { label: 'Reports',       icon: BarChart2,   href: p('/reports')        },
+            { label: 'Audit Log',     icon: ShieldCheck, href: p('/audit-log')      },
+            { label: 'Data Requests', icon: FileSearch,  href: p('/data-requests')  },
           ],
         },
         {

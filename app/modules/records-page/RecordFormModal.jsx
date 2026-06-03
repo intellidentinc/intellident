@@ -19,6 +19,15 @@ import Input from '@/components/commons/Input'
 import { useToast } from '@/app/providers/ToastProvider'
 import { useCrypto } from '@/app/providers/CryptoProvider'
 import { encryptData, decryptData, toBase64 } from '@/lib/crypto'
+import Tabs from '@mui/material/Tabs'
+import Tab from '@mui/material/Tab'
+import Timeline from '@mui/lab/Timeline'
+import TimelineItem from '@mui/lab/TimelineItem'
+import TimelineSeparator from '@mui/lab/TimelineSeparator'
+import TimelineConnector from '@mui/lab/TimelineConnector'
+import TimelineContent from '@mui/lab/TimelineContent'
+import TimelineDot from '@mui/lab/TimelineDot'
+import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
 import {
   ArticleOutlined,
   LockOutlined,
@@ -58,11 +67,17 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
   const [attachments, setAttachments] = useState([])
   const [pendingFiles, setPendingFiles] = useState([])
   const [deletingId, setDeletingId] = useState(null)
+  const [activeTab, setActiveTab] = useState(0)
+  const [initialForm, setInitialForm] = useState(null)
+  const [initialNotes, setInitialNotes] = useState('')
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const isEdit = !!record
 
   useEffect(() => {
-    if (!open || !record) return
+    if (!open) { setActiveTab(0); setHistory([]); setInitialForm(null); setInitialNotes(''); return }
+    if (!record) return
     setKeyMissing(false)
 
     async function fetchAndDecrypt() {
@@ -93,6 +108,8 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
         }
 
         setForm({ title, notes, status: status ?? 'ACTIVE' })
+        setInitialForm({ title, status: status ?? 'ACTIVE' })
+        setInitialNotes(notes)
         setAttachments(atts ?? [])
       } catch {
         showToast('Failed to load record', 'error')
@@ -181,7 +198,10 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
       const { ciphertext: encryptedData, iv: dataIv } = await encryptData(masterKey, form.notes)
 
       const body = { title: form.title.trim(), encryptedData, dataIv, contentHash }
-      if (isEdit) body.status = form.status
+      if (isEdit) {
+        body.status = form.status
+        body.notesChanged = form.notes !== initialNotes
+      }
 
       const url = isEdit ? `/api/records/${patientId}/${record.id}` : `/api/records/${patientId}`
       const res = await fetch(url, {
@@ -213,6 +233,26 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     }
   }
 
+  async function loadHistory() {
+    if (!record) return
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/records/${patientId}/${record.id}/history`)
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setHistory(data.history ?? [])
+    } catch {
+      showToast('Failed to load history', 'error')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function handleTabChange(_, val) {
+    setActiveTab(val)
+    if (val === 1 && history.length === 0) loadHistory()
+  }
+
   function handleClose() {
     if (loading || decrypting) return
     setForm(EMPTY_FORM)
@@ -220,6 +260,10 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     setKeyMissing(false)
     setAttachments([])
     setPendingFiles([])
+    setActiveTab(0)
+    setHistory([])
+    setInitialForm(null)
+    setInitialNotes('')
     onClose()
   }
 
@@ -254,8 +298,16 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
 
       <Divider />
 
+      {/* Tabs — edit mode only */}
+      {isEdit && (
+        <Tabs value={activeTab} onChange={handleTabChange} sx={{ px: 3, borderBottom: 1, borderColor: 'divider', minHeight: 40 }} TabIndicatorProps={{ sx: { bgcolor: '#2563eb' } }}>
+          <Tab label='Edit' sx={{ fontSize: '0.8rem', minHeight: 40, textTransform: 'none', color: activeTab === 0 ? '#2563eb' : 'text.secondary' }} />
+          <Tab label='History' sx={{ fontSize: '0.8rem', minHeight: 40, textTransform: 'none', color: activeTab === 1 ? '#2563eb' : 'text.secondary' }} />
+        </Tabs>
+      )}
+
       {/* Body */}
-      <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ px: 3, py: 2.5, display: isEdit && activeTab === 1 ? 'none' : 'flex', flexDirection: 'column', gap: 2 }}>
         {keyMissing && (
           <Box
             sx={{
@@ -440,6 +492,56 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
           )}
         </Box>
       </Box>
+
+      {/* History panel */}
+      {isEdit && activeTab === 1 && (
+        <Box sx={{ px: 3, py: 2.5, minHeight: 200 }}>
+          {historyLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', pt: 4 }}>
+              <CircularProgress size={24} sx={{ color: '#2563eb' }} />
+            </Box>
+          ) : history.length === 0 ? (
+            <Typography variant='body2' color='text.secondary' sx={{ textAlign: 'center', pt: 4 }}>
+              No edit history yet.
+            </Typography>
+          ) : (
+            <Timeline sx={{ m: 0, p: 0 }}>
+              {history.map((entry, idx) => {
+                const diff = entry.diff ?? {}
+                const lines = []
+                if (diff.title) lines.push(`Title: "${diff.title.old}" → "${diff.title.new}"`)
+                if (diff.status) lines.push(`Status: ${diff.status.old} → ${diff.status.new}`)
+                if (diff.notesChanged) lines.push('Notes updated')
+                return (
+                  <TimelineItem key={entry.id} sx={{ '&:before': { flex: 0, p: 0 } }}>
+                    <TimelineOppositeContent sx={{ display: 'none' }} />
+                    <TimelineSeparator>
+                      <TimelineDot sx={{ bgcolor: '#2563eb', m: 0 }} />
+                      {idx < history.length - 1 && <TimelineConnector sx={{ bgcolor: '#e2e8f0' }} />}
+                    </TimelineSeparator>
+                    <TimelineContent sx={{ pb: 2, pt: 0 }}>
+                      <Typography variant='caption' fontWeight={600} color='text.primary'>
+                        {entry.user?.firstName} {entry.user?.lastName}
+                      </Typography>
+                      <Typography variant='caption' color='text.secondary' display='block'>
+                        {new Date(entry.createdAt).toLocaleString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </Typography>
+                      {lines.length > 0
+                        ? lines.map((line, i) => (
+                          <Typography key={i} variant='caption' color='text.secondary' display='block' sx={{ mt: 0.25 }}>
+                            • {line}
+                          </Typography>
+                        ))
+                        : <Typography variant='caption' color='text.secondary' display='block' sx={{ mt: 0.25 }}>• Record updated</Typography>
+                      }
+                    </TimelineContent>
+                  </TimelineItem>
+                )
+              })}
+            </Timeline>
+          )}
+        </Box>
+      )}
 
       <Divider />
 
