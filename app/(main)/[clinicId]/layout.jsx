@@ -19,9 +19,10 @@ export default async function ClinicLayout({ children, params }) {
     redirect('/sign-in');
   }
 
-  const [user, clinic] = await Promise.all([
+  const [user, clinic, rawPendingCount] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } }),
     prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true, logoUrl: true, isEnabled: true } }),
+    prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
   ]);
 
   if (!clinic) {
@@ -35,12 +36,9 @@ export default async function ClinicLayout({ children, params }) {
   // Super admin enters a clinic with full ADMIN privileges
   const effectiveRole = user?.role === ROLES.SUPERADMIN ? ROLES.ADMIN : (user?.role ?? ROLES.PATIENT)
 
-  let pendingCount = 0
-  if (user && [ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(user.role)) {
-    pendingCount = await prisma.appointment.count({
-      where: { clinicId, isDeleted: false, status: 'PENDING' },
-    })
-  }
+  const pendingCount = user && [ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(user.role)
+    ? rawPendingCount
+    : 0
 
   return (
     <SidebarProvider>

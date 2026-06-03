@@ -23,9 +23,10 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import EditRoleModal from './EditRoleModal'
-import DeleteUserModal from './DeleteUserModal'
-import AddUserModal from './AddUserModal'
+import dynamic from 'next/dynamic'
+const EditRoleModal = dynamic(() => import('./EditRoleModal'))
+const DeleteUserModal = dynamic(() => import('./DeleteUserModal'))
+const AddUserModal = dynamic(() => import('./AddUserModal'))
 import { ROLES, ROLE_LABELS } from '@/lib/roles'
 
 const HEAD_CELLS = [

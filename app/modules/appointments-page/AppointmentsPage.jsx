@@ -48,10 +48,10 @@ import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 const AppointmentCalendar = dynamic(() => import('./AppointmentCalendar'), { ssr: false })
-import CreateAppointmentModal from './CreateAppointmentModal'
-import AppointmentDetailModal from './AppointmentDetailModal'
-import CancelAppointmentModal from './CancelAppointmentModal'
-import RescheduleAppointmentModal from './RescheduleAppointmentModal'
+const CreateAppointmentModal = dynamic(() => import('./CreateAppointmentModal'))
+const AppointmentDetailModal = dynamic(() => import('./AppointmentDetailModal'))
+const CancelAppointmentModal = dynamic(() => import('./CancelAppointmentModal'))
+const RescheduleAppointmentModal = dynamic(() => import('./RescheduleAppointmentModal'))
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

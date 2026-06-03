@@ -26,8 +26,9 @@ import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import { CalendarDays, Clock, User2, Stethoscope } from 'lucide-react'
-import BookAppointmentModal from './BookAppointmentModal'
-import CancelScheduleModal from './CancelScheduleModal'
+import dynamic from 'next/dynamic'
+const BookAppointmentModal = dynamic(() => import('./BookAppointmentModal'))
+const CancelScheduleModal = dynamic(() => import('./CancelScheduleModal'))
 
 const STATUS_CHIP = {
   PENDING:     { bg: '#fef9c3', color: '#854d0e', label: 'Pending confirmation' },

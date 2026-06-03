@@ -18,7 +18,8 @@ import SearchIcon from '@mui/icons-material/Search'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import PatientRecordsDrawer from './PatientRecordsDrawer'
+import dynamic from 'next/dynamic'
+const PatientRecordsDrawer = dynamic(() => import('./PatientRecordsDrawer'))
 
 const STATUS_CHIP = {
   CONFIRMED: { bg: '#dbeafe', color: '#1d4ed8', label: 'Confirmed' },

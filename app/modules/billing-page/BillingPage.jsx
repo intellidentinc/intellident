@@ -23,7 +23,8 @@ import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { Search, X, Eye } from 'lucide-react'
 import dayjs from 'dayjs'
-import BillingDetailDrawer from './BillingDetailDrawer'
+import dynamic from 'next/dynamic'
+const BillingDetailDrawer = dynamic(() => import('./BillingDetailDrawer'))
 
 export const STATUS_PAYMENT_CHIP = {
   UNPAID:   { bg: '#fee2e2', color: '#b91c1c', label: 'Unpaid' },

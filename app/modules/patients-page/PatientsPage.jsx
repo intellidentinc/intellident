@@ -20,9 +20,10 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import AddPatientModal from './AddPatientModal'
-import EditPatientModal from './EditPatientModal'
-import DeletePatientModal from './DeletePatientModal'
+import dynamic from 'next/dynamic'
+const AddPatientModal = dynamic(() => import('./AddPatientModal'))
+const EditPatientModal = dynamic(() => import('./EditPatientModal'))
+const DeletePatientModal = dynamic(() => import('./DeletePatientModal'))
 
 const HEAD_CELLS = [
   { id: 'firstName', label: 'Name', sortable: true },

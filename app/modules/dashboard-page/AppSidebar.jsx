@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ROLES, ROLE_LABELS } from '@/lib/roles'
 import {
   Sidebar,
@@ -165,7 +166,7 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
       <SidebarHeader className='border-b border-sidebar-border px-4 py-4'>
         <div className='flex items-center gap-2.5'>
           {clinicLogo ? (
-            <img src={clinicLogo} alt='Clinic logo' className='h-8 w-8 rounded-lg object-cover flex-shrink-0' />
+            <Image src={clinicLogo} alt='Clinic logo' width={32} height={32} className='h-8 w-8 rounded-lg object-cover flex-shrink-0' />
           ) : (
             <div className='h-8 w-8 rounded-lg bg-[#eff6ff] flex items-center justify-center flex-shrink-0'>
               <Stethoscope size={16} className='text-[#2563eb]' />

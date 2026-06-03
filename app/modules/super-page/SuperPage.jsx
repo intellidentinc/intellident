@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Tabs from '@mui/material/Tabs'
@@ -466,7 +467,7 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           {clinic.logoUrl ? (
-            <img src={clinic.logoUrl} alt='logo' style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', filter: clinic.isEnabled ? 'none' : 'grayscale(60%)' }} />
+            <Image src={clinic.logoUrl} alt='logo' width={40} height={40} style={{ borderRadius: 8, objectFit: 'cover', filter: clinic.isEnabled ? 'none' : 'grayscale(60%)' }} />
           ) : (
             <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: clinic.isEnabled ? '#dbeafe' : '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <Stethoscope size={20} color={clinic.isEnabled ? '#2563eb' : '#94a3b8'} />

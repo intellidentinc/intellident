@@ -19,8 +19,9 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import ServiceFormModal from './ServiceFormModal'
-import DeleteServiceModal from './DeleteServiceModal'
+import dynamic from 'next/dynamic'
+const ServiceFormModal = dynamic(() => import('./ServiceFormModal'))
+const DeleteServiceModal = dynamic(() => import('./DeleteServiceModal'))
 
 const HEAD_CELLS = [
   { label: 'Service Name' },
