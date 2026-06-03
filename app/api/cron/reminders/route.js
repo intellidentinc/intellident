@@ -3,10 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { sendAppointmentReminder } from '@/lib/notifications'
 
 /**
- * GET /api/cron/reminders — Vercel Cron Job (every 15 minutes)
+ * GET /api/cron/reminders — Vercel Cron Job (daily at 08:00 UTC)
  *
  * Per-clinic reminder intervals: reads reminder1Hours / reminder2Hours from each
- * Clinic record (defaults: 24h / 2h). Respects notifConfig per-type toggles.
+ * Clinic record (defaults: 24h / 2h). Uses a ±12h window around each target so
+ * a single daily run still catches all appointments due for reminders that day.
+ * Respects notifConfig per-type toggles.
  * Idempotency: reminderSent24h / reminderSent2h flags prevent duplicate sends.
  */
 export async function GET(request) {
@@ -28,7 +30,7 @@ export async function GET(request) {
   for (const clinic of clinics) {
     const h1 = clinic.reminder1Hours ?? 24
     const h2 = clinic.reminder2Hours ?? 2
-    const half = 0.5 * 60 * 60 * 1000
+    const half = 12 * 60 * 60 * 1000 // ±12h window — wide enough for one daily run
 
     // ── First reminder window ────────────────────────────────────────────────
     const w1Start = new Date(now.getTime() + h1 * 60 * 60 * 1000 - half)
