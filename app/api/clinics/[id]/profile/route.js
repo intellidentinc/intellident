@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
   })
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -52,12 +52,19 @@ export async function PATCH(request, { params }) {
   const phone    = str(parsed.body.phone, 20)
   const landline = str(parsed.body.landline, 20)
 
-  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
+  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
 
   const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body
+  const hasSingleSession = 'singleSessionEnabled' in parsed.body
   const hasPasswordExpiry = 'passwordExpiryEnabled' in parsed.body
   const hasNotifConfig = 'notifConfig' in parsed.body || 'reminder1Hours' in parsed.body || 'reminder2Hours' in parsed.body
   const hasAuditRetention = 'auditLogRetentionDays' in parsed.body
+
+  if (hasSingleSession) {
+    const singleSessionEnabled = parsed.body.singleSessionEnabled === true
+    const clinic = await prisma.clinic.update({ where: { id }, data: { singleSessionEnabled }, select: FULL_SELECT })
+    return NextResponse.json(clinic)
+  }
 
   if (hasPasswordExpiry) {
     const passwordExpiryEnabled = parsed.body.passwordExpiryEnabled === true

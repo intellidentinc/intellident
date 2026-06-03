@@ -15,6 +15,7 @@ import Tooltip from '@mui/material/Tooltip'
 import { X, Plus, Pencil, Trash2, FileText, Paperclip } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import RecordFormModal from './RecordFormModal'
+import StepUpModal from '@/components/commons/StepUpModal'
 import { useToast } from '@/app/providers/ToastProvider'
 import dayjs from 'dayjs'
 
@@ -25,7 +26,9 @@ const STATUS_CHIP = {
 
 export default function PatientRecordsDrawer({ patient, onClose }) {
   const { showToast } = useToast()
-  const open = !!patient
+
+  const [stepUpOpen, setStepUpOpen] = useState(false)
+  const [stepUpGranted, setStepUpGranted] = useState(false)
 
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(false)
@@ -49,9 +52,27 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
   }, [patient]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (patient) loadRecords()
-    else setRecords([])
+    if (!patient) {
+      setRecords([])
+      setStepUpGranted(false)
+      return
+    }
+    // Check step-up auth before opening drawer
+    fetch('/api/auth/step-up')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.valid) {
+          setStepUpGranted(true)
+        } else {
+          setStepUpOpen(true)
+        }
+      })
+      .catch(() => setStepUpOpen(true))
   }, [patient]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (stepUpGranted && patient) loadRecords()
+  }, [stepUpGranted, patient]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function openCreate() {
     setEditTarget(null)
@@ -84,9 +105,16 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
 
   return (
     <>
+      <StepUpModal
+        open={stepUpOpen}
+        onClose={() => { setStepUpOpen(false); onClose() }}
+        onSuccess={() => { setStepUpOpen(false); setStepUpGranted(true) }}
+        description='Viewing patient records requires password verification.'
+      />
+
       <Drawer
         anchor='right'
-        open={open}
+        open={!!patient && stepUpGranted && !stepUpOpen}
         onClose={onClose}
         slotProps={{ paper: { sx: { width: { xs: '100vw', sm: 480 }, p: 0 } } }}
       >

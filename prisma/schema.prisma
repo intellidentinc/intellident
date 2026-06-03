@@ -113,6 +113,7 @@ model Clinic {
   reservationFeeAmount  Float   @default(0)
   paymongoEnabled       Boolean @default(false)
   passwordExpiryEnabled Boolean @default(false)
+  singleSessionEnabled  Boolean @default(false)
   notifConfig           Json?
   reminder1Hours        Int     @default(24)
   reminder2Hours        Int     @default(2)
@@ -285,6 +286,8 @@ model User {
   chatSessions            ChatSession[]
   dataRequests            DataRequest[]
   recordHistories         RecordHistory[]
+  sessions                UserSession[]
+  knownDevices            KnownDevice[]
 
   @@index([email])
   @@index([clinicId])
@@ -682,4 +685,37 @@ model RecordHistory {
 
   @@index([recordId])
   @@map("record_history")
+}
+
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String
+  clinicId     String?
+  sessionToken String    @unique
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  terminatedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([sessionToken])
+  @@map("user_sessions")
+}
+
+model KnownDevice {
+  id            String   @id @default(cuid())
+  userId        String
+  userAgentHash String
+  lastIp        String?
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, userAgentHash])
+  @@index([userId])
+  @@map("known_devices")
 }

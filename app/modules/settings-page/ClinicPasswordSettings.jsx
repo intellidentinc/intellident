@@ -10,25 +10,30 @@ import { useToast } from '@/app/providers/ToastProvider'
 
 export default function ClinicPasswordSettings({ clinicId }) {
   const { showToast } = useToast()
-  const [enabled, setEnabled] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [passwordExpiry, setPasswordExpiry]       = useState(false)
+  const [singleSession, setSingleSession]         = useState(false)
+  const [loading, setLoading]                     = useState(true)
+  const [savingExpiry, setSavingExpiry]           = useState(false)
+  const [savingSession, setSavingSession]         = useState(false)
 
   useEffect(() => {
     fetch(`/api/clinics/${clinicId}/profile`)
       .then((r) => r.json())
-      .then((data) => setEnabled(data.passwordExpiryEnabled ?? false))
-      .catch(() => showToast('Failed to load password settings', 'error'))
+      .then((data) => {
+        setPasswordExpiry(data.passwordExpiryEnabled ?? false)
+        setSingleSession(data.singleSessionEnabled ?? false)
+      })
+      .catch(() => showToast('Failed to load security settings', 'error'))
       .finally(() => setLoading(false))
   }, [clinicId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSave() {
-    setSaving(true)
+  async function handleSaveExpiry() {
+    setSavingExpiry(true)
     try {
       const res = await fetch(`/api/clinics/${clinicId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passwordExpiryEnabled: enabled }),
+        body: JSON.stringify({ passwordExpiryEnabled: passwordExpiry }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -39,7 +44,28 @@ export default function ClinicPasswordSettings({ clinicId }) {
     } catch {
       showToast('Something went wrong', 'error')
     } finally {
-      setSaving(false)
+      setSavingExpiry(false)
+    }
+  }
+
+  async function handleSaveSession() {
+    setSavingSession(true)
+    try {
+      const res = await fetch(`/api/clinics/${clinicId}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ singleSessionEnabled: singleSession }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        showToast(data.error ?? 'Failed to save', 'error')
+        return
+      }
+      showToast('Session policy saved', 'success')
+    } catch {
+      showToast('Something went wrong', 'error')
+    } finally {
+      setSavingSession(false)
     }
   }
 
@@ -48,8 +74,8 @@ export default function ClinicPasswordSettings({ clinicId }) {
       <FormControlLabel
         control={
           <Switch
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
+            checked={passwordExpiry}
+            onChange={(e) => setPasswordExpiry(e.target.checked)}
             disabled={loading}
             color='primary'
           />
@@ -67,8 +93,34 @@ export default function ClinicPasswordSettings({ clinicId }) {
         sx={{ alignItems: 'flex-start', ml: 0, mb: 2.5 }}
       />
 
-      <Button variant='contained' onClick={handleSave} loading={saving} disabled={loading}>
+      <Button variant='contained' onClick={handleSaveExpiry} loading={savingExpiry} disabled={loading} sx={{ mb: 4 }}>
         Save Password Policy
+      </Button>
+
+      <FormControlLabel
+        control={
+          <Switch
+            checked={singleSession}
+            onChange={(e) => setSingleSession(e.target.checked)}
+            disabled={loading}
+            color='primary'
+          />
+        }
+        label={
+          <Box sx={{ ml: 0.5 }}>
+            <Typography variant='body2' fontWeight={600} color='text.primary'>
+              Enforce single active session per user
+            </Typography>
+            <Typography variant='caption' color='text.secondary'>
+              When enabled, signing in on a new device or browser will automatically terminate all other active sessions for that user.
+            </Typography>
+          </Box>
+        }
+        sx={{ alignItems: 'flex-start', ml: 0, mb: 2.5 }}
+      />
+
+      <Button variant='contained' onClick={handleSaveSession} loading={savingSession} disabled={loading}>
+        Save Session Policy
       </Button>
     </Box>
   )

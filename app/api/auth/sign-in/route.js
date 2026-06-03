@@ -18,7 +18,7 @@
  */
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
-// import crypto from 'crypto'; // MFA: not needed while OTP is disabled
+import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { setSession } from '@/lib/auth';
 import { ROLES } from '@/lib/roles';
@@ -133,7 +133,7 @@ export async function POST(request) {
     if (user.clinicId) {
       clinic = await prisma.clinic.findUnique({
         where: { id: user.clinicId },
-        select: { isEnabled: true, passwordExpiryEnabled: true },
+        select: { isEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true },
       });
       if (!clinic || !clinic.isEnabled) {
         return NextResponse.json(
@@ -167,10 +167,43 @@ export async function POST(request) {
       );
     }
 
-    const requiresTerms = !user.termsAcceptedAt;
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe, false, requiresTerms);
+    // Concurrent session enforcement — terminate all active sessions before creating new one
+    if (clinic?.singleSessionEnabled) {
+      await prisma.userSession.updateMany({
+        where: { userId: user.id, terminatedAt: null },
+        data: { terminatedAt: new Date() },
+      });
+    }
 
-    logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });
+    // Device fingerprint — detect new device and unusual IP
+    const uaHash = crypto.createHash('sha256').update(userAgent ?? '').digest('hex');
+
+    const knownDevice = await prisma.knownDevice.findUnique({
+      where: { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
+      select: { lastIp: true },
+    });
+
+    const isNewDevice  = !knownDevice;
+    const suspiciousIp = !isNewDevice && knownDevice.lastIp !== null && knownDevice.lastIp !== ip;
+
+    await prisma.knownDevice.upsert({
+      where:  { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
+      create: { userId: user.id, userAgentHash: uaHash, lastIp: ip },
+      update: { lastIp: ip, lastSeenAt: new Date() },
+    });
+
+    const requiresTerms = !user.termsAcceptedAt;
+    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe, false, requiresTerms, ip, userAgent);
+
+    logAudit({
+      userId: user.id, clinicId: user.clinicId,
+      action: 'LOGIN', entity: 'User', entityId: user.id,
+      ipAddress: ip, userAgent,
+      metadata: {
+        ...(isNewDevice  ? { newDevice: true }                                      : {}),
+        ...(suspiciousIp ? { suspiciousIp: true, previousIp: knownDevice.lastIp }  : {}),
+      },
+    });
 
     const mustChangePassword = user.mustChangePassword ?? false;
     const passwordExpired =

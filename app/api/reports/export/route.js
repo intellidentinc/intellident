@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 
@@ -24,6 +24,10 @@ export async function GET(request) {
     select: { role: true, clinicId: true },
   })
   if (!caller || !isAdmin(caller.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  if (!isStepUpValid(session)) {
+    return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
+  }
 
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 

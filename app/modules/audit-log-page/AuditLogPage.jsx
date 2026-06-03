@@ -29,6 +29,8 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded'
+import StepUpModal from '@/components/commons/StepUpModal'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import utc from 'dayjs/plugin/utc'
@@ -136,7 +138,14 @@ function MetadataRow({ log, colSpan }) {
         </TableCell>
 
         <TableCell align='center' sx={{ py: 1.25, borderBottom: open ? 'none' : undefined }}>
-          <ActionChip action={log.action} />
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <ActionChip action={log.action} />
+            {log.action === 'LOGIN' && (log.metadata?.newDevice || log.metadata?.suspiciousIp) && (
+              <Tooltip title={log.metadata?.newDevice ? 'New device login' : 'Unusual IP address'} placement='top'>
+                <WarningAmberRoundedIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+              </Tooltip>
+            )}
+          </Box>
         </TableCell>
 
         <TableCell sx={{ py: 1.25, borderBottom: open ? 'none' : undefined }}>
@@ -316,6 +325,8 @@ export default function AuditLogPage() {
   // ─── Export ───────────────────────────────────────────────────────────────
   const [exportAnchor, setExportAnchor] = useState(null)
   const [exporting, setExporting] = useState(false)
+  const [stepUpOpen, setStepUpOpen] = useState(false)
+  const [pendingExport, setPendingExport] = useState(null)
 
   function buildExportParams() {
     return new URLSearchParams({
@@ -343,8 +354,23 @@ export default function AuditLogPage() {
     URL.revokeObjectURL(url)
   }
 
-  async function handleExportCSV() {
+  async function checkStepUp(exportFn) {
     setExportAnchor(null)
+    try {
+      const res = await fetch('/api/auth/step-up')
+      const data = await res.json()
+      if (data.valid) {
+        await exportFn()
+      } else {
+        setPendingExport(() => exportFn)
+        setStepUpOpen(true)
+      }
+    } catch {
+      showToast('Failed to check authentication status', 'error')
+    }
+  }
+
+  async function doExportCSV() {
     setExporting(true)
     try {
       const logs = await fetchAllForExport()
@@ -370,8 +396,7 @@ export default function AuditLogPage() {
     }
   }
 
-  async function handleExportPDF() {
-    setExportAnchor(null)
+  async function doExportPDF() {
     setExporting(true)
     try {
       const logs = await fetchAllForExport()
@@ -419,6 +444,9 @@ export default function AuditLogPage() {
       setExporting(false)
     }
   }
+
+  const handleExportCSV = () => checkStepUp(doExportCSV)
+  const handleExportPDF = () => checkStepUp(doExportPDF)
 
   return (
     <SidebarInset>
@@ -684,6 +712,20 @@ export default function AuditLogPage() {
           />
         </Box>
       </Box>
+
+      <StepUpModal
+        open={stepUpOpen}
+        onClose={() => { setStepUpOpen(false); setPendingExport(null) }}
+        onSuccess={async () => {
+          setStepUpOpen(false)
+          if (pendingExport) {
+            const fn = pendingExport
+            setPendingExport(null)
+            await fn()
+          }
+        }}
+        description='Exporting audit logs requires password verification.'
+      />
     </SidebarInset>
   )
 }

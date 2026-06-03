@@ -25,6 +25,7 @@ import timezone from 'dayjs/plugin/timezone'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
+import StepUpModal from '@/components/commons/StepUpModal'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
@@ -265,6 +266,8 @@ export default function ReportsPage() {
   const [loading,      setLoading]      = useState(false)
   const [exportAnchor, setExportAnchor] = useState(null)
   const [exporting,    setExporting]    = useState(false)
+  const [stepUpOpen,   setStepUpOpen]   = useState(false)
+  const [pendingExport, setPendingExport] = useState(null)
   const { showToast } = useToast()
 
   const fetchData = useCallback(async () => {
@@ -343,8 +346,23 @@ export default function ReportsPage() {
     }
   }
 
-  async function handleExportCSV() {
+  async function checkStepUp(exportFn) {
     setExportAnchor(null)
+    try {
+      const res  = await fetch('/api/auth/step-up')
+      const data = await res.json()
+      if (data.valid) {
+        await exportFn()
+      } else {
+        setPendingExport(() => exportFn)
+        setStepUpOpen(true)
+      }
+    } catch {
+      showToast('Failed to check authentication status', 'error')
+    }
+  }
+
+  async function doExportCSV() {
     setExporting(true)
     try {
       const rows = await fetchExportRows()
@@ -360,8 +378,7 @@ export default function ReportsPage() {
     }
   }
 
-  async function handleExportPDF() {
-    setExportAnchor(null)
+  async function doExportPDF() {
     setExporting(true)
     try {
       const rows = await fetchExportRows()
@@ -400,6 +417,9 @@ export default function ReportsPage() {
       setExporting(false)
     }
   }
+
+  const handleExportCSV = () => checkStepUp(doExportCSV)
+  const handleExportPDF = () => checkStepUp(doExportPDF)
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -519,6 +539,20 @@ export default function ReportsPage() {
           </>
         )}
       </Box>
+
+      <StepUpModal
+        open={stepUpOpen}
+        onClose={() => { setStepUpOpen(false); setPendingExport(null) }}
+        onSuccess={async () => {
+          setStepUpOpen(false)
+          if (pendingExport) {
+            const fn = pendingExport
+            setPendingExport(null)
+            await fn()
+          }
+        }}
+        description='Exporting reports requires password verification.'
+      />
     </SidebarInset>
   )
 }
