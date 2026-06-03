@@ -21,6 +21,8 @@ export async function PATCH() {
     session.rememberMe,
     session.superAdmin || false,
     false,
+    null, null,
+    session.role ?? null,
   )
 
   return NextResponse.json({ success: true })

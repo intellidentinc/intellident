@@ -68,8 +68,7 @@ async function PatientDashboard({ session }) {
 // ─── Receptionist ─────────────────────────────────────────────────────────────
 
 async function ReceptionistDashboard({ session }) {
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true, clinicId: true } })
-  const clinicId = user?.role === ROLES.SUPERADMIN ? session.clinicId : user?.clinicId
+  const clinicId = session.clinicId
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
@@ -113,8 +112,7 @@ async function ReceptionistDashboard({ session }) {
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 async function AdminDashboard({ session }) {
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true, clinicId: true } })
-  const clinicId = user?.role === ROLES.SUPERADMIN ? session.clinicId : user?.clinicId
+  const clinicId = session.clinicId
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
@@ -160,7 +158,7 @@ async function AdminDashboard({ session }) {
 // ─── Dentist ──────────────────────────────────────────────────────────────────
 
 async function DentistDashboard({ session }) {
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { clinicId: true } })
+  const clinicId = session.clinicId
   const dentist = await prisma.dentist.findUnique({ where: { userId: session.userId }, select: { id: true } })
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -169,16 +167,16 @@ async function DentistDashboard({ session }) {
 
   const [todayAppts, weekAppts, totalPatients, nextApptRaw] = await Promise.all([
     dentist ? prisma.appointment.count({
-      where: { dentistId: dentist.id, clinicId: user?.clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: todayStart, lt: todayEnd } },
+      where: { dentistId: dentist.id, clinicId: clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: todayStart, lt: todayEnd } },
     }) : 0,
     dentist ? prisma.appointment.count({
-      where: { dentistId: dentist.id, clinicId: user?.clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: now, lt: weekEnd } },
+      where: { dentistId: dentist.id, clinicId: clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: now, lt: weekEnd } },
     }) : 0,
     dentist ? prisma.patient.count({
-      where: { clinicId: user?.clinicId, appointments: { some: { dentistId: dentist.id, isDeleted: false, status: { in: ['CONFIRMED', 'COMPLETED'] } } } },
+      where: { clinicId: clinicId, appointments: { some: { dentistId: dentist.id, isDeleted: false, status: { in: ['CONFIRMED', 'COMPLETED'] } } } },
     }) : 0,
     dentist ? prisma.appointment.findFirst({
-      where: { dentistId: dentist.id, clinicId: user?.clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: now } },
+      where: { dentistId: dentist.id, clinicId: clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: now } },
       include: {
         patient: { select: { firstName: true, lastName: true } },
         service: { select: { name: true } },
@@ -209,8 +207,7 @@ async function DentistDashboard({ session }) {
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 export default async function DashboardPage({ session }) {
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } })
-  const role = user?.role ?? 'PATIENT'
+  const role = session.role ?? ROLES.PATIENT
 
   const content = role === ROLES.PATIENT                                    ? <PatientDashboard session={session} />
                 : role === ROLES.RECEPTIONIST                              ? <ReceptionistDashboard session={session} />

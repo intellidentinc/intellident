@@ -13,7 +13,7 @@ export async function POST() {
   }
 
   // Restore session to super admin state — no clinicId, no superAdmin flag
-  await setSession(session.userId, session.email, session.firstName, session.lastName, null, session.rememberMe)
+  await setSession(session.userId, session.email, session.firstName, session.lastName, null, session.rememberMe, false, false, null, null, ROLES.SUPERADMIN)
 
   return NextResponse.json({ ok: true })
 }

@@ -23,7 +23,7 @@ export async function POST(request) {
   if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
 
   // Set session with chosen clinicId + superAdmin flag so layout allows entry
-  await setSession(session.userId, session.email, session.firstName, session.lastName, clinicId, false, true)
+  await setSession(session.userId, session.email, session.firstName, session.lastName, clinicId, false, true, false, null, null, ROLES.SUPERADMIN)
 
   const { ip, userAgent } = getRequestMeta(request)
   logAudit({ userId: session.userId, clinicId, action: 'VIEW', entity: 'Clinic', entityId: clinicId, ipAddress: ip, userAgent, metadata: { action: 'superadmin-enter' } })

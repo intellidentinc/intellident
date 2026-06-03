@@ -32,7 +32,7 @@ export async function POST(request) {
 
     const mfa = await prisma.mfaOtp.findUnique({
       where: { pendingToken },
-      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, clinicId: true } } },
+      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, clinicId: true, role: true } } },
     });
 
     if (!mfa) {
@@ -71,7 +71,7 @@ export async function POST(request) {
     await prisma.mfaOtp.update({ where: { id: mfa.id }, data: { usedAt: new Date() } });
 
     const { user } = mfa;
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, mfa.rememberMe);
+    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, mfa.rememberMe, false, false, null, null, user.role);
 
     logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });
 

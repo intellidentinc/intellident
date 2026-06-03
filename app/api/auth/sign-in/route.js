@@ -36,11 +36,6 @@ export async function POST(request) {
   try {
     const { ip, userAgent } = getRequestMeta(request);
 
-    const { allowed } = await checkRateLimit(`${ip}:sign-in`, 20, 15 * 60);
-    if (!allowed) {
-      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
-    }
-
     const parsed = await parseJsonBody(request);
     if (parsed.error) {
       return NextResponse.json({ error: parsed.error }, { status: parsed.status });
@@ -58,7 +53,15 @@ export async function POST(request) {
       );
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    // PHASE 0: Rate-limit check + user lookup in parallel (saves 1 DB round-trip)
+    const [{ allowed }, user] = await Promise.all([
+      checkRateLimit(`${ip}:sign-in`, 20, 15 * 60),
+      prisma.user.findUnique({ where: { email } }),
+    ]);
+
+    if (!allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
 
     if (!user || user.isDeleted) {
       return NextResponse.json(
@@ -83,13 +86,13 @@ export async function POST(request) {
       );
     }
 
+    // PHASE 1: bcrypt (CPU-bound, unavoidable)
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
       const now = new Date();
       const windowStart = new Date(now.getTime() - WINDOW_MS);
 
-      // Count attempts only within the rolling window
       const attemptsInWindow =
         user.lastFailedAt && user.lastFailedAt > windowStart
           ? user.failedLoginAttempts + 1
@@ -122,25 +125,32 @@ export async function POST(request) {
       );
     }
 
-    // Successful credentials — reset lockout fields
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { failedLoginAttempts: 0, lastFailedAt: null, lockedUntil: null },
-    });
+    if (!user.wrappedKey || !user.keySalt) {
+      return NextResponse.json(
+        { error: 'Account setup is incomplete. Please contact your administrator.' },
+        { status: 500 }
+      );
+    }
 
-    // Check clinic is still active (checked after password validation so lockout still applies)
-    let clinic = null;
-    if (user.clinicId) {
-      clinic = await prisma.clinic.findUnique({
-        where: { id: user.clinicId },
-        select: { isEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true },
-      });
-      if (!clinic || !clinic.isEnabled) {
-        return NextResponse.json(
-          { error: 'This clinic has been disabled. Please contact support.' },
-          { status: 403 }
-        );
-      }
+    // PHASE 2: Reset lockout + clinic check in parallel (saves 1 DB round-trip)
+    const [, clinic] = await Promise.all([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lastFailedAt: null, lockedUntil: null },
+      }),
+      user.clinicId
+        ? prisma.clinic.findUnique({
+            where: { id: user.clinicId },
+            select: { isEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (user.clinicId && (!clinic || !clinic.isEnabled)) {
+      return NextResponse.json(
+        { error: 'This clinic has been disabled. Please contact support.' },
+        { status: 403 }
+      );
     }
 
     // MFA (OTP) step disabled — skipping OTP generation and proceeding directly to session creation
@@ -160,40 +170,36 @@ export async function POST(request) {
     // );
     // ------- MFA BLOCK END -------
 
-    if (!user.wrappedKey || !user.keySalt) {
-      return NextResponse.json(
-        { error: 'Account setup is incomplete. Please contact your administrator.' },
-        { status: 500 }
-      );
-    }
-
-    // Concurrent session enforcement — terminate all active sessions before creating new one
-    if (clinic?.singleSessionEnabled) {
-      await prisma.userSession.updateMany({
-        where: { userId: user.id, terminatedAt: null },
-        data: { terminatedAt: new Date() },
-      });
-    }
-
-    // Device fingerprint — detect new device and unusual IP
+    // PHASE 3: Single-session termination + device fingerprint in parallel (saves 1 DB round-trip)
     const uaHash = crypto.createHash('sha256').update(userAgent ?? '').digest('hex');
 
-    const knownDevice = await prisma.knownDevice.findUnique({
-      where: { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
-      select: { lastIp: true },
-    });
+    const [, knownDevice] = await Promise.all([
+      clinic?.singleSessionEnabled
+        ? prisma.userSession.updateMany({
+            where: { userId: user.id, terminatedAt: null },
+            data: { terminatedAt: new Date() },
+          })
+        : Promise.resolve(),
+      prisma.knownDevice.findUnique({
+        where: { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
+        select: { lastIp: true },
+      }),
+    ]);
 
     const isNewDevice  = !knownDevice;
     const suspiciousIp = !isNewDevice && knownDevice.lastIp !== null && knownDevice.lastIp !== ip;
 
-    await prisma.knownDevice.upsert({
-      where:  { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
-      create: { userId: user.id, userAgentHash: uaHash, lastIp: ip },
-      update: { lastIp: ip, lastSeenAt: new Date() },
-    });
-
+    // PHASE 4: Device upsert + session creation in parallel (saves 1 DB round-trip)
     const requiresTerms = !user.termsAcceptedAt;
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, rememberMe, false, requiresTerms, ip, userAgent);
+    await Promise.all([
+      prisma.knownDevice.upsert({
+        where:  { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
+        create: { userId: user.id, userAgentHash: uaHash, lastIp: ip },
+        update: { lastIp: ip, lastSeenAt: new Date() },
+      }),
+      setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId,
+                 rememberMe, false, requiresTerms, ip, userAgent, user.role),
+    ]);
 
     logAudit({
       userId: user.id, clinicId: user.clinicId,
