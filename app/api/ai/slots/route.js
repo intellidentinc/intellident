@@ -27,7 +27,7 @@ export async function GET(request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
-  const serviceId = searchParams.get('serviceId')
+  const serviceId = searchParams.get('serviceId') ?? searchParams.get('serviceIds')?.split(',')[0]
   const dentistId = searchParams.get('dentistId')
   const dateStr = searchParams.get('date')
 
