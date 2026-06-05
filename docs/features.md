@@ -39,6 +39,11 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Auto-generated username | `[x]` | Format `{CLINICCODE}-{LASTNAME}-{####}` with collision-safe increment; stored in `User.username`; shown in user table, profile, and welcome email |
 | Admin password expiry (90-day) | `[x]` | Per-clinic toggle in Settings → Password Policy; `Clinic.passwordExpiryEnabled`; ADMIN accounts get `passwordExpiresAt = now + 90 days` on each password change; expired accounts redirected to `/change-password?reason=expired` on sign-in |
 | Terms of Service on registration | `[x]` | Required acceptance checkbox + modal (`TermsDialog.jsx`) on sign-up and clinic application |
+| DB-backed session validation | `[x]` | `UserSession` model; `sessionToken` in cookie validated on every `getSession()` call; `terminatedAt` enables server-side invalidation |
+| Single-session mode | `[x]` | Per-clinic toggle in Settings → Password Policy (`singleSessionEnabled`); new login terminates previous session in DB |
+| Known device tracking | `[x]` | `KnownDevice` model; stores user agent hash + IP per user; `firstSeenAt` + `lastSeenAt` |
+| Step-up authentication | `[x]` | `POST/GET /api/auth/step-up`; `StepUpModal.jsx`; 15-min TTL; required before audit log + report exports |
+| 8-hour hard session cap | `[x]` | Middleware enforces absolute 8-hour session limit regardless of sliding renewal |
 | hCaptcha on login | `[ ]` | Planned — `@hcaptcha/react-hcaptcha`, needs site key + secret key in env |
 
 ---
@@ -53,6 +58,9 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Operating hours presets | `[x]` | `SchedulePreset` model; save/apply/delete presets; applied indicator |
 | Clinic closure dates | `[x]` | Holidays/maintenance dates |
 | Password expiry policy toggle | `[x]` | `Clinic.passwordExpiryEnabled`; MUI Switch in Settings → Password Policy section; applies to ADMIN role accounts |
+| Single-session mode toggle | `[x]` | `Clinic.singleSessionEnabled`; MUI Switch in Settings → Password Policy; terminates prior session on new login |
+| Audit log retention settings | `[x]` | `Clinic.auditLogRetentionDays`; configurable in Settings via `ClinicAuditRetentionSettings.jsx`; auto-purge cron at `/api/cron/audit-purge` |
+| Notification settings | `[x]` | `Clinic.reminder1Hours` + `Clinic.reminder2Hours` (defaults 24h/2h); `Clinic.notifConfig` JSON; `ClinicNotificationSettings.jsx` in Settings |
 
 ---
 
@@ -139,8 +147,9 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Feature | Status | Notes |
 |---|---|---|
 | DB schema | `[x]` | `AuditLog`, `AuditAction` enum |
-| Audit log API | `[x]` | `GET /api/audit-log` (paginated, filtered, sortable) + CSV/PDF export |
+| Audit log API | `[x]` | `GET /api/audit-log` (paginated, filtered, sortable) + CSV/PDF export (step-up auth required) |
 | Audit log UI | `[x]` | Admin-only; expandable rows, action/entity/date/search filters |
+| Audit log retention + purge | `[x]` | `Clinic.auditLogRetentionDays`; `/api/cron/audit-purge` prunes records older than configured retention |
 
 ---
 
@@ -159,14 +168,47 @@ Track of all features built, in-progress, and pending. Update this file as featu
 
 ---
 
+## Data Subject Rights (DSAR)
+
+| Feature | Status | Notes |
+|---|---|---|
+| Patient data rights request form | `[x]` | `DataRightsDialog.jsx` in patient profile — submit ACCESS, CORRECTION, or DELETION requests |
+| Admin DSAR review | `[x]` | `DataRequestsPage.jsx` + `ReviewRequestModal.jsx`; filter by status (PENDING/IN_REVIEW/RESOLVED/REJECTED) |
+| DSAR API | `[x]` | `GET/POST /api/data-requests`; `PATCH /api/data-requests/[id]`; scoped to clinicId |
+| Patient sidebar entry | `[x]` | "Data Requests" sidebar item under Profile group for PATIENT role |
+
+---
+
+## Patient Record History
+
+| Feature | Status | Notes |
+|---|---|---|
+| Record edit diff log | `[x]` | `RecordHistory` model; JSON diff stored on every `PATCH` to `PatientRecord` |
+| History API | `[x]` | `GET /api/records/[patientId]/[recordId]/history` — returns ordered history for a record |
+
+---
+
+## Performance & Reliability
+
+| Feature | Status | Notes |
+|---|---|---|
+| Loading skeletons | `[x]` | Skeleton screens for all major pages via `loading.jsx` files in route segments |
+| Platform hardening | `[x]` | `compress: true`, `poweredByHeader: false` in `next.config.mjs` |
+| Middleware clinic check | `[x]` | Clinic enabled status cached via `unstable_cache` (60s); blocks disabled clinics at edge |
+| Health endpoint | `[x]` | `GET /api/health` — `CRON_SECRET` protected; pings DB with `SELECT 1` |
+
+---
+
 ## Other
 
 | Feature | Status | Notes |
 |---|---|---|
 | Virtual Assistant / Chatbot | `[x]` | gpt-5 via `lib/ai.js`; multi-turn; role-aware tools; system prompt cached 5 min; session-persistent; drawer UI |
-| Reporting & Exports | `[x]` | Three-tab (Appointments, Revenue, Patients); CSV + PDF; ADMIN only |
+| Reporting & Exports | `[x]` | Three-tab (Appointments, Revenue, Patients); CSV + PDF; ADMIN only; step-up auth required for export |
 | Integrity verification (tamper detection) | `[x]` | `contentHash` SHA-256 on every record write; verified on read |
+| Record edit history | `[x]` | `RecordHistory` model stores JSON diff on every `PatientRecord` update |
 | Compressed file upload rejection | `[x]` | Magic-byte detection for ZIP/RAR/7z/GZIP/BZIP2/XZ on all upload endpoints |
+| Magic-byte file type validation | `[x]` | Logo upload validates JPEG/PNG magic bytes; clinic document upload validates JPEG/PNG/PDF |
 
 ---
 
@@ -190,3 +232,17 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | 2026-05-31 | Added clinic onboarding — application form, document upload, super admin review, approve/reject flow |
 | 2026-05-31 | Added Terms of Service acceptance to sign-up and clinic application |
 | 2026-05-31 | Added compressed file upload rejection (magic-byte scan) to all upload endpoints |
+| 2026-06-03 | DB-backed session validation via `UserSession` model; `sessionToken` validated on every `getSession()` call; server-side session termination via `terminatedAt` |
+| 2026-06-03 | Added `KnownDevice` tracking model — user agent hash + IP per user |
+| 2026-06-03 | Added single-session mode per clinic (`Clinic.singleSessionEnabled`) — new login terminates prior session |
+| 2026-06-03 | Added step-up authentication (`POST/GET /api/auth/step-up`, `StepUpModal.jsx`); required before audit log + report CSV/PDF exports |
+| 2026-06-03 | Added 8-hour hard session cap in middleware |
+| 2026-06-03 | Added `DataRequest` model + full DSAR module — patients request ACCESS/CORRECTION/DELETION; admins review via `DataRequestsPage.jsx` |
+| 2026-06-03 | Added `RecordHistory` model — JSON diff stored on every `PatientRecord` edit; `GET /api/records/[patientId]/[recordId]/history` |
+| 2026-06-03 | Added `ClinicAuditRetentionSettings.jsx` + `Clinic.auditLogRetentionDays` + audit purge cron (`/api/cron/audit-purge`) |
+| 2026-06-03 | Added `ClinicNotificationSettings.jsx` — configurable reminder hours (`reminder1Hours`, `reminder2Hours`) and notification config JSON |
+| 2026-06-03 | Added loading skeletons (`loading.jsx`) for all major route segments |
+| 2026-06-03 | `next.config.mjs` — added `compress: true`, `poweredByHeader: false`, image remote patterns |
+| 2026-06-03 | Middleware: clinic enabled check cached via `unstable_cache`; 8-hour hard cap; terms-of-service gate route added (`/accept-terms`) |
+| 2026-06-03 | Added health endpoint (`GET /api/health`, `CRON_SECRET` protected) |
+| 2026-06-03 | Magic-byte validation added to clinic logo upload (`detectLogoType()` — JPEG/PNG); closes LOW-03 |

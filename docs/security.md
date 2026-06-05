@@ -154,6 +154,156 @@ model MfaOtp {
 
 ---
 
+## DB-Backed Session Management (2026-06-03)
+
+Sessions are now validated against the database on every request, enabling server-side session termination.
+
+### UserSession Model
+
+```prisma
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String
+  clinicId     String?
+  sessionToken String    @unique  // 32 random bytes hex
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  terminatedAt DateTime?
+}
+```
+
+### Flow
+
+- `setSession()` creates a `UserSession` record and stores the `sessionToken` in the cookie
+- Any existing session token for the user is terminated (`terminatedAt = now()`) before a new one is created
+- `getSession()` reads the cookie, parses `sessionToken`, queries `UserSession`, and returns `null` if `terminatedAt` is set
+- `clearSession()` (sign-out) sets `terminatedAt = now()` on the active session and deletes the cookie
+
+### Single-Session Mode
+
+When `Clinic.singleSessionEnabled` is `true`, signing in terminates all other active `UserSession` records for that user via `updateMany({ where: { userId, terminatedAt: null }, data: { terminatedAt: now } })` before creating the new session. Controlled via Settings → Password Policy.
+
+### Hard Session Cap
+
+Middleware enforces an absolute 8-hour session limit regardless of sliding renewal. Sessions older than 8 hours are cleared and the user is redirected to sign-in.
+
+---
+
+## Known Device Tracking (2026-06-03)
+
+```prisma
+model KnownDevice {
+  id            String   @id @default(cuid())
+  userId        String
+  userAgentHash String              // SHA-256 of User-Agent string
+  lastIp        String?
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+
+  @@unique([userId, userAgentHash])
+}
+```
+
+On every sign-in, the user agent hash is upserted to `KnownDevice`. This provides a per-user device footprint for future anomaly detection or reporting.
+
+---
+
+## Step-Up Authentication (2026-06-03)
+
+Sensitive operations (CSV/PDF export of audit logs and reports) require a step-up authentication challenge — the user must re-enter their current password.
+
+### Flow
+
+```
+1. Client calls GET /api/auth/step-up
+   → if stepUpGrantedAt is present and < 15 min old → { valid: true }
+   → otherwise → { valid: false }
+
+2. UI shows StepUpModal.jsx — user enters password
+
+3. Client calls POST /api/auth/step-up  (password in body)
+   → bcrypt.compare(password, user.password)
+   → if valid: sets session.stepUpGrantedAt = Date.now()
+   → returns { success: true }
+
+4. Client retries the export — middleware/route checks isStepUpValid()
+```
+
+### Properties
+
+| Property | Detail |
+|---|---|
+| TTL | 15 minutes from grant |
+| Storage | `stepUpGrantedAt` timestamp in session cookie (not DB) |
+| Scope | Re-verifies current password — not a separate credential |
+| Applied to | `GET /api/audit-log/export`, `GET /api/reports/export` |
+
+### Files
+
+| File | Purpose |
+|---|---|
+| `app/api/auth/step-up/route.js` | POST (grant) + GET (check) |
+| `components/commons/StepUpModal.jsx` | Password prompt dialog |
+| `lib/auth.js` → `grantStepUp()` / `isStepUpValid()` | Session helpers |
+
+---
+
+## Data Subject Rights / DSAR (2026-06-03)
+
+Patients may submit data rights requests under RA 10173. Three request types are supported:
+
+| Type | Description |
+|---|---|
+| `ACCESS` | Patient requests a copy of their personal data |
+| `CORRECTION` | Patient requests correction of inaccurate data |
+| `DELETION` | Patient requests erasure of their personal data |
+
+### Flow
+
+- Patient opens **My Profile → Data Rights** (`DataRightsDialog.jsx`) → fills in request type + description → submits
+- `POST /api/data-requests` creates a `DataRequest` record (status: PENDING)
+- Admin opens **Data Requests** page (`DataRequestsPage.jsx`) → reviews via `ReviewRequestModal.jsx`
+- Admin updates status to IN_REVIEW → RESOLVED or REJECTED; can add `adminNotes`
+- `PATCH /api/data-requests/[id]` updates the record
+
+### Model
+
+```prisma
+model DataRequest {
+  id          String            @id @default(cuid())
+  userId      String
+  clinicId    String
+  type        DataRequestType   // ACCESS | CORRECTION | DELETION
+  status      DataRequestStatus @default(PENDING) // PENDING | IN_REVIEW | RESOLVED | REJECTED
+  description String?
+  adminNotes  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime          @default(now())
+}
+```
+
+---
+
+## Record Edit History (2026-06-03)
+
+Every write to `PatientRecord` (create or update) appends a `RecordHistory` entry with a JSON diff.
+
+```prisma
+model RecordHistory {
+  id        String   @id @default(cuid())
+  recordId  String
+  userId    String
+  diff      Json     // { before: {...}, after: {...} }
+  createdAt DateTime @default(now())
+}
+```
+
+History is retrievable via `GET /api/records/[patientId]/[recordId]/history`. Combined with `contentHash` tamper detection, this provides a full audit trail for every patient record change.
+
+---
+
 ## Account Lockout
 Tracked on the `User` model via `failedLoginAttempts`, `lastFailedAt`, `lockedUntil`.
 - **Threshold:** 5 failed attempts within 5 minutes
