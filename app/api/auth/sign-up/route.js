@@ -44,7 +44,7 @@ export async function POST(request) {
     const email = sanitizeEmail(body.email);
     const password = secret(body.password, 128);
     const firstName = str(body.firstName, 100) ?? null;
-    const middleInitial = str(body.middleInitial, 5) ?? null;
+    const middleInitial = str(body.middleInitial, 100) ?? null;
     const lastName = str(body.lastName, 100) ?? null;
     const phone = str(body.phone, 20) ?? null;
     const address = body.address && typeof body.address === 'object' ? JSON.stringify(body.address) : null;

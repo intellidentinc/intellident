@@ -200,7 +200,7 @@ export default function AcceptTermsPage() {
             <Section title="2. Data We Collect">
               <Para>We collect the following categories of personal information:</Para>
               <BulletList items={[
-                'Identity data: first name, middle initial, last name, date of birth',
+                'Identity data: first name, middle name, last name, date of birth',
                 'Contact data: email address, mobile number, home address',
                 'Authentication data: hashed password, encrypted master key, session tokens',
                 'Health data (sensitive personal information): dental records, diagnoses, treatment notes, visit history',

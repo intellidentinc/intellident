@@ -282,8 +282,8 @@ export default function SignUpPage() {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <SectionLabel>Personal Information</SectionLabel>
 
-              {/* Name row — grid ensures even columns with fixed M.I. */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: 2 }}>
+              {/* Name row — grid ensures even columns */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 2 }}>
                 <Input
                   id="firstName"
                   label="First Name"
@@ -291,16 +291,13 @@ export default function SignUpPage() {
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="John"
                 />
                 <Input
                   id="middleInitial"
-                  label="M.I."
+                  label="Middle Name"
                   type="text"
                   value={middleInitial}
-                  onChange={(e) => setMiddleInitial(e.target.value.slice(0, 2).toUpperCase())}
-                  placeholder="A."
-                  slotProps={{ htmlInput: { maxLength: 2 } }}
+                  onChange={(e) => setMiddleInitial(e.target.value)}
                 />
                 <Input
                   id="lastName"
@@ -309,7 +306,6 @@ export default function SignUpPage() {
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Doe"
                 />
               </Box>
 
@@ -322,7 +318,6 @@ export default function SignUpPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
                 />
                 <Input
                   id="phone"

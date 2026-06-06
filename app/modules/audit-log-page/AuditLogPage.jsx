@@ -636,6 +636,7 @@ export default function AuditLogPage() {
             borderColor: 'divider',
             borderRadius: 3,
             overflow: 'hidden',
+            mb: { xs: 9, sm: 10 },
           }}
         >
           <TableContainer>

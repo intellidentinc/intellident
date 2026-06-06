@@ -193,17 +193,13 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
             helperText={errors.firstName}
             required
           />
-          <Box sx={{ width: 80, flexShrink: 0 }}>
+          <Box sx={{ flex: 1 }}>
             <Input
               id='middleInitial'
-              label='M.I.'
+              label='Middle Name'
               value={form.middleInitial}
-              onChange={(e) => {
-                const val = e.target.value.slice(0, 2).toUpperCase()
-                setForm((prev) => ({ ...prev, middleInitial: val }))
-              }}
-              placeholder='A.'
-              slotProps={{ htmlInput: { maxLength: 2 } }}
+              onChange={(e) => setForm((prev) => ({ ...prev, middleInitial: e.target.value }))}
+              placeholder='e.g. Santos'
             />
           </Box>
           <Input
