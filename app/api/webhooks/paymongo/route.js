@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyWebhookSignature } from '@/lib/paymongo'
-import { computeBillingStatus } from '@/lib/billing'
+import { computeBillingStatus, generateReceiptNumber } from '@/lib/billing'
 import { createNotification } from '@/lib/notifications'
 import { logAudit } from '@/lib/audit'
 
@@ -66,8 +66,8 @@ export async function POST(request) {
   const newBalance    = Math.max(0, billing.balance - amount)
   const newStatus     = computeBillingStatus(newAmountPaid, billing.amount)
 
-  await prisma.$transaction([
-    prisma.payment.create({
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.create({
       data: {
         billingId,
         amount,
@@ -76,12 +76,15 @@ export async function POST(request) {
         paymongoCheckoutSessionId,
         paymongoPaymentId,
       },
-    }),
-    prisma.billing.update({
-      where: { id: billingId },
-      data: { amountPaid: newAmountPaid, balance: newBalance, status: newStatus },
-    }),
-  ])
+    })
+
+    const data = { amountPaid: newAmountPaid, balance: newBalance, status: newStatus }
+    if (newStatus === 'PAID' && !billing.receiptNumber) {
+      data.receiptNumber = await generateReceiptNumber(billing.clinicId, tx)
+    }
+
+    await tx.billing.update({ where: { id: billingId }, data })
+  })
 
   // Fire-and-forget: notify patient
   const patientUser = billing.patient?.user

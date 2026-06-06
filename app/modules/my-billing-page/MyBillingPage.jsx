@@ -13,7 +13,8 @@ import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import Button from '@/components/commons/Button'
 import { useToast } from '@/app/providers/ToastProvider'
-import { Download, CreditCard, Clock, CheckCircle2 } from 'lucide-react'
+import { Download, CreditCard, Clock, CheckCircle2, Eye } from 'lucide-react'
+import ReceiptPreviewDialog from '@/app/modules/billing-page/ReceiptPreviewDialog'
 import dayjs from 'dayjs'
 
 const STATUS_CHIP = {
@@ -27,7 +28,7 @@ function php(n) {
   return '₱' + Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function BillingCard({ billing, onPay, onDownload, paying, downloadingId }) {
+function BillingCard({ billing, onPay, onView, onDownload, paying, viewingId, downloadingId }) {
   const chip    = STATUS_CHIP[billing.status] ?? STATUS_CHIP.UNPAID
   const appt    = billing.appointment
   const settled = billing.status === 'PAID' || billing.status === 'REFUNDED'
@@ -94,16 +95,28 @@ function BillingCard({ billing, onPay, onDownload, paying, downloadingId }) {
           </Button>
         )}
         {(billing.status === 'PARTIAL' || billing.status === 'PAID') && (
-          <Button
-            variant='outlined'
-            size='small'
-            startIcon={downloadingId === billing.id ? undefined : <Download size={14} />}
-            loading={downloadingId === billing.id}
-            onClick={() => onDownload(billing)}
-            sx={{ fontSize: '0.8rem' }}
-          >
-            Receipt
-          </Button>
+          <>
+            <Button
+              variant='outlined'
+              size='small'
+              startIcon={viewingId === billing.id ? undefined : <Eye size={14} />}
+              loading={viewingId === billing.id}
+              onClick={() => onView(billing)}
+              sx={{ fontSize: '0.8rem' }}
+            >
+              View Receipt
+            </Button>
+            <Button
+              variant='outlined'
+              size='small'
+              startIcon={downloadingId === billing.id ? undefined : <Download size={14} />}
+              loading={downloadingId === billing.id}
+              onClick={() => onDownload(billing)}
+              sx={{ fontSize: '0.8rem' }}
+            >
+              Download
+            </Button>
+          </>
         )}
       </Box>
     </Box>
@@ -120,8 +133,10 @@ export default function MyBillingPage() {
   const [loading, setLoading]           = useState(true)
   const [clinic, setClinic]             = useState(null)
   const [paying, setPaying]             = useState(null)
+  const [viewingId, setViewingId]       = useState(null)
   const [downloadingId, setDownloadingId] = useState(null)
   const [showSuccess, setShowSuccess]   = useState(false)
+  const [preview, setPreview]           = useState(null) // { billing, blobUrl }
 
   useEffect(() => {
     if (searchParams.get('payment') === 'success') {
@@ -157,17 +172,43 @@ export default function MyBillingPage() {
     }
   }
 
+  async function generateReceiptBlob(billing) {
+    const { pdf } = await import('@react-pdf/renderer')
+    const BillingReceiptDocument = (await import('@/app/modules/billing-page/BillingReceiptDocument')).default
+    return pdf(<BillingReceiptDocument billing={billing} clinic={clinic} />).toBlob()
+  }
+
+  async function handleView(billing) {
+    setViewingId(billing.id)
+    try {
+      const blob = await generateReceiptBlob(billing)
+      const blobUrl = URL.createObjectURL(blob)
+      setPreview({ billing, blobUrl })
+    } catch {
+      showToast('Failed to generate receipt preview', 'error')
+    } finally {
+      setViewingId(null)
+    }
+  }
+
+  function closePreview() {
+    if (preview?.blobUrl) URL.revokeObjectURL(preview.blobUrl)
+    setPreview(null)
+  }
+
+  function downloadBlobUrl(blobUrl, billing) {
+    const a    = document.createElement('a')
+    a.href     = blobUrl
+    a.download = `receipt-${billing.receiptNumber ?? billing.id}.pdf`
+    a.click()
+  }
+
   async function handleDownload(billing) {
     setDownloadingId(billing.id)
     try {
-      const { pdf } = await import('@react-pdf/renderer')
-      const BillingReceiptDocument = (await import('@/app/modules/billing-page/BillingReceiptDocument')).default
-      const blob = await pdf(<BillingReceiptDocument billing={billing} clinic={clinic} />).toBlob()
+      const blob = await generateReceiptBlob(billing)
       const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `receipt-${billing.receiptNumber ?? billing.id}.pdf`
-      a.click()
+      downloadBlobUrl(url, billing)
       URL.revokeObjectURL(url)
     } catch {
       showToast('Failed to generate receipt', 'error')
@@ -223,8 +264,10 @@ export default function MyBillingPage() {
                 key={b.id}
                 billing={b}
                 onPay={handlePay}
+                onView={handleView}
                 onDownload={handleDownload}
                 paying={paying}
+                viewingId={viewingId}
                 downloadingId={downloadingId}
               />
             ))}
@@ -253,14 +296,23 @@ export default function MyBillingPage() {
                 key={b.id}
                 billing={b}
                 onPay={handlePay}
+                onView={handleView}
                 onDownload={handleDownload}
                 paying={paying}
+                viewingId={viewingId}
                 downloadingId={downloadingId}
               />
             ))}
           </Stack>
         )}
       </Box>
+
+      <ReceiptPreviewDialog
+        open={!!preview}
+        blobUrl={preview?.blobUrl}
+        onClose={closePreview}
+        onDownload={() => preview && downloadBlobUrl(preview.blobUrl, preview.billing)}
+      />
     </SidebarInset>
   )
 }

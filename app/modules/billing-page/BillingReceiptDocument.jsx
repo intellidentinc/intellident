@@ -151,7 +151,11 @@ const styles = StyleSheet.create({
 })
 
 function php(n) {
-  return '₱' + Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // Helvetica (the only font available to @react-pdf/renderer here) has no glyph
+  // for the peso sign (U+20B1) — it falls back to a notdef glyph that overlaps
+  // the digits that follow it. Use the ASCII "PHP" prefix instead so the amount
+  // renders cleanly.
+  return 'PHP ' + Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function formatDate(d) {

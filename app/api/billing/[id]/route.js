@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
-import { computeBillingStatus } from '@/lib/billing'
+import { computeBillingStatus, generateReceiptNumber } from '@/lib/billing'
 
 async function getStaffCaller() {
   const session = await getSession()
@@ -67,6 +67,15 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // Backfill receiptNumber for billings created before generation was wired up
+  if (!billing.receiptNumber) {
+    await prisma.$transaction(async (tx) => {
+      const receiptNumber = await generateReceiptNumber(billing.clinicId, tx)
+      await tx.billing.update({ where: { id: billing.id }, data: { receiptNumber } })
+      billing.receiptNumber = receiptNumber
+    })
+  }
+
   return NextResponse.json({ billing })
 }
 
@@ -115,16 +124,18 @@ export async function PATCH(request, { params }) {
   const newBalance    = Math.max(0, billing.balance - rawAmount)
   const newStatus     = computeBillingStatus(newAmountPaid, billing.amount)
 
-  const [, updated] = await prisma.$transaction([
-    prisma.payment.create({
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.payment.create({
       data: { billingId: id, amount: rawAmount, method, notes: notes || null, type: 'FULL' },
-    }),
-    prisma.billing.update({
-      where: { id },
-      data: { amountPaid: newAmountPaid, balance: newBalance, status: newStatus },
-      include: BILLING_INCLUDE,
-    }),
-  ])
+    })
+
+    const data = { amountPaid: newAmountPaid, balance: newBalance, status: newStatus }
+    if (newStatus === 'PAID' && !billing.receiptNumber) {
+      data.receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+    }
+
+    return tx.billing.update({ where: { id }, data, include: BILLING_INCLUDE })
+  })
 
   logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'CREATE', entity: 'Payment', entityId: id, ipAddress: ip, userAgent, metadata: { amount: rawAmount, method, newStatus } })
 

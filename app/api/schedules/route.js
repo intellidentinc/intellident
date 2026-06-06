@@ -24,6 +24,7 @@ import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { createCheckoutSession } from '@/lib/paymongo'
+import { generateReceiptNumber } from '@/lib/billing'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -232,16 +233,20 @@ export async function POST(request) {
   const reservationFee = clinic?.reservationFeeAmount ?? 0
   if (clinic?.paymongoEnabled && reservationFee > 0) {
     try {
-      const billing = await prisma.billing.create({
-        data: {
-          clinicId:      caller.clinicId,
-          patientId:     caller.patientId,
-          appointmentId: appointment.id,
-          amount:        totalPrice,
-          amountPaid:    0,
-          balance:       totalPrice,
-          status:        'UNPAID',
-        },
+      const billing = await prisma.$transaction(async (tx) => {
+        const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+        return tx.billing.create({
+          data: {
+            clinicId:      caller.clinicId,
+            patientId:     caller.patientId,
+            appointmentId: appointment.id,
+            amount:        totalPrice,
+            amountPaid:    0,
+            balance:       totalPrice,
+            status:        'UNPAID',
+            receiptNumber,
+          },
+        })
       })
 
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''

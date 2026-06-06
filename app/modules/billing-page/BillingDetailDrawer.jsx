@@ -9,11 +9,12 @@ import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import CircularProgress from '@mui/material/CircularProgress'
-import { X, Download, Banknote, Link2, CheckCircle2, Clock, User, Calendar, Stethoscope } from 'lucide-react'
+import { X, Download, Eye, Banknote, Link2, CheckCircle2, Clock, User, Calendar, Stethoscope } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import { useToast } from '@/app/providers/ToastProvider'
 import { STATUS_PAYMENT_CHIP } from './BillingPage'
 import RecordPaymentModal from './RecordPaymentModal'
+import ReceiptPreviewDialog from './ReceiptPreviewDialog'
 import dayjs from 'dayjs'
 
 function php(n) {
@@ -41,8 +42,10 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
   const [billing, setBilling]         = useState(initialBilling)
   const [clinic, setClinic]           = useState(null)
   const [loadingLink, setLoadingLink] = useState(false)
+  const [loadingView, setLoadingView] = useState(false)
   const [loadingPdf, setLoadingPdf]   = useState(false)
   const [payModalOpen, setPayModalOpen] = useState(false)
+  const [previewUrl, setPreviewUrl]   = useState(null)
 
   useEffect(() => {
     if (clinicId) {
@@ -84,17 +87,42 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
     }
   }
 
+  async function generateReceiptBlob() {
+    const { pdf } = await import('@react-pdf/renderer')
+    const BillingReceiptDocument = (await import('./BillingReceiptDocument')).default
+    return pdf(<BillingReceiptDocument billing={billing} clinic={clinic} />).toBlob()
+  }
+
+  async function handleViewReceipt() {
+    setLoadingView(true)
+    try {
+      const blob = await generateReceiptBlob()
+      setPreviewUrl(URL.createObjectURL(blob))
+    } catch (err) {
+      showToast('Failed to generate receipt preview', 'error')
+    } finally {
+      setLoadingView(false)
+    }
+  }
+
+  function closePreview() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(null)
+  }
+
+  function downloadReceiptFromUrl(url) {
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `receipt-${billing.receiptNumber ?? billing.id}.pdf`
+    a.click()
+  }
+
   async function handleDownloadReceipt() {
     setLoadingPdf(true)
     try {
-      const { pdf } = await import('@react-pdf/renderer')
-      const BillingReceiptDocument = (await import('./BillingReceiptDocument')).default
-      const blob = await pdf(<BillingReceiptDocument billing={billing} clinic={clinic} />).toBlob()
+      const blob = await generateReceiptBlob()
       const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `receipt-${billing.receiptNumber ?? billing.id}.pdf`
-      a.click()
+      downloadReceiptFromUrl(url)
       URL.revokeObjectURL(url)
     } catch (err) {
       showToast('Failed to generate receipt PDF', 'error')
@@ -212,16 +240,28 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
         {/* Actions footer */}
         <Box sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider', bgcolor: '#f8fafc', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           {canReceipt && (
-            <Button
-              variant='outlined'
-              size='small'
-              startIcon={loadingPdf ? undefined : <Download size={14} />}
-              loading={loadingPdf}
-              onClick={handleDownloadReceipt}
-              sx={{ fontSize: '0.8rem' }}
-            >
-              Receipt PDF
-            </Button>
+            <>
+              <Button
+                variant='outlined'
+                size='small'
+                startIcon={loadingView ? undefined : <Eye size={14} />}
+                loading={loadingView}
+                onClick={handleViewReceipt}
+                sx={{ fontSize: '0.8rem' }}
+              >
+                View Receipt
+              </Button>
+              <Button
+                variant='outlined'
+                size='small'
+                startIcon={loadingPdf ? undefined : <Download size={14} />}
+                loading={loadingPdf}
+                onClick={handleDownloadReceipt}
+                sx={{ fontSize: '0.8rem' }}
+              >
+                Download
+              </Button>
+            </>
           )}
           {canPay && (
             <>
@@ -254,6 +294,13 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
         onClose={() => setPayModalOpen(false)}
         billing={billing}
         onSuccess={handlePaymentSuccess}
+      />
+
+      <ReceiptPreviewDialog
+        open={!!previewUrl}
+        blobUrl={previewUrl}
+        onClose={closePreview}
+        onDownload={() => previewUrl && downloadReceiptFromUrl(previewUrl)}
       />
     </>
   )
