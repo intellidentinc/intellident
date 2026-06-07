@@ -119,7 +119,9 @@ model Clinic {
   notifConfig           Json?
   reminder1Hours        Int     @default(24)
   reminder2Hours        Int     @default(2)
-  auditLogRetentionDays Int?
+  auditLogRetentionDays         Int?
+  patientRecordRetentionDays    Int?
+  billingRetentionDays          Int?
   isEnabled Boolean   @default(true)
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())

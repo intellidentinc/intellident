@@ -19,7 +19,7 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Chip from '@mui/material/Chip'
-import { Shield, Clock, Archive } from 'lucide-react'
+import { Shield, Clock, Archive, FileText, Receipt } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import SuperPageHeader from './SuperPageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -47,6 +47,18 @@ export default function SuperPoliciesPage() {
   const [retentionDays, setRetentionDays] = useState(90)
   const [retentionLoading, setRetentionLoading] = useState(false)
   const [retentionConfirm, setRetentionConfirm] = useState(false)
+
+  // Patient record retention state
+  const [prRetentionEnabled, setPrRetentionEnabled] = useState(false)
+  const [prRetentionDays, setPrRetentionDays]       = useState(365)
+  const [prRetentionLoading, setPrRetentionLoading] = useState(false)
+  const [prRetentionConfirm, setPrRetentionConfirm] = useState(false)
+
+  // Billing retention state
+  const [billRetentionEnabled, setBillRetentionEnabled] = useState(false)
+  const [billRetentionDays, setBillRetentionDays]       = useState(365)
+  const [billRetentionLoading, setBillRetentionLoading] = useState(false)
+  const [billRetentionConfirm, setBillRetentionConfirm] = useState(false)
 
   const fetchClinics = useCallback(async () => {
     try {
@@ -116,6 +128,38 @@ export default function SuperPoliciesPage() {
       showToast(e.message, 'error')
     } finally {
       setRetentionLoading(false)
+    }
+  }
+
+  async function handleApplyPatientRetention() {
+    setPrRetentionLoading(true)
+    try {
+      const val = prRetentionEnabled ? Number(prRetentionDays) : null
+      const n = await applyPolicy({ patientRecordRetentionDays: val })
+      showToast(`Patient record retention applied to ${n} clinic${n !== 1 ? 's' : ''}`, 'success')
+      setPrRetentionConfirm(false)
+      setLoadingClinics(true)
+      await fetchClinics()
+    } catch (e) {
+      showToast(e.message, 'error')
+    } finally {
+      setPrRetentionLoading(false)
+    }
+  }
+
+  async function handleApplyBillingRetention() {
+    setBillRetentionLoading(true)
+    try {
+      const val = billRetentionEnabled ? Number(billRetentionDays) : null
+      const n = await applyPolicy({ billingRetentionDays: val })
+      showToast(`Billing retention applied to ${n} clinic${n !== 1 ? 's' : ''}`, 'success')
+      setBillRetentionConfirm(false)
+      setLoadingClinics(true)
+      await fetchClinics()
+    } catch (e) {
+      showToast(e.message, 'error')
+    } finally {
+      setBillRetentionLoading(false)
     }
   }
 
@@ -227,6 +271,70 @@ export default function SuperPoliciesPage() {
           )}
         </PolicyCard>
 
+        {/* Patient Record Retention */}
+        <PolicyCard
+          icon={<FileText size={18} color='#2563eb' />}
+          title='Patient Record Retention'
+          description='Automatically purge soft-deleted patient records (and their history/attachments) older than the specified number of days.'
+          onApply={() => setPrRetentionConfirm(true)}
+        >
+          <FormControlLabel
+            control={<Switch checked={prRetentionEnabled} onChange={(e) => setPrRetentionEnabled(e.target.checked)} />}
+            label={
+              <Box sx={{ ml: 0.5 }}>
+                <Typography variant='body2' fontWeight={600}>Enable Auto-Purge</Typography>
+                <Typography variant='caption' color='text.secondary'>When off, soft-deleted records are kept indefinitely.</Typography>
+              </Box>
+            }
+            sx={{ alignItems: 'center', mt: 1 }}
+          />
+          {prRetentionEnabled && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant='body2' fontWeight={600} mb={0.75}>Retain soft-deleted records for (days)</Typography>
+              <TextField
+                type='number'
+                size='small'
+                value={prRetentionDays}
+                onChange={(e) => setPrRetentionDays(e.target.value)}
+                inputProps={{ min: 1 }}
+                sx={{ width: 140 }}
+              />
+            </Box>
+          )}
+        </PolicyCard>
+
+        {/* Billing Retention */}
+        <PolicyCard
+          icon={<Receipt size={18} color='#2563eb' />}
+          title='Billing Record Retention'
+          description='Automatically purge soft-deleted billing records (and their payments) older than the specified number of days.'
+          onApply={() => setBillRetentionConfirm(true)}
+        >
+          <FormControlLabel
+            control={<Switch checked={billRetentionEnabled} onChange={(e) => setBillRetentionEnabled(e.target.checked)} />}
+            label={
+              <Box sx={{ ml: 0.5 }}>
+                <Typography variant='body2' fontWeight={600}>Enable Auto-Purge</Typography>
+                <Typography variant='caption' color='text.secondary'>When off, soft-deleted billing records are kept indefinitely.</Typography>
+              </Box>
+            }
+            sx={{ alignItems: 'center', mt: 1 }}
+          />
+          {billRetentionEnabled && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant='body2' fontWeight={600} mb={0.75}>Retain soft-deleted billing for (days)</Typography>
+              <TextField
+                type='number'
+                size='small'
+                value={billRetentionDays}
+                onChange={(e) => setBillRetentionDays(e.target.value)}
+                inputProps={{ min: 1 }}
+                sx={{ width: 140 }}
+              />
+            </Box>
+          )}
+        </PolicyCard>
+
         {/* Status summary table */}
         <Box sx={{ mt: 5 }}>
           <Typography variant='subtitle1' fontWeight={700} mb={2}>
@@ -241,18 +349,20 @@ export default function SuperPoliciesPage() {
                   <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>Single Session</TableCell>
                   <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>Reminders</TableCell>
                   <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>Audit Retention</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>Patient Record Retention</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>Billing Retention</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loadingClinics ? (
                   <TableRow>
-                    <TableCell colSpan={5} align='center' sx={{ py: 3, color: 'text.secondary', fontSize: '0.8rem' }}>
+                    <TableCell colSpan={7} align='center' sx={{ py: 3, color: 'text.secondary', fontSize: '0.8rem' }}>
                       Loading…
                     </TableCell>
                   </TableRow>
                 ) : clinics.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align='center' sx={{ py: 3, color: 'text.secondary', fontSize: '0.8rem' }}>
+                    <TableCell colSpan={7} align='center' sx={{ py: 3, color: 'text.secondary', fontSize: '0.8rem' }}>
                       No clinics found
                     </TableCell>
                   </TableRow>
@@ -271,6 +381,12 @@ export default function SuperPoliciesPage() {
                       </TableCell>
                       <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary', py: 1.25 }}>
                         {c.auditLogRetentionDays ? `${c.auditLogRetentionDays} days` : 'Never'}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary', py: 1.25 }}>
+                        {c.patientRecordRetentionDays ? `${c.patientRecordRetentionDays} days` : 'Never'}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary', py: 1.25 }}>
+                        {c.billingRetentionDays ? `${c.billingRetentionDays} days` : 'Never'}
                       </TableCell>
                     </TableRow>
                   ))
@@ -304,6 +420,22 @@ export default function SuperPoliciesPage() {
         loading={retentionLoading}
         clinicCount={clinics.length}
         title='Apply Audit Retention Policy'
+      />
+      <ConfirmDialog
+        open={prRetentionConfirm}
+        onClose={() => setPrRetentionConfirm(false)}
+        onConfirm={handleApplyPatientRetention}
+        loading={prRetentionLoading}
+        clinicCount={clinics.length}
+        title='Apply Patient Record Retention Policy'
+      />
+      <ConfirmDialog
+        open={billRetentionConfirm}
+        onClose={() => setBillRetentionConfirm(false)}
+        onConfirm={handleApplyBillingRetention}
+        loading={billRetentionLoading}
+        clinicCount={clinics.length}
+        title='Apply Billing Retention Policy'
       />
     </SidebarInset>
   )

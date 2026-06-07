@@ -16,6 +16,7 @@ import ClinicPaymentSettings from './ClinicPaymentSettings'
 import ClinicPasswordSettings from './ClinicPasswordSettings'
 import ClinicNotificationSettings from './ClinicNotificationSettings'
 import ClinicAuditRetentionSettings from './ClinicAuditRetentionSettings'
+import ClinicDataRetentionSettings from './ClinicDataRetentionSettings'
 import { EMPTY_ADDRESS } from '@/components/commons/AddressSelector'
 
 function validate(form) {
@@ -220,6 +221,18 @@ export default function SettingsPage() {
         </Typography>
 
         <ClinicAuditRetentionSettings clinicId={clinicId} />
+
+        <Divider sx={{ my: 4 }} />
+
+        <Typography variant='h6' fontWeight={700} color='text.primary' gutterBottom>
+          Data Retention
+        </Typography>
+        <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+          Automatically purge soft-deleted patient records and billing data older than a set number of days.
+          Supports compliance with RA 10173 (Data Privacy Act) by ensuring data is not held longer than necessary.
+        </Typography>
+
+        <ClinicDataRetentionSettings clinicId={clinicId} />
       </Box>
     </SidebarInset>
   )

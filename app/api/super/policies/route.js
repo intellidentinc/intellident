@@ -25,6 +25,8 @@ export async function GET() {
       reminder1Hours: true,
       reminder2Hours: true,
       auditLogRetentionDays: true,
+      patientRecordRetentionDays: true,
+      billingRetentionDays: true,
     },
     orderBy: { name: 'asc' },
   })
@@ -38,6 +40,8 @@ const ALLOWED_FIELDS = {
   reminder1Hours: 'hours',
   reminder2Hours: 'hours',
   auditLogRetentionDays: 'retention',
+  patientRecordRetentionDays: 'retention',
+  billingRetentionDays: 'retention',
 }
 
 export async function POST(request) {
@@ -74,7 +78,7 @@ export async function POST(request) {
         sanitized[key] = null
       } else {
         const n = parseInt(val, 10)
-        if (isNaN(n) || n < 1) return NextResponse.json({ error: 'auditLogRetentionDays must be ≥ 1 or null' }, { status: 400 })
+        if (isNaN(n) || n < 1) return NextResponse.json({ error: `${key} must be ≥ 1 or null` }, { status: 400 })
         sanitized[key] = n
       }
     }

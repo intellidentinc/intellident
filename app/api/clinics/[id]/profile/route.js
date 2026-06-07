@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
   })
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -52,7 +52,7 @@ export async function PATCH(request, { params }) {
   const phone    = str(parsed.body.phone, 20)
   const landline = str(parsed.body.landline, 20)
 
-  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true }
+  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
 
   const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body
   const hasSingleSession = 'singleSessionEnabled' in parsed.body
@@ -87,6 +87,21 @@ export async function PATCH(request, { params }) {
     const raw = parsed.body.auditLogRetentionDays
     const auditLogRetentionDays = raw === null ? null : (parseInt(raw, 10) > 0 ? parseInt(raw, 10) : null)
     const clinic = await prisma.clinic.update({ where: { id }, data: { auditLogRetentionDays }, select: FULL_SELECT })
+    return NextResponse.json(clinic)
+  }
+
+  const hasDataRetention = 'patientRecordRetentionDays' in parsed.body || 'billingRetentionDays' in parsed.body
+  if (hasDataRetention) {
+    const data = {}
+    if ('patientRecordRetentionDays' in parsed.body) {
+      const raw = parsed.body.patientRecordRetentionDays
+      data.patientRecordRetentionDays = raw === null ? null : (parseInt(raw, 10) > 0 ? parseInt(raw, 10) : null)
+    }
+    if ('billingRetentionDays' in parsed.body) {
+      const raw = parsed.body.billingRetentionDays
+      data.billingRetentionDays = raw === null ? null : (parseInt(raw, 10) > 0 ? parseInt(raw, 10) : null)
+    }
+    const clinic = await prisma.clinic.update({ where: { id }, data, select: FULL_SELECT })
     return NextResponse.json(clinic)
   }
 
