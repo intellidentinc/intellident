@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { parseJsonBody, str, secret } from '@/lib/validate'
 import { supabase } from '@/lib/supabase'
+import { logAudit, getRequestMeta } from '@/lib/audit'
 
 const ATTACHMENT_BUCKET = 'record-attachments'
 
@@ -50,6 +51,8 @@ export async function GET(request, { params }) {
     })
   )
 
+  const { ip, userAgent } = getRequestMeta(request)
+  logAudit({ userId: session.userId, clinicId: dentist.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: recordId, ipAddress: ip, userAgent })
   return NextResponse.json({ record: { ...record, attachments } })
 }
 
@@ -104,6 +107,8 @@ export async function PATCH(request, { params }) {
     }).catch(() => {})
   }
 
+  const { ip: patchIp, userAgent: patchUa } = getRequestMeta(request)
+  logAudit({ userId: session.userId, clinicId: dentist.clinicId, action: 'UPDATE', entity: 'PatientRecord', entityId: recordId, ipAddress: patchIp, userAgent: patchUa })
   return NextResponse.json(record)
 }
 
@@ -127,5 +132,7 @@ export async function DELETE(request, { params }) {
     data: { isDeleted: true, deletedAt: new Date() }
   })
 
+  const { ip: delIp, userAgent: delUa } = getRequestMeta(request)
+  logAudit({ userId: session.userId, clinicId: dentist.clinicId, action: 'DELETE', entity: 'PatientRecord', entityId: recordId, ipAddress: delIp, userAgent: delUa })
   return NextResponse.json({ success: true })
 }

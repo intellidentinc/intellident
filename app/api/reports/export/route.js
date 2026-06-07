@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
+import { logAudit, getRequestMeta } from '@/lib/audit'
 
 const MAX_ROWS = 5000
 
@@ -31,6 +32,7 @@ export async function GET(request) {
 
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
+  const { ip, userAgent } = getRequestMeta(request)
   const { searchParams } = new URL(request.url)
   const type     = searchParams.get('type')     ?? 'appointments'
   const dateFrom = searchParams.get('dateFrom') ?? ''
@@ -50,6 +52,7 @@ export async function GET(request) {
       orderBy: { scheduledAt: 'desc' },
       take:    MAX_ROWS,
     })
+    logAudit({ userId: session.userId, clinicId, action: 'EXPORT', entity: 'Report', entityId: type, ipAddress: ip, userAgent, metadata: { type, filters: { dateFrom, dateTo }, rowCount: rows.length } })
     return NextResponse.json({ rows, type })
   }
 
@@ -69,6 +72,7 @@ export async function GET(request) {
       orderBy: { createdAt: 'desc' },
       take:    MAX_ROWS,
     })
+    logAudit({ userId: session.userId, clinicId, action: 'EXPORT', entity: 'Report', entityId: type, ipAddress: ip, userAgent, metadata: { type, filters: { dateFrom, dateTo }, rowCount: rows.length } })
     return NextResponse.json({ rows, type })
   }
 
@@ -86,6 +90,7 @@ export async function GET(request) {
       orderBy: { createdAt: 'desc' },
       take:    MAX_ROWS,
     })
+    logAudit({ userId: session.userId, clinicId, action: 'EXPORT', entity: 'Report', entityId: type, ipAddress: ip, userAgent, metadata: { type, filters: { dateFrom, dateTo }, rowCount: rows.length } })
     return NextResponse.json({ rows, type })
   }
 

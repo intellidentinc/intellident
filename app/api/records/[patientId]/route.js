@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { parseJsonBody, str, secret } from '@/lib/validate'
+import { logAudit, getRequestMeta } from '@/lib/audit'
 
 async function getDentistForClinic(session) {
   const caller = await prisma.user.findUnique({
@@ -53,6 +54,8 @@ export async function GET(request, { params }) {
     }
   })
 
+  const { ip, userAgent } = getRequestMeta(request)
+  logAudit({ userId: session.userId, clinicId: dentist.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: patientId, ipAddress: ip, userAgent })
   return NextResponse.json({ patient, records })
 }
 
@@ -91,5 +94,7 @@ export async function POST(request, { params }) {
     select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
   })
 
+  const { ip, userAgent } = getRequestMeta(request)
+  logAudit({ userId: session.userId, clinicId: dentist.clinicId, action: 'CREATE', entity: 'PatientRecord', entityId: record.id, ipAddress: ip, userAgent })
   return NextResponse.json(record, { status: 201 })
 }

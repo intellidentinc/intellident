@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
+import { logAudit, getRequestMeta } from '@/lib/audit'
 
 const VALID_ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'VERIFY', 'AI_INTERACTION']
 const MAX_EXPORT_ROWS = 5000
@@ -75,5 +76,16 @@ export async function GET(request) {
     take: MAX_EXPORT_ROWS,
   })
 
+  const { ip, userAgent } = getRequestMeta(request)
+  logAudit({
+    userId: session.userId,
+    clinicId,
+    action: 'EXPORT',
+    entity: 'AuditLog',
+    entityId: clinicId,
+    ipAddress: ip,
+    userAgent,
+    metadata: { filters: { action, entity, search, dateFrom, dateTo }, rowCount: logs.length },
+  })
   return NextResponse.json({ logs })
 }

@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { logAudit, getRequestMeta } from '@/lib/audit'
 
-export async function GET() {
+export async function GET(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -59,5 +60,7 @@ export async function GET() {
     }
   })
 
+  const { ip, userAgent } = getRequestMeta(request)
+  logAudit({ userId: session.userId, clinicId: user.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: patient.id, ipAddress: ip, userAgent })
   return NextResponse.json({ records, visits })
 }

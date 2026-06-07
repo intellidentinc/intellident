@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { logAudit, getRequestMeta } from '@/lib/audit'
 
 export async function GET(request, { params }) {
   const session = await getSession()
@@ -40,5 +41,7 @@ export async function GET(request, { params }) {
 
   if (!record) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
 
+  const { ip, userAgent } = getRequestMeta(request)
+  logAudit({ userId: session.userId, clinicId: user.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: recordId, ipAddress: ip, userAgent })
   return NextResponse.json({ record })
 }
