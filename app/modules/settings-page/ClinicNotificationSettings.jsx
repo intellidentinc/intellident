@@ -9,6 +9,12 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Switch from '@mui/material/Switch'
+import Collapse from '@mui/material/Collapse'
+import Chip from '@mui/material/Chip'
+import IconButton from '@mui/material/IconButton'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import TextField from '@mui/material/TextField'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -25,15 +31,18 @@ const NOTIF_TYPES = [
   { key: 'PAYMENT_RECEIVED',       label: 'Payment Received' },
 ]
 
+const TEMPLATE_VARS = ['{{firstName}}', '{{patientName}}', '{{serviceName}}', '{{scheduledAt}}', '{{appointmentCode}}']
+
 const DEFAULT_CONFIG = Object.fromEntries(NOTIF_TYPES.map((t) => [t.key, { inApp: true, email: true }]))
 
 export default function ClinicNotificationSettings({ clinicId }) {
   const { showToast } = useToast()
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(false)
-  const [config, setConfig]     = useState(DEFAULT_CONFIG)
+  const [loading, setLoading]     = useState(true)
+  const [saving, setSaving]       = useState(false)
+  const [config, setConfig]       = useState(DEFAULT_CONFIG)
   const [reminder1, setReminder1] = useState('24')
   const [reminder2, setReminder2] = useState('2')
+  const [expanded, setExpanded]   = useState(null)
 
   useEffect(() => {
     if (!clinicId) return
@@ -49,10 +58,18 @@ export default function ClinicNotificationSettings({ clinicId }) {
   }, [clinicId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggle(key, channel) {
-    setConfig((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], [channel]: !prev[key][channel] },
-    }))
+    setConfig((prev) => ({ ...prev, [key]: { ...prev[key], [channel]: !prev[key][channel] } }))
+  }
+
+  function setTemplate(key, field, value) {
+    setConfig((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }))
+  }
+
+  function resetTemplate(key) {
+    setConfig((prev) => {
+      const { emailSubject, emailBody, ...rest } = prev[key] ?? {}  // eslint-disable-line no-unused-vars
+      return { ...prev, [key]: rest }
+    })
   }
 
   async function handleSave() {
@@ -82,7 +99,7 @@ export default function ClinicNotificationSettings({ clinicId }) {
   }
 
   return (
-    <Box sx={{ maxWidth: 640 }}>
+    <Box sx={{ maxWidth: 680 }}>
       <Typography variant='subtitle2' fontWeight={600} color='text.primary' sx={{ mb: 1 }}>
         Reminder Intervals
       </Typography>
@@ -114,7 +131,7 @@ export default function ClinicNotificationSettings({ clinicId }) {
         Notification Types
       </Typography>
       <Typography variant='caption' color='text.secondary' sx={{ mb: 2, display: 'block' }}>
-        Toggle in-app bell notifications and email notifications per event type.
+        Toggle delivery channels per event type. Click the row to edit the email subject and body template.
       </Typography>
 
       <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', mb: 3 }}>
@@ -124,32 +141,79 @@ export default function ClinicNotificationSettings({ clinicId }) {
               <TableCell sx={{ fontWeight: 600, fontSize: '0.8125rem' }}>Event</TableCell>
               <TableCell align='center' sx={{ fontWeight: 600, fontSize: '0.8125rem', width: 80 }}>In-App</TableCell>
               <TableCell align='center' sx={{ fontWeight: 600, fontSize: '0.8125rem', width: 80 }}>Email</TableCell>
+              <TableCell align='center' sx={{ fontWeight: 600, fontSize: '0.8125rem', width: 56 }}>Template</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {NOTIF_TYPES.map((t) => (
-              <TableRow key={t.key} hover>
-                <TableCell sx={{ fontSize: '0.8125rem', color: 'text.primary' }}>{t.label}</TableCell>
-                <TableCell align='center'>
-                  <Switch
-                    size='small'
-                    checked={config[t.key]?.inApp !== false}
-                    onChange={() => toggle(t.key, 'inApp')}
-                    disabled={loading}
-                    color='primary'
-                  />
-                </TableCell>
-                <TableCell align='center'>
-                  <Switch
-                    size='small'
-                    checked={config[t.key]?.email !== false}
-                    onChange={() => toggle(t.key, 'email')}
-                    disabled={loading}
-                    color='primary'
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
+            {NOTIF_TYPES.map((t) => {
+              const hasTemplate = !!(config[t.key]?.emailSubject || config[t.key]?.emailBody)
+              const isOpen = expanded === t.key
+              return (
+                <>
+                  <TableRow key={t.key} hover sx={{ cursor: 'pointer' }} onClick={() => setExpanded(isOpen ? null : t.key)}>
+                    <TableCell sx={{ fontSize: '0.8125rem', color: 'text.primary' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {t.label}
+                        {hasTemplate && <Chip label='custom' size='small' color='primary' variant='outlined' sx={{ fontSize: '0.65rem', height: 18 }} />}
+                      </Box>
+                    </TableCell>
+                    <TableCell align='center' onClick={(e) => e.stopPropagation()}>
+                      <Switch size='small' checked={config[t.key]?.inApp !== false} onChange={() => toggle(t.key, 'inApp')} disabled={loading} color='primary' />
+                    </TableCell>
+                    <TableCell align='center' onClick={(e) => e.stopPropagation()}>
+                      <Switch size='small' checked={config[t.key]?.email !== false} onChange={() => toggle(t.key, 'email')} disabled={loading} color='primary' />
+                    </TableCell>
+                    <TableCell align='center'>
+                      <IconButton size='small' disabled={loading}>
+                        {isOpen ? <ExpandLessIcon fontSize='small' /> : <ExpandMoreIcon fontSize='small' />}
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow key={`${t.key}-tpl`}>
+                    <TableCell colSpan={4} sx={{ p: 0, border: 0 }}>
+                      <Collapse in={isOpen} unmountOnExit>
+                        <Box sx={{ p: 2, bgcolor: '#f8fafc', borderTop: '1px solid', borderColor: 'divider' }}>
+                          <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
+                            Available variables:
+                          </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+                            {TEMPLATE_VARS.map((v) => (
+                              <Chip key={v} label={v} size='small' variant='outlined' sx={{ fontSize: '0.7rem', fontFamily: 'monospace', cursor: 'pointer' }}
+                                onClick={() => navigator.clipboard?.writeText(v)} />
+                            ))}
+                          </Box>
+                          <Input
+                            id={`${t.key}-subject`}
+                            label='Email subject (leave blank to use default)'
+                            value={config[t.key]?.emailSubject ?? ''}
+                            onChange={(e) => setTemplate(t.key, 'emailSubject', e.target.value)}
+                            disabled={loading}
+                            sx={{ mb: 1.5 }}
+                          />
+                          <TextField
+                            label='Email body (leave blank to use default)'
+                            multiline
+                            minRows={3}
+                            maxRows={8}
+                            fullWidth
+                            size='small'
+                            value={config[t.key]?.emailBody ?? ''}
+                            onChange={(e) => setTemplate(t.key, 'emailBody', e.target.value)}
+                            disabled={loading}
+                            sx={{ mb: 1.5, '& .MuiInputLabel-root': { fontSize: '0.875rem' } }}
+                          />
+                          {hasTemplate && (
+                            <Button variant='outlined' size='small' onClick={() => resetTemplate(t.key)} disabled={loading}>
+                              Reset to default
+                            </Button>
+                          )}
+                        </Box>
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </>
+              )
+            })}
           </TableBody>
         </Table>
       </Box>
