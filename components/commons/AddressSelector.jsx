@@ -149,6 +149,7 @@ export default function AddressSelector({ value = EMPTY_ADDRESS, onChange, error
   // Load all regions on mount
   useEffect(() => {
     fetchJson(`${BASE}/regions`)
+      .catch(() => fetchJson(`${GITLAB_BASE}/regions.json`))
       .then((data) => setRegions(fixNames([...data]).sort((a, b) => a.name.localeCompare(b.name))))
       .catch(() => {})
       .finally(() => setLoadingRegions(false))
@@ -435,7 +436,10 @@ export default function AddressSelector({ value = EMPTY_ADDRESS, onChange, error
           id='addr-postal'
           label='Postal Code'
           value={value.postal}
-          onChange={(e) => update({ postal: e.target.value })}
+          onChange={(e) => {
+            const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+            update({ postal: val });
+          }}
           placeholder='e.g. 1200'
         />
       </Box>

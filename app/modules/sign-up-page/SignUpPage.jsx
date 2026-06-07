@@ -327,7 +327,7 @@ export default function SignUpPage() {
                   value={phone}
                   onChange={(e) => {
                     let val = e.target.value;
-                    if (!val.startsWith('+63')) val = '+63' + val.replace(/^\+63/, '');
+                    if (!val.startsWith('+63')) val = '+63';
                     if (val.length <= 13) setPhone(val);
                   }}
                   placeholder="+639123456789"

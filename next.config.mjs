@@ -6,7 +6,7 @@ const cspHeader = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co https://vitals.vercel-insights.com",
+  "connect-src 'self' https://*.supabase.co https://vitals.vercel-insights.com https://psgc.cloud https://psgc.gitlab.io",
   "frame-ancestors 'none'",
   "form-action 'self'",
   "base-uri 'self'",
