@@ -94,7 +94,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
 
         let notes = ''
         try {
-          notes = await decryptData(masterKey, encryptedData, dataIv)
+          notes = await decryptData(masterKey, encryptedData, dataIv, patientId)
         } catch {
           showToast('Failed to decrypt record. The data may be corrupted.', 'error')
           onClose()
@@ -195,7 +195,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     try {
       const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(form.notes))
       const contentHash = toBase64(hashBuf)
-      const { ciphertext: encryptedData, iv: dataIv } = await encryptData(masterKey, form.notes)
+      const { ciphertext: encryptedData, iv: dataIv } = await encryptData(masterKey, form.notes, patientId)
 
       const body = { title: form.title.trim(), encryptedData, dataIv, contentHash }
       if (isEdit) {

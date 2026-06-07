@@ -26,6 +26,7 @@ import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 import { checkRateLimit } from '@/lib/rateLimit';
 // import { sendMfaOtpEmail } from '@/lib/email'; // MFA: disabled
+import { sendSuspiciousLoginAlert, sendAccountLockedAlert } from '@/lib/email';
 
 // Configurable lockout constants (override via env vars)
 const MAX_ATTEMPTS     = parseInt(process.env.LOCKOUT_MAX_ATTEMPTS      ?? '5');
@@ -111,6 +112,13 @@ export async function POST(request) {
       });
 
       if (shouldLock) {
+        logAudit({
+          userId: user.id, clinicId: user.clinicId,
+          action: 'LOCKOUT', entity: 'User', entityId: user.id,
+          ipAddress: ip, userAgent,
+          metadata: { attempts: attemptsInWindow, lockedUntil },
+        });
+        sendAccountLockedAlert({ to: user.email, firstName: user.firstName, lockedUntil }).catch(() => {});
         const lockMinutes = LOCK_DURATION_MS / 60000;
         return NextResponse.json(
           { error: `Too many failed attempts. Account locked for ${lockMinutes} minutes.` },
@@ -210,6 +218,15 @@ export async function POST(request) {
         ...(suspiciousIp ? { suspiciousIp: true, previousIp: knownDevice.lastIp }  : {}),
       },
     });
+
+    if (isNewDevice || suspiciousIp) {
+      sendSuspiciousLoginAlert({
+        to: user.email, firstName: user.firstName,
+        isNewDevice, suspiciousIp,
+        previousIp: suspiciousIp ? knownDevice.lastIp : null,
+        ip, time: new Date(),
+      }).catch(() => {});
+    }
 
     const mustChangePassword = user.mustChangePassword ?? false;
     const passwordExpired =

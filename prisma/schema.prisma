@@ -67,6 +67,8 @@ enum AuditAction {
   EXPORT
   VERIFY
   AI_INTERACTION
+  LOCKOUT
+  BREACH_ALERT
 }
 
 enum ChatRole {
@@ -608,6 +610,7 @@ model AuditLog {
   @@index([clinicId])
   @@index([entity, entityId])
   @@index([createdAt])
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 

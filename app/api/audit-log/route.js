@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 
 const VALID_SORT_FIELDS = ['createdAt', 'action', 'entity']
-const VALID_ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'VERIFY', 'AI_INTERACTION']
+const VALID_ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'VERIFY', 'AI_INTERACTION', 'LOCKOUT', 'BREACH_ALERT']
 
 export async function GET(request) {
   const session = await getSession()

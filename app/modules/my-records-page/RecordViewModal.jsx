@@ -46,7 +46,7 @@ export default function RecordViewModal({ open, record, onClose }) {
         const res = await fetch(`/api/patient/records/${record.id}`)
         if (!res.ok) throw new Error()
         const data = await res.json()
-        const { encryptedData, dataIv, contentHash } = data.record
+        const { encryptedData, dataIv, contentHash, patientId } = data.record
 
         if (!encryptedData || !dataIv) {
           setNotes('')
@@ -55,7 +55,7 @@ export default function RecordViewModal({ open, record, onClose }) {
 
         let plaintext
         try {
-          plaintext = await decryptData(masterKey, encryptedData, dataIv)
+          plaintext = await decryptData(masterKey, encryptedData, dataIv, patientId)
         } catch {
           showToast('Could not decrypt this record. It may have been created before encryption was enabled.', 'warning')
           setNotes('')
