@@ -193,7 +193,6 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
-  @@index([token])
   @@index([email])
   @@map("password_reset_tokens")
 }
@@ -216,7 +215,6 @@ model EmailVerification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
 
-  @@index([token])
   @@index([email])
   @@map("email_verifications")
 }
@@ -289,7 +287,6 @@ model User {
   sessions                UserSession[]
   knownDevices            KnownDevice[]
 
-  @@index([email])
   @@index([clinicId])
   @@map("users")
 }
@@ -413,6 +410,9 @@ model Appointment {
   @@index([patientId])
   @@index([dentistId])
   @@index([scheduledAt])
+  @@index([clinicId, status])
+  @@index([clinicId, scheduledAt])
+  @@index([reminderSent24h, reminderSent2h, scheduledAt])
   @@map("appointments")
 }
 
@@ -425,6 +425,7 @@ model AppointmentService {
   service     Service     @relation(fields: [serviceId], references: [id])
 
   @@id([appointmentId, serviceId])
+  @@index([serviceId])
   @@map("appointment_services")
 }
 
@@ -504,6 +505,7 @@ model Billing {
 
   @@index([clinicId])
   @@index([patientId])
+  @@index([status])
   @@map("billings")
 }
 
@@ -584,7 +586,6 @@ model MfaOtp {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
-  @@index([pendingToken])
   @@map("mfa_otps")
 }
 
@@ -701,7 +702,6 @@ model UserSession {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
-  @@index([sessionToken])
   @@map("user_sessions")
 }
 

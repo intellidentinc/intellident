@@ -3,10 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { SidebarInset } from '@/components/ui/sidebar'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import Tabs from '@mui/material/Tabs'
-import Tab from '@mui/material/Tab'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -18,20 +17,18 @@ import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
 import { useToast } from '@/app/providers/ToastProvider'
-import SignOutButton from '@/app/modules/dashboard-page/SignOutButton'
-import ApplicationsTab from './ApplicationsTab'
+import SuperPageHeader from './SuperPageHeader'
 
 export default function SuperPage({ clinics: initialClinics }) {
   const router = useRouter()
   const { showToast } = useToast()
 
-  const [mainTab, setMainTab] = useState('clinics')
   const [clinics, setClinics] = useState(initialClinics)
   const [entering, setEntering] = useState(null)
 
   // Form modal (create / edit)
   const [formOpen, setFormOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState(null) // null = create
+  const [editTarget, setEditTarget] = useState(null)
   const [formLoading, setFormLoading] = useState(false)
   const [formName, setFormName] = useState('')
   const [formAddress, setFormAddress] = useState({ ...EMPTY_ADDRESS })
@@ -85,9 +82,7 @@ export default function SuperPage({ clinics: initialClinics }) {
     setFormOpen(true)
   }
 
-  function closeForm() {
-    setFormOpen(false)
-  }
+  function closeForm() { setFormOpen(false) }
 
   async function handleFormSubmit() {
     const errors = {}
@@ -95,10 +90,7 @@ export default function SuperPage({ clinics: initialClinics }) {
     if (formPhone.trim() && !/^\+639\d{9}$/.test(formPhone.trim())) {
       errors.phone = 'Must be in +63XXXXXXXXXX format (starts with +639)'
     }
-    if (Object.keys(errors).length) {
-      setFormErrors(errors)
-      return
-    }
+    if (Object.keys(errors).length) { setFormErrors(errors); return }
 
     setFormLoading(true)
     try {
@@ -110,10 +102,7 @@ export default function SuperPage({ clinics: initialClinics }) {
         body: JSON.stringify({ name: formName, address: formAddress, phone: formPhone }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        showToast(data.error || 'Something went wrong', 'error')
-        return
-      }
+      if (!res.ok) { showToast(data.error || 'Something went wrong', 'error'); return }
 
       if (editTarget) {
         setClinics((prev) => prev.map((c) => (c.id === editTarget.id ? data : c)))
@@ -130,32 +119,17 @@ export default function SuperPage({ clinics: initialClinics }) {
     }
   }
 
-  function openDelete(clinic) {
-    setDeleteTarget(clinic)
-  }
-
-  function closeDelete() {
-    setDeleteTarget(null)
-  }
-
-  function openToggle(clinic) {
-    setToggleTarget(clinic)
-  }
-
-  function closeToggle() {
-    setToggleTarget(null)
-  }
+  function openDelete(clinic) { setDeleteTarget(clinic) }
+  function closeDelete() { setDeleteTarget(null) }
+  function openToggle(clinic) { setToggleTarget(clinic) }
+  function closeToggle() { setToggleTarget(null) }
 
   async function handleToggle() {
     if (!toggleTarget) return
     setToggleLoading(true)
     try {
       const res = await fetch(`/api/super/clinics/${toggleTarget.id}/toggle`, { method: 'POST' })
-      if (!res.ok) {
-        const data = await res.json()
-        showToast(data.error || 'Failed to update clinic', 'error')
-        return
-      }
+      if (!res.ok) { const data = await res.json(); showToast(data.error || 'Failed to update clinic', 'error'); return }
       const data = await res.json()
       setClinics((prev) => prev.map((c) => (c.id === toggleTarget.id ? data : c)))
       showToast(data.isEnabled ? 'Clinic enabled' : 'Clinic disabled', 'success')
@@ -172,11 +146,7 @@ export default function SuperPage({ clinics: initialClinics }) {
     setDeleteLoading(true)
     try {
       const res = await fetch(`/api/super/clinics/${deleteTarget.id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const data = await res.json()
-        showToast(data.error || 'Failed to delete clinic', 'error')
-        return
-      }
+      if (!res.ok) { const data = await res.json(); showToast(data.error || 'Failed to delete clinic', 'error'); return }
       setClinics((prev) => prev.filter((c) => c.id !== deleteTarget.id))
       showToast('Clinic deleted', 'success')
       setDeleteTarget(null)
@@ -188,86 +158,37 @@ export default function SuperPage({ clinics: initialClinics }) {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#F8FAFC' }}>
-      {/* Header */}
-      <Box
-        sx={{
-          bgcolor: '#fff', borderBottom: '1px solid', borderColor: 'divider',
-          px: { xs: 3, sm: 5 }, py: 2,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Stethoscope size={20} color='#2563eb' />
-          </Box>
-          <Box>
-            <Typography variant='subtitle1' fontWeight={700} color='#2563eb' lineHeight={1.2}>IntelliDent</Typography>
-            <Typography variant='caption' color='text.secondary'>Super Admin Portal</Typography>
-          </Box>
-        </Box>
-        <SignOutButton />
-      </Box>
+    <SidebarInset>
+      <SuperPageHeader title='Clinics' />
 
-      {/* Content */}
       <Box sx={{ px: { xs: 3, sm: 5 }, py: 5, maxWidth: 1100, mx: 'auto' }}>
-        {/* Main tab switcher */}
-        <Tabs
-          value={mainTab}
-          onChange={(_, v) => setMainTab(v)}
-          sx={{ mb: 4, borderBottom: '1px solid', borderColor: 'divider' }}
-        >
-          <Tab label="Clinics" value="clinics" />
-          <Tab label="Applications" value="applications" />
-        </Tabs>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4 }}>
+          <Box>
+            <Typography variant='h5' fontWeight={700} color='text.primary' mb={0.5}>
+              Clinics
+            </Typography>
+            <Typography variant='body2' color='text.secondary'>
+              Select a clinic to enter as Admin.
+            </Typography>
+          </Box>
+          <Button variant='contained' startIcon={<Plus size={16} />} onClick={openCreate}>
+            Create Clinic
+          </Button>
+        </Box>
 
-        {/* Clinics tab */}
-        {mainTab === 'clinics' && (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4 }}>
-              <Box>
-                <Typography variant='h5' fontWeight={700} color='text.primary' mb={0.5}>
-                  Clinics
-                </Typography>
-                <Typography variant='body2' color='text.secondary'>
-                  Select a clinic to enter as Admin.
-                </Typography>
-              </Box>
-              <Button variant='contained' startIcon={<Plus size={16} />} onClick={openCreate}>
-                Create Clinic
-              </Button>
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
-              {clinics.map((clinic) => (
-                <ClinicCard
-                  key={clinic.id}
-                  clinic={clinic}
-                  loading={entering === clinic.id}
-                  onEnter={() => handleEnter(clinic.id)}
-                  onEdit={() => openEdit(clinic)}
-                  onDelete={() => openDelete(clinic)}
-                  onToggle={() => openToggle(clinic)}
-                />
-              ))}
-            </Box>
-          </>
-        )}
-
-        {/* Applications tab */}
-        {mainTab === 'applications' && (
-          <>
-            <Box sx={{ mb: 4 }}>
-              <Typography variant='h5' fontWeight={700} color='text.primary' mb={0.5}>
-                Clinic Applications
-              </Typography>
-              <Typography variant='body2' color='text.secondary'>
-                Review and approve or reject pending clinic registration requests.
-              </Typography>
-            </Box>
-            <ApplicationsTab />
-          </>
-        )}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
+          {clinics.map((clinic) => (
+            <ClinicCard
+              key={clinic.id}
+              clinic={clinic}
+              loading={entering === clinic.id}
+              onEnter={() => handleEnter(clinic.id)}
+              onEdit={() => openEdit(clinic)}
+              onDelete={() => openDelete(clinic)}
+              onToggle={() => openToggle(clinic)}
+            />
+          ))}
+        </Box>
       </Box>
 
       {/* Create / Edit Modal */}
@@ -276,8 +197,6 @@ export default function SuperPage({ clinics: initialClinics }) {
           {editTarget ? 'Edit Clinic' : 'Create Clinic'}
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: '12px !important' }}>
-
-          {/* Clinic Name */}
           <Input
             id='form-clinic-name'
             label='Clinic Name'
@@ -288,30 +207,16 @@ export default function SuperPage({ clinics: initialClinics }) {
             helperText={formErrors.name}
             placeholder='e.g. Maria Laura Cruz Dental Clinic'
           />
-
-          {/* Address section */}
-          <Box
-            sx={{
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 2,
-              overflow: 'hidden',
-            }}
-          >
+          <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
             <Box sx={{ px: 2, py: 1.25, bgcolor: '#F8FAFC', borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant='caption' fontWeight={700} color='text.secondary' sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Address
               </Typography>
             </Box>
             <Box sx={{ p: 2 }}>
-              <AddressSelector
-                value={formAddress}
-                onChange={setFormAddress}
-              />
+              <AddressSelector value={formAddress} onChange={setFormAddress} />
             </Box>
           </Box>
-
-          {/* Phone */}
           <Input
             id='form-clinic-phone'
             label='Phone'
@@ -323,9 +228,7 @@ export default function SuperPage({ clinics: initialClinics }) {
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button variant='outlined' onClick={closeForm} disabled={formLoading}>
-            Cancel
-          </Button>
+          <Button variant='outlined' onClick={closeForm} disabled={formLoading}>Cancel</Button>
           <Button variant='contained' loading={formLoading} onClick={handleFormSubmit}>
             {editTarget ? 'Save Changes' : 'Create'}
           </Button>
@@ -345,17 +248,11 @@ export default function SuperPage({ clinics: initialClinics }) {
             <DeleteOutlined sx={{ fontSize: 20, color: '#dc2626' }} />
           </Box>
           <Box>
-            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
-              Delete Clinic
-            </Typography>
-            <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
-              This action cannot be undone
-            </Typography>
+            <Typography variant='subtitle1' fontWeight={600} color='text.primary'>Delete Clinic</Typography>
+            <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>This action cannot be undone</Typography>
           </Box>
         </Box>
-
         <Divider />
-
         <Box sx={{ px: 3, py: 2.5 }}>
           <Typography variant='body2' color='text.secondary' lineHeight={1.7}>
             You are about to permanently delete{' '}
@@ -365,19 +262,10 @@ export default function SuperPage({ clinics: initialClinics }) {
             . All data associated with this clinic will be removed.
           </Typography>
         </Box>
-
         <Divider />
-
         <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button variant='outlined' onClick={closeDelete} disabled={deleteLoading}>
-            Cancel
-          </Button>
-          <Button
-            variant='contained'
-            loading={deleteLoading}
-            onClick={handleDelete}
-            sx={{ bgcolor: '#dc2626', '&:hover': { bgcolor: '#b91c1c' } }}
-          >
+          <Button variant='outlined' onClick={closeDelete} disabled={deleteLoading}>Cancel</Button>
+          <Button variant='contained' loading={deleteLoading} onClick={handleDelete} sx={{ bgcolor: '#dc2626', '&:hover': { bgcolor: '#b91c1c' } }}>
             Delete Clinic
           </Button>
         </Box>
@@ -392,13 +280,11 @@ export default function SuperPage({ clinics: initialClinics }) {
         slotProps={{ paper: { sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(0,0,0,0.10)' } } }}
       >
         <Box sx={{ px: 3, pt: 3, pb: 2, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-          <Box
-            sx={{
-              width: 36, height: 36, borderRadius: 2,
-              bgcolor: toggleTarget?.isEnabled ? '#fef9c3' : '#dcfce7',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, mt: 0.25,
-            }}
-          >
+          <Box sx={{
+            width: 36, height: 36, borderRadius: 2,
+            bgcolor: toggleTarget?.isEnabled ? '#fef9c3' : '#dcfce7',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, mt: 0.25,
+          }}>
             <Power size={18} color={toggleTarget?.isEnabled ? '#854d0e' : '#15803d'} />
           </Box>
           <Box>
@@ -412,9 +298,7 @@ export default function SuperPage({ clinics: initialClinics }) {
             </Typography>
           </Box>
         </Box>
-
         <Divider />
-
         <Box sx={{ px: 3, py: 2.5 }}>
           <Typography variant='body2' color='text.secondary' lineHeight={1.7}>
             {toggleTarget?.isEnabled ? 'Disable' : 'Enable'}{' '}
@@ -426,13 +310,9 @@ export default function SuperPage({ clinics: initialClinics }) {
               : '? Clinic staff and patients will regain access.'}
           </Typography>
         </Box>
-
         <Divider />
-
         <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button variant='outlined' onClick={closeToggle} disabled={toggleLoading}>
-            Cancel
-          </Button>
+          <Button variant='outlined' onClick={closeToggle} disabled={toggleLoading}>Cancel</Button>
           <Button
             variant='contained'
             loading={toggleLoading}
@@ -446,7 +326,7 @@ export default function SuperPage({ clinics: initialClinics }) {
           </Button>
         </Box>
       </Dialog>
-    </Box>
+    </SidebarInset>
   )
 }
 
@@ -463,7 +343,6 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
         transition: 'box-shadow 0.15s', '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.07)' },
       }}
     >
-      {/* Logo / icon + actions */}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           {clinic.logoUrl ? (
@@ -491,47 +370,19 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
             </Box>
           </Box>
         </Box>
-
-        {/* Edit / Toggle / Delete icon buttons */}
         <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-          <Box
-            component='button'
-            onClick={onEdit}
-            sx={{
-              border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5,
-              color: '#64748b', display: 'flex', alignItems: 'center',
-              '&:hover': { bgcolor: '#f1f5f9', color: '#2563eb' },
-            }}
-          >
+          <Box component='button' onClick={onEdit} sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: '#f1f5f9', color: '#2563eb' } }}>
             <Pencil size={15} />
           </Box>
-          <Box
-            component='button'
-            onClick={onToggle}
-            title={clinic.isEnabled ? 'Disable clinic' : 'Enable clinic'}
-            sx={{
-              border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5,
-              color: '#64748b', display: 'flex', alignItems: 'center',
-              '&:hover': { bgcolor: clinic.isEnabled ? '#fef9c3' : '#dcfce7', color: clinic.isEnabled ? '#854d0e' : '#15803d' },
-            }}
-          >
+          <Box component='button' onClick={onToggle} title={clinic.isEnabled ? 'Disable clinic' : 'Enable clinic'} sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: clinic.isEnabled ? '#fef9c3' : '#dcfce7', color: clinic.isEnabled ? '#854d0e' : '#15803d' } }}>
             <Power size={15} />
           </Box>
-          <Box
-            component='button'
-            onClick={onDelete}
-            sx={{
-              border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5,
-              color: '#64748b', display: 'flex', alignItems: 'center',
-              '&:hover': { bgcolor: '#fee2e2', color: '#b91c1c' },
-            }}
-          >
+          <Box component='button' onClick={onDelete} sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: '#fee2e2', color: '#b91c1c' } }}>
             <Trash2 size={15} />
           </Box>
         </Box>
       </Box>
 
-      {/* Details */}
       {clinic.address && (
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
           <MapPin size={14} color='#94a3b8' style={{ marginTop: 2, flexShrink: 0 }} />
@@ -553,7 +404,6 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
         </Box>
       )}
 
-      {/* Enter button */}
       <Button
         variant='contained'
         size='small'
