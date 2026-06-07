@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/auth';
+import { getSession, isSuspiciousSession, isStepUpValid } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/app/modules/dashboard-page/AppSidebar';
@@ -17,6 +17,10 @@ export default async function ClinicLayout({ children, params }) {
 
   if (session.clinicId !== clinicId) {
     redirect('/sign-in');
+  }
+
+  if (isSuspiciousSession(session) && !isStepUpValid(session)) {
+    redirect(`/step-up?redirect=/${clinicId}/dashboard`);
   }
 
   const [user, clinic, rawPendingCount] = await Promise.all([

@@ -105,6 +105,11 @@ export default function SignInPage() {
         router.push('/change-password?reason=expired');
         return;
       }
+      if (data.requiresStepUp) {
+        const dest = data.clinicId ? `/${data.clinicId}/dashboard` : '/super';
+        router.push(`/step-up?redirect=${encodeURIComponent(dest)}`);
+        return;
+      }
       router.push(data.clinicId ? `/${data.clinicId}/dashboard` : '/super');
     } catch (err) {
       // Clear any session the server may have already set so refresh doesn't leave the user

@@ -206,6 +206,7 @@ export async function POST(request) {
 
     // PHASE 4: Device upsert + session creation in parallel (saves 1 DB round-trip)
     const requiresTerms = !user.termsAcceptedAt;
+    const suspicious = isNewDevice || suspiciousIp;
     await Promise.all([
       prisma.knownDevice.upsert({
         where:  { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
@@ -213,7 +214,7 @@ export async function POST(request) {
         update: { lastIp: ip, lastSeenAt: new Date() },
       }),
       setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId,
-                 rememberMe, false, requiresTerms, ip, userAgent, user.role),
+                 rememberMe, false, requiresTerms, ip, userAgent, user.role, suspicious),
     ]);
 
     logAudit({
@@ -250,6 +251,7 @@ export async function POST(request) {
         ...(requiresTerms && { requiresTerms: true }),
         ...(mustChangePassword && { mustChangePassword: true }),
         ...(passwordExpired && { passwordExpired: true }),
+        ...(suspicious && { requiresStepUp: true }),
       },
       { status: 200 }
     );
