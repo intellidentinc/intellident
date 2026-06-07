@@ -33,8 +33,11 @@ Enums define the allowed values for status and category fields across the schema
 | `RecordStatus` | `ACTIVE`, `ARCHIVED` | PatientRecord |
 | `PaymentStatus` | `UNPAID`, `PARTIAL`, `PAID`, `REFUNDED` | Billing |
 | `NotificationStatus` | `PENDING`, `SENT`, `FAILED` | Notification |
-| `AuditAction` | `LOGIN`, `LOGOUT`, `CREATE`, `UPDATE`, `DELETE`, `VIEW`, `EXPORT`, `VERIFY` | AuditLog |
+| `AuditAction` | `LOGIN`, `LOGIN_FAILED`, `LOGOUT`, `CREATE`, `UPDATE`, `DELETE`, `VIEW`, `EXPORT`, `VERIFY`, `AI_INTERACTION`, `LOCKOUT`, `BREACH_ALERT`, `BACKUP`, `RESTORE` | AuditLog |
+| `ChatRole` | `USER`, `ASSISTANT` | ChatMessage |
 | `ConsentStatus` | `PENDING`, `GIVEN`, `REVOKED` | Patient |
+| `DataRequestType` | `ACCESS`, `CORRECTION`, `DELETION` | DataRequest |
+| `DataRequestStatus` | `PENDING`, `IN_REVIEW`, `RESOLVED`, `REJECTED` | DataRequest |
 
 ---
 

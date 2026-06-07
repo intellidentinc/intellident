@@ -70,7 +70,7 @@ NotificationStatus: PENDING | SENT | FAILED  (legacy Notification model only)
 ChatRole:          USER | ASSISTANT
 
 AuditAction:
-  LOGIN | LOGOUT | CREATE | UPDATE | DELETE | VIEW | EXPORT | VERIFY
+  LOGIN | LOGIN_FAILED | LOGOUT | CREATE | UPDATE | DELETE | VIEW | EXPORT | VERIFY
   AI_INTERACTION  — chatbot + slot recommendation calls
   LOCKOUT         — account locked after failed attempts
   BREACH_ALERT    — breach scan detection event
@@ -91,4 +91,5 @@ APPOINTMENT_NO_SHOW     — patient no-show (→ patient)
 APPOINTMENT_RESCHEDULED — appointment rescheduled (→ patient)
 REMINDER_24H            — 24-hour reminder (→ patient, via cron)
 REMINDER_2H             — 2-hour reminder (→ patient, via cron)
+PAYMENT_RECEIVED        — online payment confirmed via PayMongo webhook (→ patient + staff)
 ```
