@@ -291,6 +291,7 @@ export default function SignUpPage() {
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="e.g. Juan"
                 />
                 <Input
                   id="middleInitial"
@@ -298,6 +299,7 @@ export default function SignUpPage() {
                   type="text"
                   value={middleInitial}
                   onChange={(e) => setMiddleInitial(e.target.value)}
+                  placeholder="e.g. Santos"
                 />
                 <Input
                   id="lastName"
@@ -306,6 +308,7 @@ export default function SignUpPage() {
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
+                  placeholder="e.g. dela Cruz"
                 />
               </Box>
 
@@ -318,6 +321,7 @@ export default function SignUpPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="e.g. juan@email.com"
                 />
                 <Input
                   id="phone"
