@@ -59,6 +59,7 @@ enum NotificationType {
 
 enum AuditAction {
   LOGIN
+  LOGIN_FAILED
   LOGOUT
   CREATE
   UPDATE

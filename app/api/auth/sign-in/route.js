@@ -111,6 +111,13 @@ export async function POST(request) {
         },
       });
 
+      logAudit({
+        userId: user.id, clinicId: user.clinicId,
+        action: 'LOGIN_FAILED', entity: 'User', entityId: user.id,
+        ipAddress: ip, userAgent,
+        metadata: { attempt: attemptsInWindow, maxAttempts: MAX_ATTEMPTS },
+      });
+
       if (shouldLock) {
         logAudit({
           userId: user.id, clinicId: user.clinicId,
