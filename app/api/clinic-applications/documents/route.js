@@ -66,8 +66,11 @@ export async function POST(request) {
   if (!detected)
     return NextResponse.json({ error: 'Only PDF, JPG, and PNG files are accepted.' }, { status: 400 })
 
-  // Ensure bucket exists (no-op if already present)
-  await supabase.storage.createBucket(BUCKET, { public: true }).catch(() => {})
+  // Ensure bucket exists — ignore "already exists" error, surface anything else
+  const { error: bucketError } = await supabase.storage.createBucket(BUCKET, { public: true })
+  if (bucketError && !bucketError.message?.includes('already exists')) {
+    console.error('[clinic-docs] bucket creation error:', bucketError)
+  }
 
   // Extension and content-type come from magic-byte detection, not the client
   const path = `${category}/${Date.now()}-${randomBytes(10).toString('hex')}.${detected.ext}`
@@ -76,8 +79,10 @@ export async function POST(request) {
     .from(BUCKET)
     .upload(path, buffer, { contentType: detected.mime })
 
-  if (uploadError)
+  if (uploadError) {
+    console.error('[clinic-docs] upload error:', uploadError)
     return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 })
+  }
 
   const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path)
 

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/breach-scan",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/keep-alive",
+      "schedule": "0 6 1,6,11,16,21,26 * *"
     }
   ]
 }
