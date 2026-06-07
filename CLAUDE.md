@@ -25,7 +25,7 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | Encryption | Web Crypto API — AES-GCM E2EE, PBKDF2 key derivation |
 | File Storage | Supabase Storage (`clinic-logos` bucket) |
 | Email | Gmail SMTP via nodemailer (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `GMAIL_FROM_NAME`) |
-| Cron | Vercel Cron Jobs (every 15 min) → `CRON_SECRET` bearer token |
+| Cron | Vercel Cron Jobs (3 daily jobs) → `CRON_SECRET` bearer token; reminders 08:00 UTC, audit-purge 01:00 UTC, breach-scan 02:00 UTC |
 | AI | OpenAI gpt-5 — slot suggestions (`app/api/ai/slots`) + virtual assistant chatbot (`app/api/ai/chat`); helper: `lib/ai.js` |
 | Analytics | Vercel Analytics |
 
@@ -78,11 +78,14 @@ app/
 │   ├── notifications/        # GET list + PATCH mark-all-read; [id]/ PATCH mark-one-read
 │   ├── ai/                   # slots/ GET (AI slot suggestions); chat/ POST (multi-turn chatbot); risk/ GET (no-show risk)
 │   ├── super/                # enter/ POST + exit/ POST — SuperAdmin clinic switching; clinic-applications/ GET + [id]/ PATCH (approve/reject)
+│   │                         # clinics/[id]/backup/ GET — data export (step-up required); clinics/[id]/restore/request-otp/ POST + confirm/ POST — OTP-confirmed restore
 │   ├── clinic-applications/  # POST — public submission (rate-limited 5/hr); documents/ POST — Supabase upload (rate-limited 50/hr)
 │   ├── webhooks/
 │   │   └── paymongo/         # POST — HMAC-verified PayMongo webhook (idempotent)
 │   ├── cron/
-│   │   └── reminders/        # GET — Vercel cron job; sends 24h + 2h appointment reminders
+│   │   ├── reminders/        # GET — daily at 08:00 UTC; sends 24h + 2h appointment reminders
+│   │   ├── audit-purge/      # GET — daily at 01:00 UTC; purges soft-deleted records per per-clinic retention config (audit logs, patient records, billing)
+│   │   └── breach-scan/      # GET — daily at 02:00 UTC; detects distributed brute-force, mass record access, bulk export; BREACH_ALERT audit entries + admin email
 │   └── clinics/
 │       ├── route.js          # GET — public (unauthenticated); lists all clinics for sign-in/sign-up selector
 │       ├── schedule/         # GET session-based (any role) — for appointment form
@@ -115,7 +118,8 @@ app/
 │   ├── rbac-page/            # RbacPage, AddUserModal, EditRoleModal, DeleteUserModal
 │   ├── profile-page/         # ProfilePage
 │   ├── settings-page/        # SettingsPage, ClinicLogoUpload, ClinicProfileForm, ClinicSchedule, ClinicClosures
-│   ├── super-page/           # SuperPage.jsx — two tabs: Clinics + Applications; ApplicationsTab.jsx for onboarding review
+│   │                         # ClinicNotificationSettings, ClinicPasswordSettings, ClinicDataRetentionSettings, ClinicAuditRetentionSettings
+│   ├── super-page/           # SuperPage.jsx — two tabs: Clinics + Applications; ApplicationsTab.jsx for onboarding review; RestoreModal.jsx (3-step OTP restore)
 │   ├── ai-chat/              # AIChatButton.jsx, AIChatDrawer.jsx — floating chat button + Framer Motion drawer
 │   └── notifications/        # NotificationBell.jsx, NotificationDrawer.jsx
 ├── providers/                # App-level React context providers
@@ -269,6 +273,9 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - `User` has `mustChangePassword Boolean @default(false)` — set `true` on admin-created staff; sign-in returns flag; client redirects to `/change-password?reason=first-login`; cleared on successful change
 - `User` has `passwordExpiresAt DateTime?` — set to `now + 90 days` for ADMIN accounts on password change when clinic has `passwordExpiryEnabled`
 - `Clinic` has `passwordExpiryEnabled Boolean @default(false)` — per-clinic toggle in Settings; enables 90-day password expiry for ADMIN accounts
+- `Clinic` has `singleSessionEnabled Boolean @default(false)` — per-clinic toggle; new login terminates any prior active session
+- `Clinic` has `isEnabled Boolean @default(true)` — disabled clinics are blocked at middleware (cached 60s via `unstable_cache`)
+- `Clinic` has `auditLogRetentionDays Int?`, `patientRecordRetentionDays Int?`, `billingRetentionDays Int?` — null = keep forever; enforced by daily purge cron
 - `User` is not created on sign-up; `EmailVerification` record holds pending data until email verified
 - `Appointment.dentistId` is nullable (null = "Any Available"); `endsAt = scheduledAt + duration + bufferTime`
 - `patientCode` format: `PAT-{CLINICCODE}-{YYYY}-{#####}`; `appointmentCode`: `APT-{CODE}-{YYYY/MM/DD}-{####}`
@@ -292,7 +299,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
 - `notifyPatientStatusChange(...)` — status change → patient (in-app + email)
 - `sendAppointmentReminder({ appointment, hoursAhead })` — cron reminders (24h / 2h)
 
-**Cron:** `app/api/cron/reminders/route.js` — every 15 min, Bearer `CRON_SECRET`, sets `reminderSent24h`/`reminderSent2h` to prevent duplicates.
+**Cron:** `app/api/cron/reminders/route.js` — daily at 08:00 UTC, Bearer `CRON_SECRET`, sets `reminderSent24h`/`reminderSent2h` to prevent duplicates.
 
 **API:** `GET/PATCH /api/notifications`, `PATCH /api/notifications/[id]`
 
@@ -383,7 +390,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Framer Motion slide-in notification drawer
   - [x] In-app notifications for: booking request, confirmation, cancellation, completion, no-show, rescheduled, 24h reminder, 2h reminder
   - [x] Email notifications via Gmail/nodemailer for all notification types
-  - [x] Vercel cron job for 24h + 2h appointment reminders (every 15 min, protected by CRON_SECRET)
+  - [x] Vercel cron job for 24h + 2h appointment reminders (daily at 08:00 UTC, protected by CRON_SECRET)
   - [x] Mark-read (single + all) functionality
 - [x] Virtual Assistant / Chatbot — multi-turn AI chat via `app/api/ai/chat`; drawer UI at `app/modules/ai-chat/`; gpt-5 via `chatWithTools()` in `lib/ai.js`; role-aware tools + system prompt caching
 - [x] Patient Record Management
@@ -420,6 +427,17 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Reject → emails applicant with optional rejection notes
   - [x] Submission confirmation email via `sendClinicApplicationReceived`
   - [x] Staff welcome email on admin-created accounts — `sendStaffWelcomeEmail` fire-and-forget on `POST /api/users`
+- [x] Data Retention Controls
+  - [x] Per-clinic configurable retention for audit logs (`Clinic.auditLogRetentionDays`) — `ClinicAuditRetentionSettings.jsx`
+  - [x] Per-clinic configurable retention for patient records (`Clinic.patientRecordRetentionDays`) — cascades `RecordHistory` + `Attachment`
+  - [x] Per-clinic configurable retention for billing records (`Clinic.billingRetentionDays`) — cascades `Payment`
+  - [x] Auto-purge cron (`/api/cron/audit-purge`) — daily at 01:00 UTC; removes soft-deleted records older than configured retention
+- [x] Backup & Restore (Super Admin)
+  - [x] Clinic data export — `GET /api/super/clinics/[id]/backup`; step-up auth required; JSON snapshot of profile, patients, services, appointments, billing, audit logs (last 5,000); excludes E2EE patient record notes; audit-logged as `BACKUP`
+  - [x] 3-step OTP-confirmed restore — `RestoreModal.jsx`; `POST .../restore/request-otp` (rate-limited 5/15 min, OTP via email) + `POST .../restore/confirm`; returns confirmation token for Neon point-in-time restore; audit-logged as `RESTORE`
+- [x] Breach Detection & Alerting
+  - [x] Daily cron (`/api/cron/breach-scan`, 02:00 UTC); detects distributed brute-force (same IP locks 3+ accounts), mass record access (100+ views/24h by one user), bulk export (5+/24h by one user)
+  - [x] Creates `BREACH_ALERT` audit log entry + emails clinic admins on detection
 
 ---
 

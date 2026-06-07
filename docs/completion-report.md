@@ -24,7 +24,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Module | Status | Notes |
 |---|---|---|
 | User Access & Authentication | ✅ 100% | All 24 sub-items complete — MFA, lockout, RBAC, sessions, password policy, history, Remember Me, inactivity logout, admin user creation, first-login forced password change, random temp passwords, auto-generated usernames, 90-day admin password expiry |
-| Clinic Settings | ✅ 100% | Profile, logo upload, operating hours + presets, closure dates, audit retention, notification config, single-session toggle |
+| Clinic Settings | ✅ 100% | Profile, logo upload, operating hours + presets, closure dates, retention config for audit logs + patient records + billing, notification config, single-session toggle |
 | Service Catalog | ✅ 100% | Create / edit / delete services; duration, price, buffer; dentist assignment |
 | Appointment Scheduling | ✅ 100% | All 16 items complete — scheduling, calendar, conflict detection, status transitions, AI slot suggestions, patient self-booking, dentist calendar, rescheduling flow UI |
 | AI Slot Suggestions | ✅ 100% | gpt-5-powered slot ranking with fallback algorithmic tagging; audit logging of AI interactions (`app/api/ai/slots`) |
@@ -40,6 +40,8 @@ This report assesses the current completion state of IntelliDent across two dime
 | Billing & Payment Tracking | ✅ 100% | Full CRUD API; Admin/Receptionist billing list + detail drawer; cash payment via `RecordPaymentModal`; PDF receipts; PayMongo checkout + webhook (registered, end-to-end verified); GCash/Maya QR working (live keys); reservation fee charged at booking; auto-billing on COMPLETED; patient `MyBillingPage`; receipt number generation atomic (PostgreSQL advisory lock) |
 | Reporting & Exports | ✅ 100% | Three-tab report page (Appointments, Revenue, Patients); date range filter; summary stat cards; breakdown tables by status, service, dentist, and month; CSV + PDF export; ADMIN only |
 | Clinic Onboarding | ✅ 100% | Public application form with BIR document + applicant ID upload; Terms of Service acceptance; magic-byte file validation + compressed archive rejection; Super Admin review tab (approve/reject); approval auto-creates `Clinic` record; email notifications for submission/approval/rejection |
+| Backup & Restore | ✅ 100% | Super admin backup export (`GET /api/super/clinics/[id]/backup`; step-up auth required; JSON snapshot of clinic profile, patients, services, appointments, billing, audit logs; excludes E2EE `PatientRecord`); 3-step OTP-confirmed restore flow (`RestoreModal.jsx` → request-otp → confirm); audit-logged as `BACKUP` / `RESTORE` |
+| Breach Detection & Alerting | ✅ 100% | Daily cron at `/api/cron/breach-scan` (02:00 UTC); detects distributed brute-force, mass record access, bulk export; creates `BREACH_ALERT` audit entries; emails clinic admins |
 
 ### 1.2 Partially Completed Modules
 
@@ -66,7 +68,9 @@ None.
 | AI Slot Suggestions | 1 | 1 | 100% (OpenAI gpt-5) |
 | Reporting & Exports | 1 | 1 | 100% |
 | Clinic Onboarding | 9 | 9 | 100% |
-| **Total** | **87** | **87** | **100%** |
+| Backup & Restore | 2 | 2 | 100% |
+| Breach Detection | 1 | 1 | 100% |
+| **Total** | **90** | **90** | **100%** |
 
 ---
 
@@ -98,6 +102,9 @@ None.
 | File Upload Security | ✅ Complete | Magic-byte validation (JPEG/PNG/PDF) + compressed archive rejection on all upload endpoints including clinic logo; `detectLogoType()` replaces client-supplied MIME |
 | Data Subject Rights (DSAR) | ✅ Complete | Patients submit ACCESS/CORRECTION/DELETION requests; admins review and resolve; `DataRequest` model + full API + UI |
 | Audit Log Retention + Purge | ✅ Complete | Per-clinic `auditLogRetentionDays`; auto-purge cron (`/api/cron/audit-purge`) |
+| Data Retention (Patient Records + Billing) | ✅ Complete | Per-clinic `patientRecordRetentionDays` + `billingRetentionDays`; same purge cron cascades `RecordHistory`, `Attachment`, and `Payment` records |
+| Automated Breach Detection | ✅ Complete | Daily cron (`/api/cron/breach-scan`, 02:00 UTC); three detection patterns: distributed brute-force, mass record access, bulk export; `BREACH_ALERT` audit log entries; email alerts to clinic admins |
+| Backup & Restore | ✅ Complete | `GET /api/super/clinics/[id]/backup` (step-up required); JSON export excludes E2EE patient record notes; 3-step OTP-confirmed restore with rate limiting; full audit trail (`BACKUP` / `RESTORE` actions) |
 | Platform Hardening | ✅ Complete | `poweredByHeader: false` hides server fingerprint; `compress: true` |
 
 ### 2.2 Security Controls — Remaining Gaps
@@ -182,9 +189,9 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 
 | Standard | Status | Gap |
 |---|---|---|
-| Philippine Data Privacy Act (RA 10173) | ⚠️ Near-Complete | PHI encrypted at rest (E2EE) with tamper detection; data subject rights (ACCESS/CORRECTION/DELETION) implemented; audit log with configurable retention and auto-purge; no automated breach detection or alerting |
-| ISO/IEC 27001 | ⚠️ Partial | Access control (RBAC, zero trust, step-up), authentication (lockout, MFA-ready, session hardening), and audit logging strong; incident response controls not formalized |
-| NIST CSF | ⚠️ Partial | Identify ✅, Protect ✅ (E2EE + input validation + rate limiting + session hardening + step-up auth), Detect ⚠️ (audit log queryable + record history; no alerting), Respond ⚠️ (DSAR process in place; no formal incident playbook), Recover ⚠️ |
+| Philippine Data Privacy Act (RA 10173) | ⚠️ Near-Complete | PHI encrypted at rest (E2EE) with tamper detection; data subject rights (ACCESS/CORRECTION/DELETION) implemented; audit log with configurable retention and auto-purge; automated breach detection active (daily scan + admin alerting); breach notification to data subjects not yet formalized |
+| ISO/IEC 27001 | ⚠️ Partial | Access control (RBAC, zero trust, step-up), authentication (lockout, MFA-ready, session hardening), and audit logging strong; automated breach detection via daily cron; incident response controls not formalized |
+| NIST CSF | ⚠️ Partial | Identify ✅, Protect ✅ (E2EE + input validation + rate limiting + session hardening + step-up auth), Detect ✅ (audit log queryable + record history + automated breach alerting via daily cron), Respond ⚠️ (DSAR process in place; no formal incident playbook), Recover ⚠️ (backup/restore tooling in place; no formal DR plan) |
 
 ---
 

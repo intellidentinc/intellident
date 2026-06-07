@@ -52,7 +52,7 @@ All email functions are fire-and-forget (`.catch(() => {})`) — email failures 
 
 ## Cron Job (Reminders)
 - **File:** `app/api/cron/reminders/route.js`
-- **Schedule:** every 15 minutes (`*/15 * * * *` in `vercel.json`)
+- **Schedule:** daily at 08:00 UTC (`0 8 * * *` in `vercel.json`)
 - **Auth:** `Authorization: Bearer {CRON_SECRET}` header — set `CRON_SECRET` env var in Vercel + `.env`
 - Finds CONFIRMED appointments in a ±30min window around 24h and 2h from now
 - Sends in-app + email reminders; sets `reminderSent24h` / `reminderSent2h` = true to prevent duplicates

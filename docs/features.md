@@ -60,6 +60,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Password expiry policy toggle | `[x]` | `Clinic.passwordExpiryEnabled`; MUI Switch in Settings → Password Policy section; applies to ADMIN role accounts |
 | Single-session mode toggle | `[x]` | `Clinic.singleSessionEnabled`; MUI Switch in Settings → Password Policy; terminates prior session on new login |
 | Audit log retention settings | `[x]` | `Clinic.auditLogRetentionDays`; configurable in Settings via `ClinicAuditRetentionSettings.jsx`; auto-purge cron at `/api/cron/audit-purge` |
+| Patient record retention settings | `[x]` | `Clinic.patientRecordRetentionDays`; configurable in Settings via `ClinicDataRetentionSettings.jsx`; purge cron at `/api/cron/audit-purge` cascades `RecordHistory` + `Attachment` |
+| Billing retention settings | `[x]` | `Clinic.billingRetentionDays`; configurable in Settings via `ClinicDataRetentionSettings.jsx`; purge cron cascades `Payment` records |
 | Notification settings | `[x]` | `Clinic.reminder1Hours` + `Clinic.reminder2Hours` (defaults 24h/2h); `Clinic.notifConfig` JSON; `ClinicNotificationSettings.jsx` in Settings |
 
 ---
@@ -93,6 +95,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Dentist: read-only calendar | `[x]` | Day / Week view |
 | Rescheduling flow | `[x]` | `RescheduleAppointmentModal`; real-time conflict check; reason field |
 | AI slot suggestions | `[x]` | gpt-5 via `lib/ai.js`; fallback algorithmic tagging if AI call fails |
+| No-show risk flag (staff) | `[x]` | HIGH risk badge + tooltip shown in both `AppointmentDetailModal` and `CreateAppointmentModal`; "AI Suggested Actions" box with recommended remediation |
 
 ---
 
@@ -104,7 +107,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Framer Motion notification drawer | `[x]` | Slide-in on bell click |
 | In-app notifications for all events | `[x]` | Booking, confirm, cancel, complete, no-show, reschedule, 24h/2h reminders |
 | Email notifications via Gmail/nodemailer | `[x]` | All notification types |
-| Vercel cron reminders | `[x]` | Every 15 min, `CRON_SECRET` protected |
+| Vercel cron reminders | `[x]` | Daily at 08:00 UTC, `CRON_SECRET` protected |
 | Mark read (single + all) | `[x]` | |
 
 ---
@@ -188,6 +191,15 @@ Track of all features built, in-progress, and pending. Update this file as featu
 
 ---
 
+## Backup & Restore
+
+| Feature | Status | Notes |
+|---|---|---|
+| Super admin: backup clinic data | `[x]` | `GET /api/super/clinics/[id]/backup`; step-up auth required; exports clinic profile, patients, services, appointments, billing, and last 5,000 audit logs as a timestamped JSON download; excludes E2EE `PatientRecord` entries (server never has plaintext); audit-logged as `BACKUP` |
+| Super admin: restore flow (3-step) | `[x]` | `RestoreModal.jsx` — reason → OTP verification → confirmation; `POST /api/super/clinics/[id]/restore/request-otp` rate-limited 5/15 min; OTP sent to superadmin email (10 min expiry, max 5 attempts); `POST /api/super/clinics/[id]/restore/confirm` validates OTP + returns confirmation token for Neon point-in-time restore reference; audit-logged as `RESTORE` |
+
+---
+
 ## Performance & Reliability
 
 | Feature | Status | Notes |
@@ -196,6 +208,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Platform hardening | `[x]` | `compress: true`, `poweredByHeader: false` in `next.config.mjs` |
 | Middleware clinic check | `[x]` | Clinic enabled status cached via `unstable_cache` (60s); blocks disabled clinics at edge |
 | Health endpoint | `[x]` | `GET /api/health` — `CRON_SECRET` protected; pings DB with `SELECT 1` |
+| Breach scan cron | `[x]` | `/api/cron/breach-scan`, daily at 02:00 UTC; detects distributed brute-force (same IP locks 3+ accounts), mass record access (100+ patient records viewed by one user in 24h), bulk export (5+ exports by one user in 24h); creates `BREACH_ALERT` audit log entry + emails clinic admins |
 
 ---
 
@@ -246,3 +259,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | 2026-06-03 | Middleware: clinic enabled check cached via `unstable_cache`; 8-hour hard cap; terms-of-service gate route added (`/accept-terms`) |
 | 2026-06-03 | Added health endpoint (`GET /api/health`, `CRON_SECRET` protected) |
 | 2026-06-03 | Magic-byte validation added to clinic logo upload (`detectLogoType()` — JPEG/PNG); closes LOW-03 |
+| 2026-06-08 | Added data retention controls for all 3 types — patient records (`Clinic.patientRecordRetentionDays`), billing (`Clinic.billingRetentionDays`), and audit logs; `ClinicDataRetentionSettings.jsx`; purge cron at `/api/cron/audit-purge` |
+| 2026-06-08 | Added in-app backup and restore for super admin — `GET /api/super/clinics/[id]/backup` (step-up required, JSON export); 3-step OTP-confirmed restore flow via `RestoreModal.jsx` |
+| 2026-06-08 | No-show risk flag now shown in `CreateAppointmentModal` in addition to `AppointmentDetailModal` (commit `21a64d4`) |
+| 2026-06-08 | Added daily breach scan cron (`/api/cron/breach-scan`, 02:00 UTC) — detects brute-force, mass record access, bulk export patterns; `BREACH_ALERT` audit entries + admin email alerts |
