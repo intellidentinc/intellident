@@ -69,6 +69,8 @@ enum AuditAction {
   AI_INTERACTION
   LOCKOUT
   BREACH_ALERT
+  BACKUP
+  RESTORE
 }
 
 enum ChatRole {

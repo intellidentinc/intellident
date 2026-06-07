@@ -12,12 +12,14 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Divider from '@mui/material/Divider'
 import { DeleteOutlined } from '@mui/icons-material'
-import { Stethoscope, MapPin, Mail, Phone, LogIn, Plus, Pencil, Trash2, Power } from 'lucide-react'
+import { Stethoscope, MapPin, Mail, Phone, LogIn, Plus, Pencil, Trash2, Power, Download, RotateCcw } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
+import StepUpModal from '@/components/commons/StepUpModal'
 import { useToast } from '@/app/providers/ToastProvider'
 import SuperPageHeader from './SuperPageHeader'
+import RestoreModal from './RestoreModal'
 
 export default function SuperPage({ clinics: initialClinics }) {
   const router = useRouter()
@@ -42,6 +44,16 @@ export default function SuperPage({ clinics: initialClinics }) {
   // Toggle dialog
   const [toggleTarget, setToggleTarget] = useState(null)
   const [toggleLoading, setToggleLoading] = useState(false)
+
+  // Backup
+  const [backupLoading, setBackupLoading] = useState(null)
+
+  // Restore
+  const [restoreTarget, setRestoreTarget] = useState(null)
+
+  // Step-up (shared by backup + restore)
+  const [stepUpOpen, setStepUpOpen] = useState(false)
+  const [stepUpPending, setStepUpPending] = useState(null)
 
   async function handleEnter(clinicId) {
     setEntering(clinicId)
@@ -141,6 +153,63 @@ export default function SuperPage({ clinics: initialClinics }) {
     }
   }
 
+  async function checkStepUp(action) {
+    try {
+      const res = await fetch('/api/auth/step-up')
+      const data = await res.json()
+      if (data.valid) {
+        action()
+      } else {
+        setStepUpPending(() => action)
+        setStepUpOpen(true)
+      }
+    } catch {
+      setStepUpPending(() => action)
+      setStepUpOpen(true)
+    }
+  }
+
+  async function doBackup(clinicId) {
+    setBackupLoading(clinicId)
+    try {
+      const res = await fetch(`/api/super/clinics/${clinicId}/backup`)
+      if (res.status === 403) {
+        const data = await res.json()
+        if (data.requiresStepUp) {
+          setStepUpPending(() => () => doBackup(clinicId))
+          setStepUpOpen(true)
+          return
+        }
+        showToast(data.error || 'Forbidden', 'error')
+        return
+      }
+      if (!res.ok) { showToast('Backup failed', 'error'); return }
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') || ''
+      const match = disposition.match(/filename="(.+)"/)
+      const filename = match ? match[1] : `intellident-backup-${clinicId}.json`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Backup downloaded', 'success')
+    } catch {
+      showToast('Something went wrong', 'error')
+    } finally {
+      setBackupLoading(null)
+    }
+  }
+
+  function handleBackup(clinic) {
+    checkStepUp(() => doBackup(clinic.id))
+  }
+
+  function handleRestore(clinic) {
+    checkStepUp(() => setRestoreTarget(clinic))
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return
     setDeleteLoading(true)
@@ -182,10 +251,13 @@ export default function SuperPage({ clinics: initialClinics }) {
               key={clinic.id}
               clinic={clinic}
               loading={entering === clinic.id}
+              backupLoading={backupLoading === clinic.id}
               onEnter={() => handleEnter(clinic.id)}
               onEdit={() => openEdit(clinic)}
               onDelete={() => openDelete(clinic)}
               onToggle={() => openToggle(clinic)}
+              onBackup={() => handleBackup(clinic)}
+              onRestore={() => handleRestore(clinic)}
             />
           ))}
         </Box>
@@ -271,6 +343,29 @@ export default function SuperPage({ clinics: initialClinics }) {
         </Box>
       </Dialog>
 
+      {/* Step-up Auth */}
+      <StepUpModal
+        open={stepUpOpen}
+        description='This operation requires password verification to proceed.'
+        onClose={() => { setStepUpOpen(false); setStepUpPending(null) }}
+        onSuccess={() => {
+          setStepUpOpen(false)
+          if (stepUpPending) { stepUpPending(); setStepUpPending(null) }
+        }}
+      />
+
+      {/* Restore Authorization Modal */}
+      <RestoreModal
+        open={!!restoreTarget}
+        clinic={restoreTarget}
+        onClose={() => setRestoreTarget(null)}
+        onStepUpRequired={() => {
+          setRestoreTarget(null)
+          setStepUpPending(null)
+          setStepUpOpen(true)
+        }}
+      />
+
       {/* Toggle Enable/Disable Confirmation Dialog */}
       <Dialog
         open={!!toggleTarget}
@@ -330,7 +425,7 @@ export default function SuperPage({ clinics: initialClinics }) {
   )
 }
 
-function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
+function ClinicCard({ clinic, loading, backupLoading, onEnter, onEdit, onDelete, onToggle, onBackup, onRestore }) {
   return (
     <Box
       sx={{
@@ -371,13 +466,13 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
           </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-          <Box component='button' onClick={onEdit} sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: '#f1f5f9', color: '#2563eb' } }}>
+          <Box component='button' onClick={onEdit} title='Edit clinic' sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: '#f1f5f9', color: '#2563eb' } }}>
             <Pencil size={15} />
           </Box>
           <Box component='button' onClick={onToggle} title={clinic.isEnabled ? 'Disable clinic' : 'Enable clinic'} sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: clinic.isEnabled ? '#fef9c3' : '#dcfce7', color: clinic.isEnabled ? '#854d0e' : '#15803d' } }}>
             <Power size={15} />
           </Box>
-          <Box component='button' onClick={onDelete} sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: '#fee2e2', color: '#b91c1c' } }}>
+          <Box component='button' onClick={onDelete} title='Delete clinic' sx={{ border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0.75, borderRadius: 1.5, color: '#64748b', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: '#fee2e2', color: '#b91c1c' } }}>
             <Trash2 size={15} />
           </Box>
         </Box>
@@ -404,12 +499,32 @@ function ClinicCard({ clinic, loading, onEnter, onEdit, onDelete, onToggle }) {
         </Box>
       )}
 
+      <Box sx={{ display: 'flex', gap: 1, mt: 'auto', pt: 1 }}>
+        <Button
+          variant='outlined'
+          size='small'
+          loading={backupLoading}
+          onClick={onBackup}
+          startIcon={!backupLoading && <Download size={14} />}
+          sx={{ flex: 1, fontSize: '0.75rem' }}
+        >
+          Backup
+        </Button>
+        <Button
+          variant='outlined'
+          size='small'
+          onClick={onRestore}
+          startIcon={<RotateCcw size={14} />}
+          sx={{ flex: 1, fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5', '&:hover': { bgcolor: '#fef2f2', borderColor: '#dc2626' } }}
+        >
+          Restore
+        </Button>
+      </Box>
       <Button
         variant='contained'
         size='small'
         loading={loading}
         onClick={onEnter}
-        sx={{ mt: 'auto', pt: 1 }}
         startIcon={!loading && <LogIn size={15} />}
       >
         Enter as Admin

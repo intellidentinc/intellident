@@ -443,3 +443,69 @@ const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : clinicId
 // After (fixed)
 const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 ```
+
+---
+
+## Backup and Restore Controls
+
+### Application-Level Backup
+
+**Endpoint:** `GET /api/super/clinics/[id]/backup`
+**Access:** SUPERADMIN only + step-up authentication (password re-entry, 15-min TTL)
+
+Produces a signed, downloadable JSON artifact (`intellident-backup-{CODE}-{DATE}.json`) containing all non-deleted clinic data:
+
+| Included | Excluded |
+|---|---|
+| Clinic profile + schedule + closures | `PatientRecord.encryptedData` (E2EE — server never holds plaintext) |
+| Patients (demographics, contact, medical history) | User passwords, wrappedKey, keySalt |
+| Services | |
+| Appointments (full history + codes) | |
+| Billing records + payments | |
+| Audit logs (last 5,000 rows) | |
+
+Every backup request creates a `BACKUP` audit log entry recording who triggered it, when, and row counts for each entity. This entry is visible in the Admin audit log UI.
+
+**Usage:** Download and store the JSON file in a secure, access-controlled location (encrypted at rest). Label the file with the generation date and retain per your data retention policy.
+
+### Application-Level Restore (MFA-Gated)
+
+Restoring data at the database level is performed via the **Neon platform console** (point-in-time restore). The IntelliDent application provides a **two-factor authorization gate** that must be completed before any restore is executed:
+
+**Step 1 — Request OTP**
+`POST /api/super/clinics/[id]/restore/request-otp`
+- Requires SUPERADMIN session + valid step-up (password already re-verified)
+- Generates a 6-digit OTP (10-min expiry, bcrypt-hashed, 5-attempt limit)
+- Sends OTP to the superadmin's registered email address via a high-priority alert email
+- Returns `{ pendingToken, expiresIn: 600 }`
+
+**Step 2 — Confirm with OTP**
+`POST /api/super/clinics/[id]/restore/confirm`
+```json
+{
+  "pendingToken": "<token from step 1>",
+  "code": "<6-digit OTP>",
+  "reason": "Production data loss — incident #XYZ",
+  "snapshotDescription": "Neon PITR snapshot 2026-06-07T02:00:00Z"
+}
+```
+- Validates OTP against the stored bcrypt hash
+- Records a `RESTORE` audit log entry containing: `reason`, `snapshotDescription`, `confirmationToken`, `authorizedAt`, IP, and User-Agent
+- Returns `{ confirmationToken }` — a 32-char hex token to use as the audit reference when executing the Neon restore
+
+**Step 3 — Execute restore in Neon**
+Using the `confirmationToken` as the audit reference, open the Neon console and perform the point-in-time restore. Document the token in your incident ticket.
+
+**Authorization controls summary:**
+
+| Control | Implementation |
+|---|---|
+| Identity verification | Active session (SUPERADMIN role) |
+| Knowledge factor | Step-up password re-entry (15-min TTL) |
+| Possession factor | Email OTP (6-digit, 10-min, 5-attempt limit) |
+| Audit trail | `RESTORE` AuditLog entry with full metadata |
+| Rate limiting | 5 OTP requests / 15 min per IP; 10 confirm attempts / 15 min per IP |
+
+### E2EE Restore Limitation
+
+`PatientRecord.encryptedData` **cannot be restored to a readable state from a server-side backup** — the plaintext was never held by the server. This is a deliberate security property of the E2EE architecture. Patients who have had records entered must re-submit data if a database restore is required that predates those records. This limitation must be disclosed to clinic administrators and documented in any data processing agreements per RA 10173.
