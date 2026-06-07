@@ -10,7 +10,7 @@ export default function Page() {
   return (
     <SidebarInset>
       <SuperPageHeader title='Clinic Applications' />
-      <Box sx={{ px: { xs: 3, sm: 5 }, py: 5, maxWidth: 1100, mx: 'auto' }}>
+      <Box sx={{ px: { xs: 3, sm: 5 }, py: 5, maxWidth: 1100, mx: 'auto', width: '100%' }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant='h5' fontWeight={700} color='text.primary' mb={0.5}>
             Clinic Applications
