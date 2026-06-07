@@ -14,6 +14,9 @@ import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -259,24 +262,40 @@ function PatientsContent({ data }) {
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
-  const [tab,          setTab]          = useState('appointments')
-  const [dateFrom,     setDateFrom]     = useState(null)
-  const [dateTo,       setDateTo]       = useState(null)
-  const [data,         setData]         = useState(null)
-  const [loading,      setLoading]      = useState(false)
-  const [exportAnchor, setExportAnchor] = useState(null)
-  const [exporting,    setExporting]    = useState(false)
-  const [stepUpOpen,   setStepUpOpen]   = useState(false)
+  const [tab,           setTab]          = useState('appointments')
+  const [dateFrom,      setDateFrom]     = useState(null)
+  const [dateTo,        setDateTo]       = useState(null)
+  const [serviceFilter, setServiceFilter] = useState('')
+  const [dentistFilter, setDentistFilter] = useState('')
+  const [services,      setServices]     = useState([])
+  const [dentists,      setDentists]     = useState([])
+  const [data,          setData]         = useState(null)
+  const [loading,       setLoading]      = useState(false)
+  const [exportAnchor,  setExportAnchor] = useState(null)
+  const [exporting,     setExporting]    = useState(false)
+  const [stepUpOpen,    setStepUpOpen]   = useState(false)
   const [pendingExport, setPendingExport] = useState(null)
   const { showToast } = useToast()
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/services').then((r) => r.ok ? r.json() : { services: [] }),
+      fetch('/api/services/dentists').then((r) => r.ok ? r.json() : []),
+    ]).then(([svcData, dntData]) => {
+      setServices(svcData.services ?? [])
+      setDentists(Array.isArray(dntData) ? dntData : [])
+    }).catch(() => {})
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setData(null)
     try {
       const params = new URLSearchParams({ type: tab })
-      if (dateFrom) params.set('dateFrom', dayjs(dateFrom).format('YYYY-MM-DD'))
-      if (dateTo)   params.set('dateTo',   dayjs(dateTo).format('YYYY-MM-DD'))
+      if (dateFrom)      params.set('dateFrom',  dayjs(dateFrom).format('YYYY-MM-DD'))
+      if (dateTo)        params.set('dateTo',    dayjs(dateTo).format('YYYY-MM-DD'))
+      if (tab === 'revenue' && serviceFilter) params.set('serviceId', serviceFilter)
+      if (tab === 'revenue' && dentistFilter) params.set('dentistId', dentistFilter)
       const res = await fetch(`/api/reports?${params}`)
       if (!res.ok) throw new Error()
       setData(await res.json())
@@ -285,7 +304,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [tab, dateFrom, dateTo, showToast])
+  }, [tab, dateFrom, dateTo, serviceFilter, dentistFilter, showToast])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -293,8 +312,10 @@ export default function ReportsPage() {
 
   async function fetchExportRows() {
     const params = new URLSearchParams({ type: tab })
-    if (dateFrom) params.set('dateFrom', dayjs(dateFrom).format('YYYY-MM-DD'))
-    if (dateTo)   params.set('dateTo',   dayjs(dateTo).format('YYYY-MM-DD'))
+    if (dateFrom)      params.set('dateFrom',  dayjs(dateFrom).format('YYYY-MM-DD'))
+    if (dateTo)        params.set('dateTo',    dayjs(dateTo).format('YYYY-MM-DD'))
+    if (tab === 'revenue' && serviceFilter) params.set('serviceId', serviceFilter)
+    if (tab === 'revenue' && dentistFilter) params.set('dentistId', dentistFilter)
     const res = await fetch(`/api/reports/export?${params}`)
     if (!res.ok) throw new Error('Export failed')
     return (await res.json()).rows
@@ -399,7 +420,10 @@ export default function ReportsPage() {
       const rangeLabel = (dateFrom || dateTo)
         ? `${dateFrom ? dayjs(dateFrom).format('MMM D, YYYY') : 'All time'} – ${dateTo ? dayjs(dateTo).format('MMM D, YYYY') : 'today'}`
         : 'All time'
-      doc.text(`Exported ${dayjs().tz(PHT).format('MMMM D, YYYY HH:mm')} · ${rows.length} records · ${rangeLabel}`, 14, 22)
+      const svcLabel = serviceFilter ? (services.find((s) => s.id === serviceFilter)?.name ?? '') : ''
+      const dntLabel = dentistFilter ? (() => { const d = dentists.find((d) => d.id === dentistFilter); return d ? `${d.user?.firstName} ${d.user?.lastName}` : '' })() : ''
+      const filterLabel = [svcLabel, dntLabel].filter(Boolean).join(' · ')
+      doc.text(`Exported ${dayjs().tz(PHT).format('MMMM D, YYYY HH:mm')} · ${rows.length} records · ${rangeLabel}${filterLabel ? ` · ${filterLabel}` : ''}`, 14, 22)
 
       autoTable(doc, {
         startY: 27,
@@ -502,10 +526,38 @@ export default function ReportsPage() {
               slotProps={{ textField: { size: 'small', sx: { width: 180 } } }}
             />
           </LocalizationProvider>
-          {(dateFrom || dateTo) && (
+          {tab === 'revenue' && (
+            <>
+              <FormControl size='small' sx={{ minWidth: 160 }}>
+                <InputLabel sx={{ fontSize: '0.875rem' }}>Service</InputLabel>
+                <Select
+                  value={serviceFilter}
+                  label='Service'
+                  onChange={(e) => setServiceFilter(e.target.value)}
+                  sx={{ fontSize: '0.875rem' }}
+                >
+                  <MenuItem value=''><em>All services</em></MenuItem>
+                  {services.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <FormControl size='small' sx={{ minWidth: 160 }}>
+                <InputLabel sx={{ fontSize: '0.875rem' }}>Dentist</InputLabel>
+                <Select
+                  value={dentistFilter}
+                  label='Dentist'
+                  onChange={(e) => setDentistFilter(e.target.value)}
+                  sx={{ fontSize: '0.875rem' }}
+                >
+                  <MenuItem value=''><em>All dentists</em></MenuItem>
+                  {dentists.map((d) => <MenuItem key={d.id} value={d.id}>{d.user?.firstName} {d.user?.lastName}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </>
+          )}
+          {(dateFrom || dateTo || serviceFilter || dentistFilter) && (
             <Box
               component='button'
-              onClick={() => { setDateFrom(null); setDateTo(null) }}
+              onClick={() => { setDateFrom(null); setDateTo(null); setServiceFilter(''); setDentistFilter('') }}
               sx={{ border: 'none', bgcolor: 'transparent', color: '#64748b', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 500, '&:hover': { color: '#334155' } }}
             >
               Clear
@@ -517,7 +569,7 @@ export default function ReportsPage() {
         <Box sx={{ borderBottom: '1px solid #e2e8f0', mb: 3 }}>
           <Tabs
             value={tab}
-            onChange={(_, v) => { setData(null); setTab(v) }}
+            onChange={(_, v) => { setData(null); setServiceFilter(''); setDentistFilter(''); setTab(v) }}
             sx={{ '& .MuiTab-root': { fontWeight: 600, fontSize: '0.85rem', textTransform: 'none', minWidth: 0, px: 2.5 } }}
           >
             <Tab label='Appointments' value='appointments' />

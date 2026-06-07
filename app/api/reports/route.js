@@ -100,7 +100,19 @@ export async function GET(request) {
 
   // ─── Revenue ──────────────────────────────────────────────────────────────
   if (type === 'revenue') {
-    const baseWhere = { clinicId, isDeleted: false, ...dateRange('createdAt', dateFrom, dateTo) }
+    const serviceId = searchParams.get('serviceId') ?? ''
+    const dentistId = searchParams.get('dentistId') ?? ''
+
+    const baseWhere = {
+      clinicId, isDeleted: false,
+      ...dateRange('createdAt', dateFrom, dateTo),
+      ...(serviceId || dentistId ? {
+        appointment: {
+          ...(serviceId ? { serviceId } : {}),
+          ...(dentistId ? { dentistId } : {}),
+        },
+      } : {}),
+    }
 
     const [agg, byStatusRaw, billings] = await Promise.all([
       prisma.billing.aggregate({

@@ -34,9 +34,11 @@ export async function GET(request) {
 
   const { ip, userAgent } = getRequestMeta(request)
   const { searchParams } = new URL(request.url)
-  const type     = searchParams.get('type')     ?? 'appointments'
-  const dateFrom = searchParams.get('dateFrom') ?? ''
-  const dateTo   = searchParams.get('dateTo')   ?? ''
+  const type      = searchParams.get('type')      ?? 'appointments'
+  const dateFrom  = searchParams.get('dateFrom')  ?? ''
+  const dateTo    = searchParams.get('dateTo')    ?? ''
+  const serviceId = searchParams.get('serviceId') ?? ''
+  const dentistId = searchParams.get('dentistId') ?? ''
 
   if (type === 'appointments') {
     const rows = await prisma.appointment.findMany({
@@ -58,7 +60,16 @@ export async function GET(request) {
 
   if (type === 'revenue') {
     const rows = await prisma.billing.findMany({
-      where:   { clinicId, isDeleted: false, ...dateRange('createdAt', dateFrom, dateTo) },
+      where: {
+        clinicId, isDeleted: false,
+        ...dateRange('createdAt', dateFrom, dateTo),
+        ...(serviceId || dentistId ? {
+          appointment: {
+            ...(serviceId ? { serviceId } : {}),
+            ...(dentistId ? { dentistId } : {}),
+          },
+        } : {}),
+      },
       select: {
         createdAt:     true,
         receiptNumber: true,
