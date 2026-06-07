@@ -33,7 +33,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
-import { CalendarDays, Sparkles } from 'lucide-react'
+import { CalendarDays, Sparkles, AlertTriangle } from 'lucide-react'
 import dayjs from 'dayjs'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
@@ -80,6 +80,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
   const [conflict, setConflict] = useState(null) // { available, conflict }
   const [aiSuggestions, setAiSuggestions] = useState([])
   const [aiLoading, setAiLoading] = useState(false)
+  const [patientRisk, setPatientRisk] = useState(null)
 
   useEffect(() => {
     if (!open) return
@@ -93,6 +94,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
     setConflict(null)
     setPatientQuery('')
     setAiSuggestions([])
+    setPatientRisk(null)
 
     // Fetch services and clinic schedule
     fetch('/api/appointments/services').then(r => r.json()).then(d => setServices(d.services ?? []))
@@ -119,6 +121,15 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
     }, 300)
     return () => clearTimeout(timeout)
   }, [patientQuery, open])
+
+  // No-show risk for selected patient
+  useEffect(() => {
+    if (!form.patient?.id) { setPatientRisk(null); return }
+    fetch(`/api/ai/risk/${form.patient.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(setPatientRisk)
+  }, [form.patient?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dentists for selected services (intersection)
   useEffect(() => {
@@ -311,6 +322,26 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
               )}
             />
           </Box>
+
+          {/* No-show risk flags */}
+          {patientRisk?.risk === 'HIGH' && (
+            <Box sx={{ bgcolor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 2, px: 2, py: 1.25, mt: -0.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
+                <AlertTriangle size={14} color='#c2410c' />
+                <Typography variant='caption' fontWeight={700} color='#c2410c'>No-show Risk Flags</Typography>
+              </Box>
+              {patientRisk.noShowCount >= 2 && (
+                <Typography variant='caption' color='#9a3412' sx={{ display: 'block', lineHeight: 1.8 }}>
+                  • <strong>No-show history:</strong> {patientRisk.noShowCount} missed appointments on record
+                </Typography>
+              )}
+              {patientRisk.isLastMinuteBooking && (
+                <Typography variant='caption' color='#9a3412' sx={{ display: 'block', lineHeight: 1.8 }}>
+                  • <strong>Last-minute booking pattern:</strong> Most recent active booking was made less than 24 hours in advance
+                </Typography>
+              )}
+            </Box>
+          )}
 
           {/* Services (multi-select) */}
           <Box>

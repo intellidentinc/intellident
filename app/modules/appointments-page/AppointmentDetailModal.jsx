@@ -128,15 +128,21 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
             <Typography variant='body2' color='text.primary' fontWeight={500}>
               {appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : '—'}
             </Typography>
-            {noShowRisk?.risk === 'HIGH' && (
-              <Tooltip title={noShowRisk.reasons?.join(' · ') ?? 'High no-show risk'} placement='top'>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 1, px: 0.75, py: 0.25, cursor: 'default' }}>
-                  <AlertTriangle size={12} color='#b91c1c' />
-                  <Typography variant='caption' color='#b91c1c' fontWeight={700} sx={{ fontSize: '0.68rem' }}>
-                    High Risk
-                  </Typography>
-                </Box>
-              </Tooltip>
+            {noShowRisk != null && noShowRisk.noShowCount >= 2 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 1, px: 0.75, py: 0.25 }}>
+                <AlertTriangle size={12} color='#b91c1c' />
+                <Typography variant='caption' color='#b91c1c' fontWeight={700} sx={{ fontSize: '0.68rem' }}>
+                  {noShowRisk.noShowCount} No-shows
+                </Typography>
+              </Box>
+            )}
+            {noShowRisk?.isLastMinuteBooking && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 1, px: 0.75, py: 0.25 }}>
+                <AlertTriangle size={12} color='#c2410c' />
+                <Typography variant='caption' color='#c2410c' fontWeight={700} sx={{ fontSize: '0.68rem' }}>
+                  &lt;24h Booking
+                </Typography>
+              </Box>
             )}
           </Box>
           <DetailRow
@@ -160,18 +166,35 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
           {appointment.notes && <DetailRow label='Notes' value={appointment.notes} />}
         </Box>
 
-        {/* No-show risk suggestions */}
-        {noShowRisk?.risk === 'HIGH' && noShowRisk.suggestions?.length > 0 && (
+        {/* No-show risk flags + suggestions */}
+        {noShowRisk?.risk === 'HIGH' && (
           <Box sx={{ bgcolor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 2, px: 2, py: 1.25 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
               <AlertTriangle size={14} color='#c2410c' />
-              <Typography variant='caption' fontWeight={700} color='#c2410c'>AI Suggested Actions</Typography>
+              <Typography variant='caption' fontWeight={700} color='#c2410c'>No-show Risk Flags</Typography>
             </Box>
-            {noShowRisk.suggestions.map((s, i) => (
-              <Typography key={i} variant='caption' color='#9a3412' sx={{ display: 'block', lineHeight: 1.5 }}>
-                • {s}
+            {noShowRisk.noShowCount >= 2 && (
+              <Typography variant='caption' color='#9a3412' sx={{ display: 'block', lineHeight: 1.8 }}>
+                • <strong>No-show history:</strong> {noShowRisk.noShowCount} missed appointments on record (threshold: 2)
               </Typography>
-            ))}
+            )}
+            {noShowRisk.isLastMinuteBooking && (
+              <Typography variant='caption' color='#9a3412' sx={{ display: 'block', lineHeight: 1.8 }}>
+                • <strong>Last-minute booking:</strong> Appointment was booked less than 24 hours in advance
+              </Typography>
+            )}
+            {noShowRisk.suggestions?.length > 0 && (
+              <Box sx={{ mt: 0.75, pt: 0.75, borderTop: '1px solid #fed7aa' }}>
+                <Typography variant='caption' fontWeight={600} color='#c2410c' sx={{ display: 'block', mb: 0.25 }}>
+                  Recommended Actions
+                </Typography>
+                {noShowRisk.suggestions.map((s, i) => (
+                  <Typography key={i} variant='caption' color='#9a3412' sx={{ display: 'block', lineHeight: 1.5 }}>
+                    • {s}
+                  </Typography>
+                ))}
+              </Box>
+            )}
           </Box>
         )}
 
