@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Table from '@mui/material/Table'
@@ -149,8 +149,8 @@ export default function ClinicNotificationSettings({ clinicId }) {
               const hasTemplate = !!(config[t.key]?.emailSubject || config[t.key]?.emailBody)
               const isOpen = expanded === t.key
               return (
-                <>
-                  <TableRow key={t.key} hover sx={{ cursor: 'pointer' }} onClick={() => setExpanded(isOpen ? null : t.key)}>
+                <Fragment key={t.key}>
+                  <TableRow hover sx={{ cursor: 'pointer' }} onClick={() => setExpanded(isOpen ? null : t.key)}>
                     <TableCell sx={{ fontSize: '0.8125rem', color: 'text.primary' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {t.label}
@@ -211,7 +211,7 @@ export default function ClinicNotificationSettings({ clinicId }) {
                       </Collapse>
                     </TableCell>
                   </TableRow>
-                </>
+                </Fragment>
               )
             })}
           </TableBody>
