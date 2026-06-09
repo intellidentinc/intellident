@@ -235,8 +235,12 @@ model ClinicApplication {
   contactPersonName  String
   contactPersonPhone String
   contactPersonEmail String?
+  proposedServices   Json              @default("[]")
   birDocuments       String[]          @default([])
+  businessPermitDocs String[]          @default([])
+  dtiSecDocs         String[]          @default([])
   applicantIds       String[]          @default([])
+  prcLicenseDocs     String[]          @default([])
   message            String?
   status             ApplicationStatus @default(PENDING)
   notes              String?

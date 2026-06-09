@@ -6,6 +6,7 @@ import { sendClinicApplicationReceived } from '@/lib/email'
 
 const PHONE_RE   = /^\+63\d{10}$/
 const MAX_DOCS   = 5
+const MAX_SERVICES = 50
 const BUCKET     = 'clinic-documents'
 
 // Validate that a URL points to our own Supabase storage bucket — rejects arbitrary external URLs
@@ -46,19 +47,40 @@ export async function POST(request) {
   const birDocuments = Array.isArray(body.birDocuments)
     ? body.birDocuments.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
     : []
+  const businessPermitDocs = Array.isArray(body.businessPermitDocs)
+    ? body.businessPermitDocs.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    : []
+  const dtiSecDocs = Array.isArray(body.dtiSecDocs)
+    ? body.dtiSecDocs.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    : []
   const applicantIds = Array.isArray(body.applicantIds)
     ? body.applicantIds.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
     : []
+  const prcLicenseDocs = Array.isArray(body.prcLicenseDocs)
+    ? body.prcLicenseDocs.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    : []
 
-  if (!clinicName)               return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
-  if (!businessAddress)          return NextResponse.json({ error: 'Business address is required' }, { status: 400 })
-  if (!businessPhone)            return NextResponse.json({ error: 'Business phone is required' }, { status: 400 })
-  if (!businessEmail)            return NextResponse.json({ error: 'Business email is required' }, { status: 400 })
-  if (!contactPersonName)        return NextResponse.json({ error: 'Contact person name is required' }, { status: 400 })
-  if (!contactPersonPhone)       return NextResponse.json({ error: 'Contact person phone is required' }, { status: 400 })
-  if (!contactPersonEmail)       return NextResponse.json({ error: 'Contact email is required' }, { status: 400 })
-  if (birDocuments.length === 0) return NextResponse.json({ error: 'At least one BIR document is required' }, { status: 400 })
-  if (applicantIds.length === 0) return NextResponse.json({ error: 'At least one applicant ID is required' }, { status: 400 })
+  const rawServices = Array.isArray(body.proposedServices) ? body.proposedServices.slice(0, MAX_SERVICES) : []
+  const proposedServices = rawServices.map(s => ({
+    name:        str(typeof s?.name === 'string' ? s.name : '', 200) ?? '',
+    duration:    Number.isInteger(Number(s?.duration)) ? Math.round(Number(s.duration)) : 0,
+    ...(s?.price !== undefined && s?.price !== '' && !isNaN(parseFloat(s.price)) && isFinite(parseFloat(s.price)) && parseFloat(s.price) >= 0 && { price: parseFloat(s.price) }),
+    ...(s?.description && str(String(s.description), 500) && { description: str(String(s.description), 500) }),
+  })).filter(s => s.name && s.duration >= 15 && s.duration <= 480)
+
+  if (!clinicName)                    return NextResponse.json({ error: 'Clinic name is required' }, { status: 400 })
+  if (!businessAddress)               return NextResponse.json({ error: 'Business address is required' }, { status: 400 })
+  if (!businessPhone)                 return NextResponse.json({ error: 'Business phone is required' }, { status: 400 })
+  if (!businessEmail)                 return NextResponse.json({ error: 'Business email is required' }, { status: 400 })
+  if (!contactPersonName)             return NextResponse.json({ error: 'Contact person name is required' }, { status: 400 })
+  if (!contactPersonPhone)            return NextResponse.json({ error: 'Contact person phone is required' }, { status: 400 })
+  if (!contactPersonEmail)            return NextResponse.json({ error: 'Contact email is required' }, { status: 400 })
+  if (birDocuments.length === 0)      return NextResponse.json({ error: 'BIR Certificate of Registration is required' }, { status: 400 })
+  if (businessPermitDocs.length === 0) return NextResponse.json({ error: 'Business Permit is required' }, { status: 400 })
+  if (dtiSecDocs.length === 0)        return NextResponse.json({ error: 'DTI or SEC Registration document is required' }, { status: 400 })
+  if (applicantIds.length === 0)      return NextResponse.json({ error: 'At least one applicant ID is required' }, { status: 400 })
+  if (prcLicenseDocs.length === 0)    return NextResponse.json({ error: 'PRC License is required' }, { status: 400 })
+  if (proposedServices.length === 0)  return NextResponse.json({ error: 'At least one service is required' }, { status: 400 })
 
   if (!PHONE_RE.test(businessPhone)) {
     return NextResponse.json({ error: 'Business phone must be in +63XXXXXXXXXX format' }, { status: 400 })
@@ -72,7 +94,7 @@ export async function POST(request) {
 
   try {
     await prisma.clinicApplication.create({
-      data: { clinicName, businessAddress, businessPhone, businessEmail, contactPersonName, contactPersonPhone, contactPersonEmail, birDocuments, applicantIds, message, termsAcceptedAt },
+      data: { clinicName, businessAddress, businessPhone, businessEmail, contactPersonName, contactPersonPhone, contactPersonEmail, proposedServices, birDocuments, businessPermitDocs, dtiSecDocs, applicantIds, prcLicenseDocs, message, termsAcceptedAt },
     })
 
     sendClinicApplicationReceived({

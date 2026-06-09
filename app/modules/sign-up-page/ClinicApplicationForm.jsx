@@ -7,7 +7,7 @@ import Paper from '@mui/material/Paper'
 import Divider from '@mui/material/Divider'
 import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
-import { Check } from 'lucide-react'
+import { Check, Plus, Trash2 } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import AddressSelector, { EMPTY_ADDRESS, assembleAddress } from '@/components/commons/AddressSelector'
@@ -52,7 +52,7 @@ function PhoneInput({ id, label, value, onChange, error, helperText, required })
 }
 
 function StepIndicator({ current }) {
-  const steps = ['Clinic Details', 'Documents']
+  const steps = ['Clinic Details', 'Services', 'Documents']
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', mb: 4 }}>
       {steps.map((label, i) => {
@@ -78,7 +78,7 @@ function StepIndicator({ current }) {
               </Typography>
             </Box>
             {i < steps.length - 1 && (
-              <Box sx={{ flex: 1, height: 2, mt: 2.25, mx: 1, bgcolor: current > 1 ? 'primary.main' : '#e2e8f0', transition: 'background-color 0.2s' }} />
+              <Box sx={{ flex: 1, height: 2, mt: 2.25, mx: 1, bgcolor: current > i + 1 ? 'primary.main' : '#e2e8f0', transition: 'background-color 0.2s' }} />
             )}
           </Fragment>
         )
@@ -120,9 +120,26 @@ export default function ClinicApplicationForm() {
   const [contactPersonEmail, setContactPersonEmail] = useState('')
   const [message,            setMessage]            = useState('')
 
-  // Step 2 — documents
-  const [birFiles, setBirFiles] = useState([])
-  const [idFiles,  setIdFiles]  = useState([])
+  // Step 2 — services
+  const EMPTY_SERVICE = { name: '', duration: '', price: '', description: '' }
+  const [services, setServices] = useState([{ ...EMPTY_SERVICE }])
+
+  function updateService(i, field, value) {
+    setServices(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
+  }
+  function addService() {
+    setServices(prev => [...prev, { ...EMPTY_SERVICE }])
+  }
+  function removeService(i) {
+    setServices(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  // Step 3 — documents
+  const [birFiles,           setBirFiles]           = useState([])
+  const [businessPermitFiles, setBusinessPermitFiles] = useState([])
+  const [dtiSecFiles,        setDtiSecFiles]        = useState([])
+  const [idFiles,            setIdFiles]            = useState([])
+  const [prcLicenseFiles,    setPrcLicenseFiles]    = useState([])
 
   const [loading,         setLoading]         = useState(false)
   const [submitted,       setSubmitted]       = useState(false)
@@ -149,33 +166,66 @@ export default function ClinicApplicationForm() {
 
   function validateStep2() {
     const e = {}
-    if (birFiles.length === 0) e.birFiles = 'Please upload at least one BIR document'
-    if (idFiles.length  === 0) e.idFiles  = 'Please upload at least one valid ID'
-    if (!termsAccepted)        e.terms    = 'You must accept the Terms of Service and Data Privacy Policy to continue.'
+    const rowErrors = services.map(s => {
+      const re = {}
+      if (!s.name.trim()) re.name = 'Service name is required'
+      const dur = parseInt(s.duration, 10)
+      if (!s.duration || isNaN(dur) || dur < 15 || dur > 480)
+        re.duration = '15–480 min'
+      return re
+    })
+    if (services.length === 0) e.services = 'Add at least one service'
+    if (rowErrors.some(re => Object.keys(re).length > 0)) e.serviceRows = rowErrors
+    return e
+  }
+
+  function validateStep3() {
+    const e = {}
+    if (birFiles.length === 0)            e.birFiles            = 'Please upload your BIR Certificate of Registration (Form 2303)'
+    if (businessPermitFiles.length === 0) e.businessPermitFiles = 'Please upload your Business Permit'
+    if (dtiSecFiles.length === 0)         e.dtiSecFiles         = 'Please upload your DTI or SEC Registration Certificate'
+    if (idFiles.length === 0)             e.idFiles             = 'Please upload at least one valid government-issued ID'
+    if (prcLicenseFiles.length === 0)     e.prcLicenseFiles     = 'Please upload the PRC License of your dentist'
+    if (!termsAccepted)                   e.terms               = 'You must accept the Terms of Service and Data Privacy Policy to continue.'
     return e
   }
 
   function handleNext() {
-    const errs = validateStep1()
-    if (Object.keys(errs).length) { setErrors(errs); return }
+    if (step === 1) {
+      const errs = validateStep1()
+      if (Object.keys(errs).length) { setErrors(errs); return }
+    } else if (step === 2) {
+      const errs = validateStep2()
+      if (Object.keys(errs).length) { setErrors(errs); return }
+    }
     setErrors({})
-    setStep(2)
+    setStep(s => s + 1)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handleSubmit() {
-    const errs = validateStep2()
+    const errs = validateStep3()
     if (Object.keys(errs).length) { setErrors(errs); return }
     setErrors({})
     setLoading(true)
     try {
-      const [birUrls, idUrls] = await Promise.all([
+      const [birUrls, businessPermitUrls, dtiSecUrls, idUrls, prcLicenseUrls] = await Promise.all([
         Promise.all(birFiles.map(f => uploadFile(f, 'bir'))),
+        Promise.all(businessPermitFiles.map(f => uploadFile(f, 'business_permit'))),
+        Promise.all(dtiSecFiles.map(f => uploadFile(f, 'dti_sec'))),
         Promise.all(idFiles.map(f => uploadFile(f, 'id'))),
+        Promise.all(prcLicenseFiles.map(f => uploadFile(f, 'prc_license'))),
       ])
 
       const contactPersonName = [contactFirstName, contactMiddleName, contactLastName, contactSuffix]
         .map(s => s.trim()).filter(Boolean).join(' ')
+
+      const proposedServices = services.map(s => ({
+        name: s.name.trim(),
+        duration: parseInt(s.duration, 10),
+        ...(s.price !== '' && !isNaN(parseFloat(s.price)) && { price: parseFloat(s.price) }),
+        ...(s.description.trim() && { description: s.description.trim() }),
+      }))
 
       const res = await fetch('/api/clinic-applications', {
         method: 'POST',
@@ -189,8 +239,12 @@ export default function ClinicApplicationForm() {
           contactPersonPhone,
           contactPersonEmail: contactPersonEmail.trim(),
           message: message.trim() || null,
-          birDocuments: birUrls,
-          applicantIds:  idUrls,
+          proposedServices,
+          birDocuments:      birUrls,
+          businessPermitDocs: businessPermitUrls,
+          dtiSecDocs:        dtiSecUrls,
+          applicantIds:      idUrls,
+          prcLicenseDocs:    prcLicenseUrls,
           termsAcceptedAt,
         }),
       })
@@ -290,6 +344,7 @@ export default function ClinicApplicationForm() {
                   placeholder="Juan"
                   error={!!errors.contactFirstName}
                   helperText={errors.contactFirstName}
+                  inputProps={{ maxLength: 100 }}
                   required
                 />
                 <Input
@@ -298,6 +353,7 @@ export default function ClinicApplicationForm() {
                   value={contactMiddleName}
                   onChange={(e) => setContactMiddleName(e.target.value)}
                   placeholder="Santos (optional)"
+                  inputProps={{ maxLength: 100 }}
                 />
                 <Input
                   id="contactLastName"
@@ -307,6 +363,7 @@ export default function ClinicApplicationForm() {
                   placeholder="Cruz"
                   error={!!errors.contactLastName}
                   helperText={errors.contactLastName}
+                  inputProps={{ maxLength: 100 }}
                   required
                 />
               </Box>
@@ -317,6 +374,7 @@ export default function ClinicApplicationForm() {
                   value={contactSuffix}
                   onChange={(e) => setContactSuffix(e.target.value)}
                   placeholder="Jr., Sr., III (optional)"
+                  inputProps={{ maxLength: 20 }}
                 />
               </Box>
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -376,8 +434,114 @@ export default function ClinicApplicationForm() {
         </Box>
       )}
 
-      {/* ── Step 2: Documents ── */}
+      {/* ── Step 2: Services ── */}
       {step === 2 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+
+          <Box sx={{ p: 2, bgcolor: '#eff6ff', borderRadius: 2, border: '1px solid #bfdbfe' }}>
+            <Typography variant="body2" color="primary.dark" sx={{ lineHeight: 1.7 }}>
+              List the dental services your clinic will offer. You can adjust these after approval.
+            </Typography>
+          </Box>
+
+          {errors.services && (
+            <Typography variant="caption" color="error">{errors.services}</Typography>
+          )}
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {services.map((svc, i) => (
+              <Box key={i} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: '#fafbfc', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                  <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Service {i + 1}
+                  </Typography>
+                  {services.length > 1 && (
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={() => { removeService(i); setErrors(prev => ({ ...prev, serviceRows: undefined, services: undefined })) }}
+                      sx={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', p: 0.5, borderRadius: 1, '&:hover': { color: '#E05C6A', bgcolor: '#fff5f5' } }}
+                    >
+                      <Trash2 size={15} />
+                    </Box>
+                  )}
+                </Box>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 2 }}>
+                  <Input
+                    id={`svc-name-${i}`}
+                    label="Service Name"
+                    value={svc.name}
+                    onChange={(e) => { updateService(i, 'name', e.target.value); setErrors(prev => ({ ...prev, serviceRows: undefined })) }}
+                    placeholder="e.g. Tooth Extraction"
+                    error={!!errors.serviceRows?.[i]?.name}
+                    helperText={errors.serviceRows?.[i]?.name}
+                    inputProps={{ maxLength: 200 }}
+                    required
+                  />
+                  <Input
+                    id={`svc-dur-${i}`}
+                    label="Duration (min)"
+                    type="number"
+                    value={svc.duration}
+                    onChange={(e) => { updateService(i, 'duration', e.target.value); setErrors(prev => ({ ...prev, serviceRows: undefined })) }}
+                    placeholder="30"
+                    error={!!errors.serviceRows?.[i]?.duration}
+                    helperText={errors.serviceRows?.[i]?.duration}
+                    inputProps={{ min: 15, max: 480, step: 1 }}
+                    required
+                  />
+                  <Input
+                    id={`svc-price-${i}`}
+                    label="Price (₱, optional)"
+                    type="number"
+                    value={svc.price}
+                    onChange={(e) => updateService(i, 'price', e.target.value)}
+                    placeholder="500"
+                    inputProps={{ min: 0 }}
+                  />
+                </Box>
+                <Input
+                  id={`svc-desc-${i}`}
+                  label="Description (optional)"
+                  value={svc.description}
+                  onChange={(e) => updateService(i, 'description', e.target.value)}
+                  placeholder="Brief description of the service..."
+                  inputProps={{ maxLength: 500 }}
+                />
+              </Box>
+            ))}
+          </Box>
+
+          {services.length < 50 && (
+            <Box
+              component="button"
+              type="button"
+              onClick={addService}
+              sx={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1,
+                border: '1.5px dashed #bfdbfe', bgcolor: 'transparent', borderRadius: 2,
+                color: '#2563eb', fontWeight: 600, fontSize: '0.85rem', py: 1.5, cursor: 'pointer',
+                '&:hover': { bgcolor: '#eff6ff' }, transition: 'background 0.15s',
+              }}
+            >
+              <Plus size={16} />
+              Add Another Service
+            </Box>
+          )}
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 2 }}>
+            <Button variant="outlined" onClick={() => { setStep(1); setErrors({}) }}>
+              Back
+            </Button>
+            <Button variant="contained" onClick={handleNext} sx={{ py: 1.5, fontWeight: 600 }}>
+              Next
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {/* ── Step 3: Documents ── */}
+      {step === 3 && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
 
           <Box sx={{ p: 2, bgcolor: '#eff6ff', borderRadius: 2, border: '1px solid #bfdbfe' }}>
@@ -387,11 +551,11 @@ export default function ClinicApplicationForm() {
           </Box>
 
           <Box>
-            <SectionLabel>BIR Registration</SectionLabel>
-            <Box sx={{ mt: 1.5 }}>
+            <SectionLabel>Business Registration Documents</SectionLabel>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1.5 }}>
               <FileUploadZone
-                label="BIR Documents"
-                hint="Upload your BIR Certificate of Registration (Form 2303) or other BIR registration documents."
+                label="BIR Certificate of Registration"
+                hint="Upload BIR Form 2303 (Certificate of Registration) issued by the Bureau of Internal Revenue."
                 files={birFiles}
                 onAdd={(f) => setBirFiles(prev => [...prev, ...f])}
                 onRemove={(i) => setBirFiles(prev => prev.filter((_, idx) => idx !== i))}
@@ -399,19 +563,49 @@ export default function ClinicApplicationForm() {
                 required
                 maxFiles={5}
               />
+              <FileUploadZone
+                label="Business Permit"
+                hint="Upload your current Mayor's Permit / Business Permit issued by your Local Government Unit (LGU)."
+                files={businessPermitFiles}
+                onAdd={(f) => setBusinessPermitFiles(prev => [...prev, ...f])}
+                onRemove={(i) => setBusinessPermitFiles(prev => prev.filter((_, idx) => idx !== i))}
+                error={errors.businessPermitFiles}
+                required
+                maxFiles={5}
+              />
+              <FileUploadZone
+                label="DTI or SEC Registration"
+                hint="Upload your DTI Certificate of Registration (sole proprietor) or SEC Certificate of Incorporation (corporation/partnership)."
+                files={dtiSecFiles}
+                onAdd={(f) => setDtiSecFiles(prev => [...prev, ...f])}
+                onRemove={(i) => setDtiSecFiles(prev => prev.filter((_, idx) => idx !== i))}
+                error={errors.dtiSecFiles}
+                required
+                maxFiles={5}
+              />
             </Box>
           </Box>
 
           <Box>
-            <SectionLabel>Owner / Applicant ID</SectionLabel>
-            <Box sx={{ mt: 1.5 }}>
+            <SectionLabel>Owner &amp; Professional Credentials</SectionLabel>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1.5 }}>
               <FileUploadZone
                 label="Government-Issued ID"
-                hint="Upload at least one valid government-issued ID (Driver's License, Passport, SSS, PhilHealth, UMID, etc.)."
+                hint="Upload a valid government-issued ID of the owner or authorized representative (Driver's License, Passport, SSS, PhilHealth, UMID, etc.)."
                 files={idFiles}
                 onAdd={(f) => setIdFiles(prev => [...prev, ...f])}
                 onRemove={(i) => setIdFiles(prev => prev.filter((_, idx) => idx !== i))}
                 error={errors.idFiles}
+                required
+                maxFiles={5}
+              />
+              <FileUploadZone
+                label="PRC License"
+                hint="Upload the PRC ID or Certificate of Registration of the clinic's licensed dentist to verify their professional credentials."
+                files={prcLicenseFiles}
+                onAdd={(f) => setPrcLicenseFiles(prev => [...prev, ...f])}
+                onRemove={(i) => setPrcLicenseFiles(prev => prev.filter((_, idx) => idx !== i))}
+                error={errors.prcLicenseFiles}
                 required
                 maxFiles={5}
               />
@@ -467,7 +661,7 @@ export default function ClinicApplicationForm() {
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 2 }}>
             <Button
               variant="outlined"
-              onClick={() => { setStep(1); setErrors({}) }}
+              onClick={() => { setStep(2); setErrors({}) }}
               disabled={loading}
             >
               Back

@@ -41,10 +41,24 @@ export async function middleware(request) {
   const isDashboard = /^\/[^/]+\/dashboard/.test(pathname);
   const isSignOut   = pathname === '/api/auth/sign-out';
 
-  // Authenticated user hitting auth page → redirect to dashboard
+  // Authenticated user hitting auth page → validate DB session then redirect to dashboard
   if (userCookie && isAuthPage) {
     try {
       const session = JSON.parse(userCookie.value);
+
+      if (session.sessionToken) {
+        const dbSession = await prisma.userSession.findUnique({
+          where: { sessionToken: session.sessionToken },
+          select: { terminatedAt: true },
+        });
+        if (!dbSession || dbSession.terminatedAt) {
+          // Stale cookie — clear it and let the user land on the auth page
+          const res = NextResponse.next();
+          res.cookies.delete('user');
+          return res;
+        }
+      }
+
       const dest = session.clinicId ? `/${session.clinicId}/dashboard` : '/sign-in';
       return NextResponse.redirect(new URL(dest, request.url));
     } catch {

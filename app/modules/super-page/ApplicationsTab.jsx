@@ -431,8 +431,36 @@ export default function ApplicationsTab() {
                   </>
                 )}
 
+                {/* Proposed Services */}
+                {detailTarget.proposedServices?.length > 0 && (
+                  <>
+                    <Divider />
+                    <Box>
+                      <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1.25, display: 'block' }}>
+                        Proposed Services ({detailTarget.proposedServices.length})
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                        {detailTarget.proposedServices.map((svc, i) => (
+                          <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', bgcolor: '#f8fafc' }}>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant="body2" fontWeight={600} color="text.primary">{svc.name}</Typography>
+                              {svc.description && (
+                                <Typography variant="caption" color="text.secondary">{svc.description}</Typography>
+                              )}
+                            </Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{svc.duration} min</Typography>
+                            {svc.price != null && (
+                              <Typography variant="caption" fontWeight={600} color="primary.main" sx={{ whiteSpace: 'nowrap' }}>₱{Number(svc.price).toLocaleString()}</Typography>
+                            )}
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  </>
+                )}
+
                 {/* Documents */}
-                {(detailTarget.birDocuments?.length > 0 || detailTarget.applicantIds?.length > 0) && (
+                {(detailTarget.birDocuments?.length > 0 || detailTarget.businessPermitDocs?.length > 0 || detailTarget.dtiSecDocs?.length > 0 || detailTarget.applicantIds?.length > 0 || detailTarget.prcLicenseDocs?.length > 0) && (
                   <>
                     <Divider />
                     <Box>
@@ -440,40 +468,29 @@ export default function ApplicationsTab() {
                         Submitted Documents
                       </Typography>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {detailTarget.birDocuments?.length > 0 && (
-                          <Box>
+                        {[
+                          { key: 'birDocuments',      label: 'BIR Certificate of Registration', docs: detailTarget.birDocuments },
+                          { key: 'businessPermitDocs', label: 'Business Permit',                  docs: detailTarget.businessPermitDocs },
+                          { key: 'dtiSecDocs',         label: 'DTI / SEC Registration',           docs: detailTarget.dtiSecDocs },
+                          { key: 'applicantIds',       label: 'Government-Issued ID',             docs: detailTarget.applicantIds },
+                          { key: 'prcLicenseDocs',     label: 'PRC License',                      docs: detailTarget.prcLicenseDocs },
+                        ].filter(g => g.docs?.length > 0).map(({ key, label, docs }) => (
+                          <Box key={key}>
                             <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mb: 0.75, display: 'block' }}>
-                              BIR Documents ({detailTarget.birDocuments.length})
+                              {label} ({docs.length})
                             </Typography>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                              {detailTarget.birDocuments.map((url, i) => (
+                              {docs.map((url, i) => (
                                 <Box key={i} component="a" href={url} target="_blank" rel="noopener noreferrer"
                                   sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.25, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', bgcolor: '#f8fafc', color: 'primary.main', textDecoration: 'none', fontSize: 13, '&:hover': { bgcolor: '#eff6ff', borderColor: '#2563eb' }, transition: 'all 0.15s' }}>
                                   <FileText size={14} />
-                                  <Typography variant="body2" color="primary.main" fontWeight={500}>BIR Document {i + 1}</Typography>
+                                  <Typography variant="body2" color="primary.main" fontWeight={500}>{label} {i + 1}</Typography>
                                   <Eye size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} />
                                 </Box>
                               ))}
                             </Box>
                           </Box>
-                        )}
-                        {detailTarget.applicantIds?.length > 0 && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mb: 0.75, display: 'block' }}>
-                              Owner / Applicant IDs ({detailTarget.applicantIds.length})
-                            </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                              {detailTarget.applicantIds.map((url, i) => (
-                                <Box key={i} component="a" href={url} target="_blank" rel="noopener noreferrer"
-                                  sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.25, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', bgcolor: '#f8fafc', color: 'primary.main', textDecoration: 'none', fontSize: 13, '&:hover': { bgcolor: '#eff6ff', borderColor: '#2563eb' }, transition: 'all 0.15s' }}>
-                                  <FileText size={14} />
-                                  <Typography variant="body2" color="primary.main" fontWeight={500}>ID Document {i + 1}</Typography>
-                                  <Eye size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} />
-                                </Box>
-                              ))}
-                            </Box>
-                          </Box>
-                        )}
+                        ))}
                       </Box>
                     </Box>
                   </>

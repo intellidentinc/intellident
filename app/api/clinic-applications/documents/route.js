@@ -50,7 +50,7 @@ export async function POST(request) {
 
   if (!file || !(file instanceof File))
     return NextResponse.json({ error: 'No file provided.' }, { status: 400 })
-  if (!['bir', 'id'].includes(category))
+  if (!['bir', 'business_permit', 'dti_sec', 'id', 'prc_license'].includes(category))
     return NextResponse.json({ error: 'Invalid category.' }, { status: 400 })
   if (file.size > MAX_SIZE)
     return NextResponse.json({ error: 'File must be 5 MB or smaller.' }, { status: 400 })
