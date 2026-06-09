@@ -1,5 +1,17 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 
+function formatAddress(addr) {
+  if (!addr || typeof addr !== 'object') return addr ?? ''
+  return [
+    addr.unit,
+    addr.street,
+    addr.barangay?.name ? `Brgy. ${addr.barangay.name}` : '',
+    addr.cityMuni?.name ?? '',
+    addr.province?.name ?? addr.region?.name ?? '',
+    addr.postal,
+  ].map(s => s?.trim()).filter(Boolean).join(', ')
+}
+
 const styles = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
@@ -182,7 +194,7 @@ export default function BillingReceiptDocument({ billing, clinic }) {
           {clinic?.logoUrl && <Image src={clinic.logoUrl} style={styles.logo} />}
           <View style={{ flex: 1 }}>
             <Text style={styles.clinicName}>{clinic?.name ?? 'Dental Clinic'}</Text>
-            {clinic?.address && <Text style={styles.clinicSub}>{clinic.address}</Text>}
+            {clinic?.address && <Text style={styles.clinicSub}>{formatAddress(clinic.address)}</Text>}
             {clinic?.email   && <Text style={styles.clinicSub}>{clinic.email}</Text>}
             {clinic?.phone   && <Text style={styles.clinicSub}>{clinic.phone}</Text>}
           </View>

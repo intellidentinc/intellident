@@ -2,11 +2,12 @@
 
 const cspHeader = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co",
   "font-src 'self' data:",
   "connect-src 'self' https://*.supabase.co https://vitals.vercel-insights.com https://psgc.cloud https://psgc.gitlab.io",
+  "frame-src 'self' blob:",
   "frame-ancestors 'none'",
   "form-action 'self'",
   "base-uri 'self'",

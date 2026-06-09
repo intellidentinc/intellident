@@ -90,7 +90,20 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
   async function generateReceiptBlob() {
     const { pdf } = await import('@react-pdf/renderer')
     const BillingReceiptDocument = (await import('./BillingReceiptDocument')).default
-    return pdf(<BillingReceiptDocument billing={billing} clinic={clinic} />).toBlob()
+    let logoDataUrl = null
+    if (clinic?.logoUrl) {
+      try {
+        const res  = await fetch(clinic.logoUrl)
+        const blob = await res.blob()
+        logoDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload  = () => resolve(reader.result)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      } catch { /* skip logo on fetch failure */ }
+    }
+    return pdf(<BillingReceiptDocument billing={billing} clinic={{ ...clinic, logoUrl: logoDataUrl }} />).toBlob()
   }
 
   async function handleViewReceipt() {
@@ -98,7 +111,7 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
     try {
       const blob = await generateReceiptBlob()
       setPreviewUrl(URL.createObjectURL(blob))
-    } catch (err) {
+    } catch {
       showToast('Failed to generate receipt preview', 'error')
     } finally {
       setLoadingView(false)

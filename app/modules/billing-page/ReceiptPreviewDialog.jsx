@@ -25,9 +25,9 @@ export default function ReceiptPreviewDialog({ open, onClose, blobUrl, onDownloa
           <X size={16} />
         </IconButton>
       </DialogTitle>
-      <DialogContent sx={{ p: 0, display: 'flex', borderTop: '1px solid', borderBottom: '1px solid', borderColor: 'divider' }}>
+      <DialogContent sx={{ p: 0, display: 'flex', flex: '1 1 auto', overflow: 'hidden', borderTop: '1px solid', borderBottom: '1px solid', borderColor: 'divider' }}>
         {blobUrl ? (
-          <Box component='iframe' src={blobUrl} title='Receipt preview' sx={{ flex: 1, border: 0 }} />
+          <Box component='iframe' src={blobUrl} title='Receipt preview' width='100%' height='100%' sx={{ border: 0, display: 'block' }} />
         ) : (
           <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <CircularProgress size={28} />

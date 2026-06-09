@@ -49,18 +49,58 @@ async function generateKeyMaterial(password) {
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 
-const SERVICES = [
-  { name: 'Dental Consultation',           description: 'Initial or follow-up consultation and oral examination.',            duration: 30,  price: 350,    bufferTime: 0  },
-  { name: 'Dental Cleaning (Prophylaxis)', description: 'Professional scaling and polishing to remove plaque and tartar.',   duration: 60,  price: 700,    bufferTime: 10 },
-  { name: 'Tooth Extraction (Simple)',     description: 'Removal of a visible, erupted tooth under local anesthesia.',       duration: 30,  price: 800,    bufferTime: 10 },
-  { name: 'Tooth Extraction (Surgical)',   description: 'Removal of impacted or broken-down teeth requiring surgery.',       duration: 60,  price: 2500,   bufferTime: 15 },
-  { name: 'Composite Filling',             description: 'Tooth-colored resin restoration for cavities.',                     duration: 45,  price: 1500,   bufferTime: 10 },
-  { name: 'Root Canal Treatment',          description: 'Removal of infected pulp and sealing of the root canal system.',   duration: 90,  price: 7000,   bufferTime: 15 },
-  { name: 'Teeth Whitening',              description: 'In-office bleaching treatment for a brighter smile.',               duration: 90,  price: 5000,   bufferTime: 15 },
-  { name: 'Dental Crown',                  description: 'Porcelain or metal-ceramic crown to restore a damaged tooth.',      duration: 60,  price: 8000,   bufferTime: 15 },
-  { name: 'Denture (Complete)',            description: 'Full removable prosthesis for patients with no remaining teeth.',   duration: 60,  price: 18000,  bufferTime: 15 },
-  { name: 'Orthodontic Consultation',      description: 'Assessment and treatment planning for braces or aligners.',         duration: 45,  price: 500,    bufferTime: 10 },
+// Maria Laura Cruz Dental Clinic — General Dentistry & Orthodontics
+const MLC_SERVICES = [
+  { name: 'Oral Prophylaxis',                description: 'Professional scaling and polishing to remove plaque and tartar.',                  duration: 60,  price: 1000,   bufferTime: 10 },
+  { name: 'Deep Scaling',                    description: 'Deep cleaning below the gumline, priced per quadrant.',                            duration: 60,  price: 1000,   bufferTime: 10 },
+  { name: 'Light Cured Filling',             description: 'Tooth-colored light-cured composite restoration, priced per surface.',             duration: 45,  price: 1000,   bufferTime: 10 },
+  { name: 'Simple Extraction',               description: 'Removal of a visible, erupted tooth under local anesthesia.',                      duration: 30,  price: 1000,   bufferTime: 10 },
+  { name: 'Extraction (Ankylosed)',          description: 'Removal of an ankylosed or fused tooth requiring additional technique.',           duration: 60,  price: 2000,   bufferTime: 15 },
+  { name: 'Simple Surgical Procedure',       description: 'Minor oral surgical procedure under local anesthesia.',                            duration: 90,  price: 5000,   bufferTime: 15 },
+  { name: 'Odontectomy (Wisdom Tooth)',      description: 'Surgical removal of an impacted wisdom tooth.',                                    duration: 120, price: 10000,  bufferTime: 20 },
+  { name: 'Complete Denture',                description: 'Full removable prosthesis for an arch with no remaining teeth, priced per arch.',  duration: 60,  price: 10000,  bufferTime: 15 },
+  { name: 'Ivocap Denture',                  description: 'High-precision injection-molded complete denture, priced per arch.',               duration: 60,  price: 20000,  bufferTime: 15 },
+  { name: 'Partial Denture',                 description: 'Removable partial prosthesis to replace missing teeth, priced per arch.',          duration: 60,  price: 7000,   bufferTime: 15 },
+  { name: 'Valplast (Unilateral)',           description: 'Flexible resin partial denture replacing teeth on one side.',                      duration: 60,  price: 10000,  bufferTime: 15 },
+  { name: 'Valplast (Bilateral)',            description: 'Flexible resin partial denture replacing teeth on both sides.',                    duration: 60,  price: 15000,  bufferTime: 15 },
+  { name: 'Valplast with Metal Framework',   description: 'Flexible partial denture reinforced with a metal framework.',                      duration: 75,  price: 20000,  bufferTime: 15 },
+  { name: 'Porcelain Jacket Crown',          description: 'Full porcelain-over-metal crown to restore a damaged tooth, priced per unit.',     duration: 60,  price: 7000,   bufferTime: 15 },
+  { name: 'Tilite Porcelain Crown',          description: 'High-strength Tilite ceramic crown for superior aesthetics, priced per unit.',     duration: 60,  price: 8000,   bufferTime: 15 },
+  { name: 'All Porcelain Crown',             description: 'Full all-ceramic crown for optimal aesthetics, priced per unit.',                  duration: 60,  price: 12000,  bufferTime: 15 },
+  { name: 'Orthodontics (Corrective)',       description: 'Full corrective braces treatment for significant bite or alignment issues.',       duration: 90,  price: 40000,  bufferTime: 15 },
+  { name: 'Orthodontics (Adjunctive)',       description: 'Supplemental orthodontic treatment as part of broader dental care.',              duration: 60,  price: 20000,  bufferTime: 15 },
 ];
+
+// Cabasal Dental Clinic & KH Dental Aesthetics — shared service catalog
+const CAB_KH_SERVICES = [
+  { name: 'Consultation',                   description: 'Initial or follow-up oral health consultation and examination.',                   duration: 30,  price: 500,    bufferTime: 0  },
+  { name: 'Scaling',                        description: 'Professional scaling to remove plaque, tartar, and stains.',                       duration: 60,  price: 800,    bufferTime: 10 },
+  { name: 'Extraction',                     description: 'Removal of a tooth under local anesthesia.',                                       duration: 30,  price: 800,    bufferTime: 10 },
+  { name: 'Tooth Restoration',              description: 'Direct composite or amalgam restoration, priced per surface.',                     duration: 45,  price: 800,    bufferTime: 10 },
+  { name: 'Temporary Filling',              description: 'Interim filling to protect a tooth pending definitive treatment.',                 duration: 30,  price: 500,    bufferTime: 5  },
+  { name: 'Fluoride Treatment',             description: 'Topical fluoride application to strengthen enamel and prevent decay.',            duration: 30,  price: 800,    bufferTime: 5  },
+  { name: 'Pit & Fissure Sealant',          description: 'Protective sealant applied to molar grooves to prevent cavities.',               duration: 30,  price: 800,    bufferTime: 5  },
+  { name: 'Odontectomy',                    description: 'Surgical removal of an impacted or partially erupted tooth.',                      duration: 120, price: 8000,   bufferTime: 20 },
+  { name: 'Root Canal Treatment',           description: 'Removal of infected pulp and sealing of the root canal system, per canal.',       duration: 90,  price: 8000,   bufferTime: 15 },
+  { name: 'Crown (PFM)',                    description: 'Porcelain-fused-to-metal crown for durable tooth restoration, per unit.',          duration: 60,  price: 8000,   bufferTime: 15 },
+  { name: 'Crown (Tilite)',                 description: 'High-strength Tilite ceramic crown for enhanced aesthetics, per unit.',            duration: 60,  price: 12000,  bufferTime: 15 },
+  { name: 'Crown (Emax)',                   description: 'Lithium disilicate all-ceramic crown for superior aesthetics, per unit.',          duration: 60,  price: 15000,  bufferTime: 15 },
+  { name: 'Crown (Zirconia)',               description: 'Ultra-strong zirconia crown for posterior or aesthetic use, per unit.',            duration: 75,  price: 25000,  bufferTime: 15 },
+  { name: 'Veneer (Porcelain)',             description: 'Traditional porcelain laminate veneer for smile enhancement, per unit.',           duration: 60,  price: 10000,  bufferTime: 15 },
+  { name: 'Veneer (Emax)',                  description: 'Lithium disilicate Emax veneer for natural translucency, per unit.',               duration: 60,  price: 12000,  bufferTime: 15 },
+  { name: 'Veneer (Zirconia)',              description: 'Durable zirconia veneer for long-lasting aesthetics, per unit.',                   duration: 75,  price: 20000,  bufferTime: 15 },
+  { name: 'Partial Denture (Unilateral)',   description: 'Removable partial denture replacing teeth on one side.',                           duration: 60,  price: 8000,   bufferTime: 15 },
+  { name: 'Partial Denture (Bilateral Flexite)', description: 'Flexible Flexite partial denture replacing teeth on both sides.',             duration: 60,  price: 20000,  bufferTime: 15 },
+  { name: 'Complete Denture',               description: 'Full removable prosthesis for an arch with no remaining teeth (plastic base).',   duration: 60,  price: 15000,  bufferTime: 15 },
+  { name: 'Basic Orthodontics',             description: 'Standard braces treatment for bite correction and teeth alignment.',               duration: 90,  price: 50000,  bufferTime: 15 },
+  { name: 'Retainer',                       description: 'Post-orthodontic retainer to maintain tooth alignment, priced per arch.',          duration: 30,  price: 5000,   bufferTime: 5  },
+];
+
+const SERVICES_BY_CLINIC = {
+  MLC: MLC_SERVICES,
+  KH:  CAB_KH_SERVICES,
+  CAB: CAB_KH_SERVICES,
+};
 
 const clinics = [
   { name: 'Maria Laura Cruz Dental Clinic', address: 'Quezon City', code: 'MLC' },
@@ -197,7 +237,7 @@ async function main() {
 
   // Seed services per clinic
   for (const clinic of clinicRecords) {
-    for (const svc of SERVICES) {
+    for (const svc of (SERVICES_BY_CLINIC[clinic.code] ?? [])) {
       const existing = await prisma.service.findFirst({
         where: { clinicId: clinic.id, name: svc.name, isDeleted: false },
       });

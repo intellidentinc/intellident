@@ -175,7 +175,20 @@ export default function MyBillingPage() {
   async function generateReceiptBlob(billing) {
     const { pdf } = await import('@react-pdf/renderer')
     const BillingReceiptDocument = (await import('@/app/modules/billing-page/BillingReceiptDocument')).default
-    return pdf(<BillingReceiptDocument billing={billing} clinic={clinic} />).toBlob()
+    let logoDataUrl = null
+    if (clinic?.logoUrl) {
+      try {
+        const res  = await fetch(clinic.logoUrl)
+        const blob = await res.blob()
+        logoDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload  = () => resolve(reader.result)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      } catch { /* skip logo on fetch failure */ }
+    }
+    return pdf(<BillingReceiptDocument billing={billing} clinic={{ ...clinic, logoUrl: logoDataUrl }} />).toBlob()
   }
 
   async function handleView(billing) {
