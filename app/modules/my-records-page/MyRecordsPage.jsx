@@ -227,7 +227,7 @@ export default function MyRecordsPage() {
 
 function EmptyState({ icon, message, sub }) {
   return (
-    <Box sx={{ textAlign: 'center', py: 8 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
       <Box sx={{ mb: 2 }}>{icon}</Box>
       <Typography variant='body1' fontWeight={600} color='text.secondary' gutterBottom>
         {message}

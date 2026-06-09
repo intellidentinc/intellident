@@ -82,7 +82,14 @@ export async function POST(request, { params }) {
   if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
 
   const patient = await prisma.patient.findFirst({
-    where: { id: patientId, clinicId: dentist.clinicId, isDeleted: false }
+    where: {
+      id: patientId,
+      clinicId: dentist.clinicId,
+      isDeleted: false,
+      appointments: {
+        some: { dentistId: dentist.dentistId, isDeleted: false, status: { in: ['CONFIRMED', 'COMPLETED'] } }
+      }
+    }
   })
   if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
 
