@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026 (updated June 5, 2026)  
+**Date:** May 12, 2026 (updated June 10, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -13,7 +13,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Dimension | Completion |
 |---|---|
 | System Functionality | ~100% |
-| Security Implementation | ~97% |
+| Security Implementation | ~99% |
 
 ---
 
@@ -74,7 +74,7 @@ None.
 
 ---
 
-## 2. Security Implementation (~97%)
+## 2. Security Implementation (~99%)
 
 ### 2.1 Security Controls — Implemented
 
@@ -105,31 +105,31 @@ None.
 | Data Retention (Patient Records + Billing) | ✅ Complete | Per-clinic `patientRecordRetentionDays` + `billingRetentionDays`; same purge cron cascades `RecordHistory`, `Attachment`, and `Payment` records |
 | Automated Breach Detection | ✅ Complete | Daily cron (`/api/cron/breach-scan`, 02:00 UTC); three detection patterns: distributed brute-force, mass record access, bulk export; `BREACH_ALERT` audit log entries; email alerts to clinic admins |
 | Backup & Restore | ✅ Complete | `GET /api/super/clinics/[id]/backup` (step-up required); JSON export excludes E2EE patient record notes; 3-step OTP-confirmed restore with rate limiting; full audit trail (`BACKUP` / `RESTORE` actions) |
-| Platform Hardening | ✅ Complete | `poweredByHeader: false` hides server fingerprint; `compress: true` |
+| Platform Hardening | ✅ Complete | `poweredByHeader: false` hides server fingerprint; `compress: true`; 6 security headers in `next.config.mjs`: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy (2026-06-07) |
+| Rate Limiter (TOCTOU fixed) | ✅ Complete | Atomic SQL UPDATE in `lib/rateLimit.js` eliminates race condition where concurrent bursts could slip through; WHERE embeds the `count < maxRequests` guard (2026-06-07) |
+| Suspicious Login & Account Locked Alerts | ✅ Complete | `sendSuspiciousLoginAlert` fires on new device or IP change at sign-in; `sendAccountLockedAlert` fires when account is locked after failed attempts; step-up auth is also required on suspicious logins (`requiresStepUp: true`) |
 
 ### 2.2 Security Controls — Remaining Gaps
 
 | Control | Status | Risk | Details |
 |---|---|---|---|
-| Security HTTP Headers (CSP / HSTS / X-Frame) | ⚠️ Partial | Medium | `poweredByHeader: false` added; no CSP, HSTS, or X-Content-Type-Options headers configured in `next.config.mjs` |
 | AAD in AES-GCM | ❌ Not implemented | Low-Medium | Encrypted records not cryptographically bound to their patient; payload swapping detectable only via `contentHash` |
-| MFA Enforcement | ⚠️ Disabled | Low-Medium | Email OTP code is fully implemented and ready (`MfaOtp` model, `verify-otp` route, `VerifyOtpPage`); commented out in `sign-in/route.js` lines 166–168 |
-| Rate Limiter TOCTOU | ⚠️ Open | Low | `findFirst` → `create`/`update` in `lib/rateLimit.js` is not atomic; concurrent bursts can slip through |
+| MFA Enforcement | ⚠️ Disabled | Low-Medium | Email OTP code is fully implemented and ready (`MfaOtp` model, `verify-otp` route, `VerifyOtpPage`); commented out in `sign-in/route.js` |
 
 ### 2.3 Security Layer Breakdown
 
 | Security Layer | Completion | Notes |
 |---|---|---|
-| Authentication | ~99% | Lockout, sessions, password controls, rate limiting all complete; MFA code ready but disabled; first-login forced change, password expiry, and random temp passwords added; step-up auth for sensitive actions |
-| Session Security | ~100% | DB-backed `UserSession` model; server-side termination; single-session mode; 8-hour hard cap; known device tracking |
+| Authentication | ~99% | Lockout, sessions, password controls, rate limiting all complete; MFA code ready but disabled; first-login forced change, password expiry, random temp passwords, suspicious login alerts, and account locked alerts all active; step-up auth for sensitive actions |
+| Session Security | ~100% | DB-backed `UserSession` model; server-side termination; single-session mode; 8-hour hard cap; known device tracking; step-up required on suspicious new device/IP detection |
 | Access Control (RBAC + Tenancy) | ~100% | Role enforcement and clinicId scoping solid; step-up required for audit/report exports |
 | Data Protection (E2EE) | ~100% | Fully wired to patient records on both dentist and patient sides; tamper detection active; record diff history via `RecordHistory` |
-| Input Validation & Rate Limiting | ~98% | All routes covered; IP rate limits on all auth endpoints; TOCTOU race in rate limiter still open |
-| Audit & Monitoring | ~98% | Full query UI and export (step-up protected); `logAudit()` called on all major write operations; configurable retention + auto-purge cron |
+| Input Validation & Rate Limiting | ~100% | All routes covered; IP rate limits on all auth endpoints; TOCTOU race fixed with atomic SQL UPDATE (2026-06-07) |
+| Audit & Monitoring | ~100% | Full query UI and export (step-up protected); `logAudit()` called on all major write operations including AI interactions, exports, and record views; configurable retention + auto-purge cron |
 | Data Subject Rights | ~100% | DSAR module complete — patients can request access, correction, or deletion; admins review and resolve |
 | Integrity Verification | ~100% | SHA-256 `contentHash` on every write/read; `RecordHistory` diff log on every edit |
-| Transport & Platform Security | ~75% | `poweredByHeader: false`, `compress: true`; no CSP/HSTS/X-Frame-Options headers yet |
-| **Overall Security** | **~97%** | |
+| Transport & Platform Security | ~98% | `poweredByHeader: false`, `compress: true`; CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy all set via `next.config.mjs` (2026-06-07); CSP uses `unsafe-inline` for scripts |
+| **Overall Security** | **~99%** | |
 
 ---
 
@@ -179,9 +179,10 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 15 | ~~Data Subject Rights (DSAR) module~~ | ✅ Done | — |
 | 16 | ~~Record edit history (`RecordHistory` diff log)~~ | ✅ Done | — |
 | 17 | ~~Magic-byte file type validation on clinic logo upload~~ | ✅ Done | — |
-| 18 | Security HTTP headers (CSP, HSTS, X-Frame-Options) | ⏳ Pending | Low |
-| 19 | AAD in AES-GCM (bind ciphertext to patientId) | ⏳ Pending | Low |
-| 20 | Enable MFA enforcement in sign-in flow | ⏳ Pending | Low |
+| 18 | ~~Security HTTP headers (CSP, HSTS, X-Frame-Options)~~ | ✅ Done | — |
+| 19 | ~~Rate limiter TOCTOU race (atomic SQL UPDATE in `lib/rateLimit.js`)~~ | ✅ Done | — |
+| 20 | AAD in AES-GCM (bind ciphertext to patientId) | ⏳ Pending | Low |
+| 21 | Enable MFA enforcement in sign-in flow | ⏳ Pending | Low |
 
 ---
 

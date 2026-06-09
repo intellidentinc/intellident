@@ -64,7 +64,7 @@ On limit exceeded: `429 Too Many Requests`. Rate limit checks complement the per
 
 ## Multi-Factor Authentication (Email OTP)
 
-> **Status:** Code is fully implemented but currently **disabled** in `app/api/auth/sign-in/route.js` (lines 125–139 are commented out). The `MfaOtp` table, `verify-otp` API, and `VerifyOtpPage` are all in place and ready to re-enable.
+> **Status:** Code is fully implemented but currently **disabled** in `app/api/auth/sign-in/route.js` (MFA block is commented out; `sendMfaOtpEmail` import is also commented out). The `MfaOtp` table, `verify-otp` API, and `VerifyOtpPage` are all in place and ready to re-enable.
 
 When enabled: MFA is enforced for **all users** on every sign-in. After credentials are verified, a 6-digit OTP is emailed and the user must enter it before a session is created.
 
@@ -301,6 +301,41 @@ model RecordHistory {
 ```
 
 History is retrievable via `GET /api/records/[patientId]/[recordId]/history`. Combined with `contentHash` tamper detection, this provides a full audit trail for every patient record change.
+
+---
+
+## HTTP Security Headers (2026-06-07)
+
+All responses include the following security headers, configured in `next.config.mjs`:
+
+| Header | Value |
+|---|---|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://vitals.vercel-insights.com https://psgc.cloud https://psgc.gitlab.io; frame-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'` |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+
+Note: CSP uses `unsafe-inline` for scripts and styles to support MUI (Emotion's runtime CSS injection). This is a trade-off required by the MUI + Next.js SSR setup.
+
+---
+
+## Suspicious Login & Account Locked Alerts
+
+Two email alerts fire automatically from the sign-in flow:
+
+### Suspicious Login (`sendSuspiciousLoginAlert`)
+Fires when a successful sign-in is detected from:
+- A **new device** (user agent hash not in `KnownDevice`)
+- A **different IP** than the device's last known IP
+
+The alert email includes: device description, IP address, timestamp. The sign-in response also includes `requiresStepUp: true` so the client immediately prompts for step-up authentication before granting access to sensitive operations.
+
+### Account Locked Alert (`sendAccountLockedAlert`)
+Fires when repeated failed sign-in attempts trigger account lockout. The alert email includes: the lock duration and a recommendation to contact support if the user did not make these attempts.
+
+Both alerts are fire-and-forget (`.catch(() => {})`) — email failure never blocks sign-in.
 
 ---
 

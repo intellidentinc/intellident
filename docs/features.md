@@ -44,6 +44,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Known device tracking | `[x]` | `KnownDevice` model; stores user agent hash + IP per user; `firstSeenAt` + `lastSeenAt` |
 | Step-up authentication | `[x]` | `POST/GET /api/auth/step-up`; `StepUpModal.jsx`; 15-min TTL; required before audit log + report exports |
 | 8-hour hard session cap | `[x]` | Middleware enforces absolute 8-hour session limit regardless of sliding renewal |
+| Suspicious login alert email | `[x]` | `sendSuspiciousLoginAlert` fires on sign-in from a new or previously unseen device/IP; `requiresStepUp: true` returned so client prompts re-auth |
+| Account locked alert email | `[x]` | `sendAccountLockedAlert` fires when sign-in triggers account lockout; warns user via email |
 | hCaptcha on login | `[ ]` | Planned — `@hcaptcha/react-hcaptcha`, needs site key + secret key in env |
 
 ---
@@ -205,7 +207,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Feature | Status | Notes |
 |---|---|---|
 | Loading skeletons | `[x]` | Skeleton screens for all major pages via `loading.jsx` files in route segments |
-| Platform hardening | `[x]` | `compress: true`, `poweredByHeader: false` in `next.config.mjs` |
+| Platform hardening | `[x]` | `compress: true`, `poweredByHeader: false`; 6 security headers in `next.config.mjs`: CSP, HSTS (preload), X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy |
 | Middleware clinic check | `[x]` | Clinic enabled status cached via `unstable_cache` (60s); blocks disabled clinics at edge |
 | Health endpoint | `[x]` | `GET /api/health` — `CRON_SECRET` protected; pings DB with `SELECT 1` |
 | Breach scan cron | `[x]` | `/api/cron/breach-scan`, daily at 02:00 UTC; detects distributed brute-force (same IP locks 3+ accounts), mass record access (100+ patient records viewed by one user in 24h), bulk export (5+ exports by one user in 24h); creates `BREACH_ALERT` audit log entry + emails clinic admins |
@@ -263,3 +265,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | 2026-06-08 | Added in-app backup and restore for super admin — `GET /api/super/clinics/[id]/backup` (step-up required, JSON export); 3-step OTP-confirmed restore flow via `RestoreModal.jsx` |
 | 2026-06-08 | No-show risk flag now shown in `CreateAppointmentModal` in addition to `AppointmentDetailModal` (commit `21a64d4`) |
 | 2026-06-08 | Added daily breach scan cron (`/api/cron/breach-scan`, 02:00 UTC) — detects brute-force, mass record access, bulk export patterns; `BREACH_ALERT` audit entries + admin email alerts |
+| 2026-06-07 | Added 6 HTTP security headers in `next.config.mjs`: CSP (default-src self, script-src self unsafe-inline), HSTS (max-age=63072000; includeSubDomains; preload), X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy (closes security gap) |
+| 2026-06-07 | Patched TOCTOU race in rate limiter (`lib/rateLimit.js`) — replaced `findFirst → create/update` with atomic `$executeRaw` UPDATE WHERE `count < maxRequests`; fixes MED-01 |
+| 2026-06-07 | Added missing audit log coverage to records API (`GET /api/records`, `GET /api/patient/records`, record views), audit-log export, and reports export |
+| 2026-06-07 | Added suspicious login alert email (`sendSuspiciousLoginAlert`) — fires on sign-in from new or different-IP device; returns `requiresStepUp: true` to force step-up re-auth |
+| 2026-06-07 | Added account locked alert email (`sendAccountLockedAlert`) — fires when repeated failed attempts trigger account lockout |
