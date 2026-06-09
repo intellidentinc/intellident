@@ -115,9 +115,6 @@ function usersForClinic(slug) {
     { firstName: 'Admin',        lastName: slug, email: `admin.${slug}@intellident.test`,         role: ROLES.ADMIN },
     { firstName: 'Receptionist', lastName: slug, email: `receptionist.${slug}@intellident.test`,  role: ROLES.RECEPTIONIST },
     { firstName: 'Dentist',      lastName: slug, email: `dentist.${slug}@intellident.test`,       role: ROLES.DENTIST },
-    { firstName: 'Dentist2',     lastName: slug, email: `dentist2.${slug}@intellident.test`,      role: ROLES.DENTIST },
-    { firstName: 'Dentist3',     lastName: slug, email: `dentist3.${slug}@intellident.test`,      role: ROLES.DENTIST },
-    { firstName: 'Dentist4',     lastName: slug, email: `dentist4.${slug}@intellident.test`,      role: ROLES.DENTIST },
     { firstName: 'Patient',      lastName: slug, email: `patient.${slug}@intellident.test`,       role: ROLES.PATIENT },
   ];
 }
@@ -139,6 +136,23 @@ async function main() {
       console.log(`Clinic exists:  ${record.name} (code: ${record.code})`);
     }
     clinicRecords.push(record);
+  }
+
+  // Remove extra dentist accounts no longer in the seed definition
+  for (const clinic of clinicRecords) {
+    const slug = clinic.name.split(' ')[0].toLowerCase();
+    const extraEmails = ['dentist2', 'dentist3', 'dentist4'].map(
+      (n) => `${n}.${slug}@intellident.test`
+    );
+    const extraUsers = await prisma.user.findMany({
+      where: { email: { in: extraEmails } },
+      select: { id: true, email: true },
+    });
+    for (const u of extraUsers) {
+      await prisma.dentist.deleteMany({ where: { userId: u.id } });
+      await prisma.user.delete({ where: { id: u.id } });
+      console.log(`  Removed extra dentist: ${u.email}`);
+    }
   }
 
   // Seed users per clinic
@@ -269,16 +283,11 @@ async function main() {
         continue;
       }
 
-      // Shuffle and pick 3–6 random services
-      const shuffled = [...clinicServices].sort(() => Math.random() - 0.5);
-      const count = 3 + Math.floor(Math.random() * 4); // 3, 4, 5, or 6
-      const assigned = shuffled.slice(0, count);
-
       await prisma.dentist.update({
         where: { id: dentist.id },
-        data: { services: { connect: assigned.map(s => ({ id: s.id })) } },
+        data: { services: { connect: clinicServices.map(s => ({ id: s.id })) } },
       });
-      console.log(`  Assigned ${assigned.length} services to dentist ${dentist.id} [${clinic.code}]: ${assigned.map(s => s.name).join(', ')}`);
+      console.log(`  Assigned all ${clinicServices.length} services to dentist ${dentist.id} [${clinic.code}]`);
     }
   }
 
