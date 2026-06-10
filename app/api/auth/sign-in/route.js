@@ -20,13 +20,10 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { setSession } from '@/lib/auth';
-import { ROLES } from '@/lib/roles';
 import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 import { checkRateLimit } from '@/lib/rateLimit';
-// import { sendMfaOtpEmail } from '@/lib/email'; // MFA: disabled
-import { sendSuspiciousLoginAlert, sendAccountLockedAlert } from '@/lib/email';
+import { sendMfaOtpEmail, sendAccountLockedAlert } from '@/lib/email';
 
 // Configurable lockout constants (override via env vars)
 const MAX_ATTEMPTS     = parseInt(process.env.LOCKOUT_MAX_ATTEMPTS      ?? '5');
@@ -168,91 +165,23 @@ export async function POST(request) {
       );
     }
 
-    // MFA (OTP) step disabled — skipping OTP generation and proceeding directly to session creation
-    // ------- MFA BLOCK START (commented out) -------
-    // const otp = String(Math.floor(100000 + Math.random() * 900000));
-    // const pendingToken = crypto.randomBytes(32).toString('hex');
-    // const codeHash = await bcrypt.hash(otp, 8);
-    // const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-    // await prisma.mfaOtp.deleteMany({ where: { userId: user.id, usedAt: null } });
-    // await prisma.mfaOtp.create({
-    //   data: { userId: user.id, pendingToken, codeHash, rememberMe, expiresAt },
-    // });
-    // sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp }).catch(() => {});
-    // return NextResponse.json(
-    //   { mfaPending: true, pendingToken, wrappedKey: user.wrappedKey, keySalt: user.keySalt },
-    //   { status: 200 }
-    // );
-    // ------- MFA BLOCK END -------
+    // MFA (email OTP) step — credentials are valid; issue a one-time code and defer session
+    // creation to POST /api/auth/verify-otp, which runs finalizeLogin() once the code is confirmed.
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const pendingToken = crypto.randomBytes(32).toString('hex');
+    const codeHash = await bcrypt.hash(otp, 8);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // PHASE 3: Single-session termination + device fingerprint in parallel (saves 1 DB round-trip)
-    const uaHash = crypto.createHash('sha256').update(userAgent ?? '').digest('hex');
-
-    const [, knownDevice] = await Promise.all([
-      clinic?.singleSessionEnabled
-        ? prisma.userSession.updateMany({
-            where: { userId: user.id, terminatedAt: null },
-            data: { terminatedAt: new Date() },
-          })
-        : Promise.resolve(),
-      prisma.knownDevice.findUnique({
-        where: { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
-        select: { lastIp: true },
-      }),
-    ]);
-
-    const isNewDevice  = !knownDevice;
-    const suspiciousIp = !isNewDevice && knownDevice.lastIp !== null && knownDevice.lastIp !== ip;
-
-    // PHASE 4: Device upsert + session creation in parallel (saves 1 DB round-trip)
-    const requiresTerms = !user.termsAcceptedAt;
-    const suspicious = isNewDevice || suspiciousIp;
-    await Promise.all([
-      prisma.knownDevice.upsert({
-        where:  { userId_userAgentHash: { userId: user.id, userAgentHash: uaHash } },
-        create: { userId: user.id, userAgentHash: uaHash, lastIp: ip },
-        update: { lastIp: ip, lastSeenAt: new Date() },
-      }),
-      setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId,
-                 rememberMe, false, requiresTerms, ip, userAgent, user.role, suspicious),
-    ]);
-
-    logAudit({
-      userId: user.id, clinicId: user.clinicId,
-      action: 'LOGIN', entity: 'User', entityId: user.id,
-      ipAddress: ip, userAgent,
-      metadata: {
-        ...(isNewDevice  ? { newDevice: true }                                      : {}),
-        ...(suspiciousIp ? { suspiciousIp: true, previousIp: knownDevice.lastIp }  : {}),
-      },
+    await prisma.mfaOtp.deleteMany({ where: { userId: user.id, usedAt: null } });
+    await prisma.mfaOtp.create({
+      data: { userId: user.id, pendingToken, codeHash, rememberMe, expiresAt },
     });
 
-    if (isNewDevice || suspiciousIp) {
-      sendSuspiciousLoginAlert({
-        to: user.email, firstName: user.firstName,
-        isNewDevice, suspiciousIp,
-        previousIp: suspiciousIp ? knownDevice.lastIp : null,
-        ip, time: new Date(),
-      }).catch(() => {});
-    }
+    sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp }).catch(() => {});
 
-    const mustChangePassword = user.mustChangePassword ?? false;
-    const passwordExpired =
-      user.role === ROLES.ADMIN &&
-      clinic?.passwordExpiryEnabled === true &&
-      user.passwordExpiresAt instanceof Date &&
-      user.passwordExpiresAt < new Date();
-
+    // wrappedKey/keySalt are handed to the client now so the master key can be unwrapped after OTP.
     return NextResponse.json(
-      {
-        clinicId: user.clinicId,
-        wrappedKey: user.wrappedKey,
-        keySalt: user.keySalt,
-        ...(requiresTerms && { requiresTerms: true }),
-        ...(mustChangePassword && { mustChangePassword: true }),
-        ...(passwordExpired && { passwordExpired: true }),
-        ...(suspicious && { requiresStepUp: true }),
-      },
+      { mfaPending: true, pendingToken, wrappedKey: user.wrappedKey, keySalt: user.keySalt },
       { status: 200 }
     );
   } catch (error) {

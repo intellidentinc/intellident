@@ -116,6 +116,28 @@ export default function VerifyOtpPage() {
 
       sessionStorage.removeItem('mfa_pending');
       showToast('Signed in successfully!', 'success');
+
+      // Honor the same post-login routing flags the sign-in page does.
+      if (data.requiresTerms) {
+        const params = new URLSearchParams();
+        if (data.clinicId) params.set('clinicId', data.clinicId);
+        if (data.mustChangePassword) params.set('mustChange', '1');
+        router.push(`/accept-terms?${params.toString()}`);
+        return;
+      }
+      if (data.mustChangePassword) {
+        router.push('/change-password?reason=first-login');
+        return;
+      }
+      if (data.passwordExpired) {
+        router.push('/change-password?reason=expired');
+        return;
+      }
+      if (data.requiresStepUp) {
+        const dest = data.clinicId ? `/${data.clinicId}/dashboard` : '/super';
+        router.push(`/step-up?redirect=${encodeURIComponent(dest)}`);
+        return;
+      }
       router.push(data.clinicId ? `/${data.clinicId}/dashboard` : '/super');
     } catch {
       showToast('Something went wrong. Please try again.', 'error');

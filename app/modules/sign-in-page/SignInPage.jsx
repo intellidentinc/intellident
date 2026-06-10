@@ -69,18 +69,17 @@ export default function SignInPage() {
         return;
       }
 
-      // MFA (OTP) step disabled — skipping redirect to verify-otp
-      // ------- MFA BLOCK START (commented out) -------
-      // if (data.mfaPending) {
-      //   sessionStorage.setItem('mfa_pending', JSON.stringify({
-      //     password,
-      //     wrappedKey: data.wrappedKey,
-      //     keySalt: data.keySalt,
-      //   }));
-      //   router.push(`/verify-otp?token=${data.pendingToken}`);
-      //   return;
-      // }
-      // ------- MFA BLOCK END -------
+      // MFA (OTP) gate — credentials valid, but a one-time code is required before any session
+      // exists. Stash the key material so the master key can be unwrapped after the OTP succeeds.
+      if (data.mfaPending) {
+        sessionStorage.setItem('mfa_pending', JSON.stringify({
+          password,
+          wrappedKey: data.wrappedKey,
+          keySalt: data.keySalt,
+        }));
+        router.push(`/verify-otp?token=${data.pendingToken}`);
+        return;
+      }
 
       // Unwrap the master key client-side using the password — server cannot do this
       const salt = fromBase64(data.keySalt);

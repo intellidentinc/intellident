@@ -3,6 +3,7 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import { verifyCookie } from '@/lib/session-cookie';
 
 const getClinicEnabled = unstable_cache(
   async (clinicId) => {
@@ -43,9 +44,16 @@ export async function middleware(request) {
 
   // Authenticated user hitting auth page → validate DB session then redirect to dashboard
   if (userCookie && isAuthPage) {
-    try {
-      const session = JSON.parse(userCookie.value);
+    const session = verifyCookie(userCookie.value);
 
+    // Forged / tampered / unsigned cookie — clear it and let the user land on the auth page
+    if (!session) {
+      const res = NextResponse.next();
+      res.cookies.delete('user');
+      return res;
+    }
+
+    try {
       if (session.sessionToken) {
         const dbSession = await prisma.userSession.findUnique({
           where: { sessionToken: session.sessionToken },
@@ -58,12 +66,12 @@ export async function middleware(request) {
           return res;
         }
       }
-
-      const dest = session.clinicId ? `/${session.clinicId}/dashboard` : '/sign-in';
-      return NextResponse.redirect(new URL(dest, request.url));
     } catch {
-      return NextResponse.next();
+      // DB error: fall through to the redirect below (page-level guards handle it)
     }
+
+    const dest = session.clinicId ? `/${session.clinicId}/dashboard` : '/sign-in';
+    return NextResponse.redirect(new URL(dest, request.url));
   }
 
   // Unauthenticated user hitting dashboard → redirect to sign-in
@@ -72,11 +80,13 @@ export async function middleware(request) {
   }
 
   if (userCookie && !isSignOut) {
-    let session;
-    try {
-      session = JSON.parse(userCookie.value);
-    } catch {
-      return NextResponse.next();
+    const session = verifyCookie(userCookie.value);
+
+    // Forged / tampered / unsigned cookie — strip it and continue unauthenticated.
+    if (!session) {
+      const res = NextResponse.next();
+      res.cookies.delete('user');
+      return res;
     }
 
     // Hard 8-hour cap — force re-login regardless of sliding renewal

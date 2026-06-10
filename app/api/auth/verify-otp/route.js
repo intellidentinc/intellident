@@ -8,8 +8,8 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
-import { setSession } from '@/lib/auth';
-import { getRequestMeta, logAudit } from '@/lib/audit';
+import { finalizeLogin } from '@/lib/login';
+import { getRequestMeta } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 const MAX_OTP_ATTEMPTS = 5;
@@ -32,7 +32,14 @@ export async function POST(request) {
 
     const mfa = await prisma.mfaOtp.findUnique({
       where: { pendingToken },
-      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, clinicId: true, role: true } } },
+      include: {
+        user: {
+          select: {
+            id: true, email: true, firstName: true, lastName: true, clinicId: true, role: true,
+            termsAcceptedAt: true, mustChangePassword: true, passwordExpiresAt: true,
+          },
+        },
+      },
     });
 
     if (!mfa) {
@@ -71,11 +78,26 @@ export async function POST(request) {
     await prisma.mfaOtp.update({ where: { id: mfa.id }, data: { usedAt: new Date() } });
 
     const { user } = mfa;
-    await setSession(user.id, user.email, user.firstName, user.lastName, user.clinicId, mfa.rememberMe, false, false, null, null, user.role);
 
-    logAudit({ userId: user.id, clinicId: user.clinicId, action: 'LOGIN', entity: 'User', entityId: user.id, ipAddress: ip, userAgent });
+    // Load clinic config + re-check it is still enabled (defense-in-depth between the two steps).
+    const clinic = user.clinicId
+      ? await prisma.clinic.findUnique({
+          where: { id: user.clinicId },
+          select: { isEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true },
+        })
+      : null;
 
-    return NextResponse.json({ clinicId: user.clinicId });
+    if (user.clinicId && (!clinic || !clinic.isEnabled)) {
+      return NextResponse.json(
+        { error: 'This clinic has been disabled. Please contact support.' },
+        { status: 403 }
+      );
+    }
+
+    // Post-authentication: device fingerprint, suspicious detection, session creation, audit, flags.
+    const flags = await finalizeLogin({ user, clinic, rememberMe: mfa.rememberMe, ip, userAgent });
+
+    return NextResponse.json({ clinicId: user.clinicId, ...flags });
   } catch (error) {
     console.error('Verify OTP error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
