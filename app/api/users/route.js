@@ -7,24 +7,7 @@ import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
 import { sendStaffWelcomeEmail } from '@/lib/email'
 
-function generateStaffPassword() {
-  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  const lower = 'abcdefghijklmnopqrstuvwxyz'
-  const digit = '0123456789'
-  const special = '!@#$%^&*'
-  const all = upper + lower + digit + special
-  const required = [
-    upper[Math.floor(Math.random() * upper.length)],
-    lower[Math.floor(Math.random() * lower.length)],
-    digit[Math.floor(Math.random() * digit.length)],
-    special[Math.floor(Math.random() * special.length)],
-  ]
-  const length = 8 + Math.floor(Math.random() * 5)
-  for (let i = required.length; i < length; i++) {
-    required.push(all[Math.floor(Math.random() * all.length)])
-  }
-  return required.sort(() => Math.random() - 0.5).join('')
-}
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
 
 async function generateUsername(lastName, clinicCode, tx) {
   const base = lastName.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 20)
@@ -117,15 +100,22 @@ export async function POST(request) {
   const email         = sanitizeEmail(parsed.body.email)
   const phone         = str(parsed.body.phone, 20)
   const { role }      = parsed.body
+  const tempPassword  = secret(parsed.body.tempPassword, 128)
   const wrappedKey    = secret(parsed.body.wrappedKey, 1024)
   const keySalt       = secret(parsed.body.keySalt, 256)
 
-  if (!firstName || !lastName || !email || !role || !wrappedKey || !keySalt) {
+  if (!firstName || !lastName || !email || !role || !tempPassword || !wrappedKey || !keySalt) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
   if (![ROLES.DENTIST, ROLES.RECEPTIONIST].includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
+
+  // The temp password doubles as the KEK password used to wrap the master key
+  // client-side, so it must satisfy the password policy.
+  if (!PASSWORD_REGEX.test(tempPassword)) {
+    return NextResponse.json({ error: 'Temporary password does not meet the password policy' }, { status: 400 })
   }
 
   const existing = await prisma.user.findUnique({ where: { email } })
@@ -138,7 +128,6 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Clinic not found' }, { status: 400 })
   }
 
-  const tempPassword = generateStaffPassword()
   const hashedPassword = await bcrypt.hash(tempPassword, 10)
 
   const newUser = await prisma.$transaction(async (tx) => {

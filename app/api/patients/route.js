@@ -7,24 +7,7 @@ import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
 import { sendPatientClaimEmail } from '@/lib/email'
 
-function generatePatientPassword() {
-  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  const lower = 'abcdefghijklmnopqrstuvwxyz'
-  const digit = '0123456789'
-  const special = '!@#$%^&*'
-  const all = upper + lower + digit + special
-  const required = [
-    upper[Math.floor(Math.random() * upper.length)],
-    lower[Math.floor(Math.random() * lower.length)],
-    digit[Math.floor(Math.random() * digit.length)],
-    special[Math.floor(Math.random() * special.length)],
-  ]
-  const length = 8 + Math.floor(Math.random() * 5)
-  for (let i = required.length; i < length; i++) {
-    required.push(all[Math.floor(Math.random() * all.length)])
-  }
-  return required.sort(() => Math.random() - 0.5).join('')
-}
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
 
 export async function GET(request) {
   const session = await getSession()
@@ -103,11 +86,18 @@ export async function POST(request) {
   const lastName  = str(parsed.body.lastName, 100)
   const email     = sanitizeEmail(parsed.body.email)
   const phone     = str(parsed.body.phone, 20)
+  const tempPassword = secret(parsed.body.tempPassword, 128)
   const wrappedKey = secret(parsed.body.wrappedKey, 1024)
   const keySalt    = secret(parsed.body.keySalt, 256)
 
-  if (!firstName || !lastName || !email || !phone || !wrappedKey || !keySalt) {
+  if (!firstName || !lastName || !email || !phone || !tempPassword || !wrappedKey || !keySalt) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  // The temp password doubles as the KEK password used to wrap the master key
+  // client-side, so it must satisfy the password policy.
+  if (!PASSWORD_REGEX.test(tempPassword)) {
+    return NextResponse.json({ error: 'Temporary password does not meet the password policy' }, { status: 400 })
   }
 
   const existing = await prisma.user.findUnique({ where: { email } })
@@ -115,7 +105,6 @@ export async function POST(request) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 400 })
   }
 
-  const tempPassword = generatePatientPassword()
   const hashedPassword = await bcrypt.hash(tempPassword, 10)
 
   const newPatient = await prisma.$transaction(async (tx) => {

@@ -16,9 +16,8 @@ import {
   deriveKEK,
   wrapMasterKey,
   toBase64,
+  generateTempPassword,
 } from '@/lib/crypto'
-
-const DEFAULT_PASSWORD = 'Intellident2026#'
 
 function normalizeName(value) {
   return value
@@ -81,8 +80,12 @@ export default function AddPatientModal({ open, onClose, onSuccess }) {
     if (!validate()) return
     setLoading(true)
     try {
+      // Generate a unique temporary password and wrap the master key with a KEK
+      // derived from it. The server uses this same value as the login password,
+      // so the key-encryption password is high-entropy and per-patient.
+      const tempPassword = generateTempPassword()
       const salt = generateSalt()
-      const kek = await deriveKEK(DEFAULT_PASSWORD, salt)
+      const kek = await deriveKEK(tempPassword, salt)
       const masterKey = await generateMasterKey()
       const wrappedKey = await wrapMasterKey(masterKey, kek)
       const keySalt = toBase64(salt)
@@ -95,6 +98,7 @@ export default function AddPatientModal({ open, onClose, onSuccess }) {
           lastName: normalizeName(form.lastName.trim()),
           email: form.email.trim().toLowerCase(),
           phone: form.phone.trim(),
+          tempPassword,
           wrappedKey,
           keySalt,
         }),
@@ -163,7 +167,7 @@ export default function AddPatientModal({ open, onClose, onSuccess }) {
             Register Walk-in Patient
           </Typography>
           <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
-            Default password: <strong>Intellident2026#</strong>
+            A secure temporary password will be emailed to the patient.
           </Typography>
         </Box>
       </Box>
@@ -215,15 +219,11 @@ export default function AddPatientModal({ open, onClose, onSuccess }) {
           placeholder='+639XXXXXXXXX'
           error={!!errors.phone}
           helperText={errors.phone || 'Include country code (+63)'}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position='start'>
-                  <Typography variant='body2' color='text.secondary'>🇵🇭</Typography>
-                </InputAdornment>
-              ),
-            },
-          }}
+          startAdornment={
+            <InputAdornment position='start'>
+              <Typography variant='body2' color='text.secondary'>🇵🇭</Typography>
+            </InputAdornment>
+          }
           required
         />
       </Box>

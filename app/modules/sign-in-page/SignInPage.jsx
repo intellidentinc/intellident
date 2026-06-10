@@ -70,13 +70,10 @@ export default function SignInPage() {
       }
 
       // MFA (OTP) gate — credentials valid, but a one-time code is required before any session
-      // exists. Stash the key material so the master key can be unwrapped after the OTP succeeds.
+      // exists. Stash only the password; the server releases the E2EE key material
+      // (wrappedKey/keySalt) after the OTP is verified, not before.
       if (data.mfaPending) {
-        sessionStorage.setItem('mfa_pending', JSON.stringify({
-          password,
-          wrappedKey: data.wrappedKey,
-          keySalt: data.keySalt,
-        }));
+        sessionStorage.setItem('mfa_pending', JSON.stringify({ password }));
         router.push(`/verify-otp?token=${data.pendingToken}`);
         return;
       }

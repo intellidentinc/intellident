@@ -197,15 +197,11 @@ export default function EditPatientModal({ open, patient, onClose, onSuccess }) 
           placeholder='+639XXXXXXXXX'
           error={!!errors.phone}
           helperText={errors.phone || 'Include country code (+63)'}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position='start'>
-                  <Typography variant='body2' color='text.secondary'>🇵🇭</Typography>
-                </InputAdornment>
-              ),
-            },
-          }}
+          startAdornment={
+            <InputAdornment position='start'>
+              <Typography variant='body2' color='text.secondary'>🇵🇭</Typography>
+            </InputAdornment>
+          }
         />
       </Box>
 

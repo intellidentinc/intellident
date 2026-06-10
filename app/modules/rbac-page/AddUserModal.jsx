@@ -17,6 +17,7 @@ import {
   deriveKEK,
   wrapMasterKey,
   toBase64,
+  generateTempPassword,
 } from '@/lib/crypto'
 import { ROLES } from '@/lib/roles'
 
@@ -24,8 +25,6 @@ const ROLE_OPTIONS = [
   { value: ROLES.DENTIST,      label: 'Dentist' },
   { value: ROLES.RECEPTIONIST, label: 'Receptionist' },
 ]
-
-const DEFAULT_PASSWORD = 'Intellident2026#'
 
 function normalizeName(value) {
   return value
@@ -89,8 +88,12 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
     if (!validate()) return
     setLoading(true)
     try {
+      // Generate a unique temporary password and wrap the master key with a KEK
+      // derived from it. The server uses this same value as the login password,
+      // so the key-encryption password is high-entropy and per-user.
+      const tempPassword = generateTempPassword()
       const salt = generateSalt()
-      const kek = await deriveKEK(DEFAULT_PASSWORD, salt)
+      const kek = await deriveKEK(tempPassword, salt)
       const masterKey = await generateMasterKey()
       const wrappedKey = await wrapMasterKey(masterKey, kek)
       const keySalt = toBase64(salt)
@@ -105,6 +108,7 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
           email: form.email.trim().toLowerCase(),
           phone: form.phone.trim() || null,
           role: form.role,
+          tempPassword,
           wrappedKey,
           keySalt,
         }),
@@ -143,7 +147,7 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
     <Dialog
       open={open}
       onClose={handleClose}
-      maxWidth='xs'
+      maxWidth='sm'
       fullWidth
       slotProps={{
         paper: {
@@ -182,7 +186,7 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
 
       {/* Body */}
       <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, '& > *': { flex: 1, minWidth: 0 } }}>
           <Input
             id='firstName'
             label='First Name'
@@ -193,15 +197,13 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
             helperText={errors.firstName}
             required
           />
-          <Box sx={{ flex: 1 }}>
-            <Input
-              id='middleInitial'
-              label='Middle Name'
-              value={form.middleInitial}
-              onChange={(e) => setForm((prev) => ({ ...prev, middleInitial: e.target.value }))}
-              placeholder='e.g. Santos'
-            />
-          </Box>
+          <Input
+            id='middleInitial'
+            label='Middle Name'
+            value={form.middleInitial}
+            onChange={(e) => setForm((prev) => ({ ...prev, middleInitial: e.target.value }))}
+            placeholder='Santos'
+          />
           <Input
             id='lastName'
             label='Last Name'
@@ -234,15 +236,11 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
           placeholder='+639XXXXXXXXX'
           error={!!errors.phone}
           helperText={errors.phone || 'Optional — include country code (+63)'}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position='start'>
-                  <Typography variant='body2' color='text.secondary'>🇵🇭</Typography>
-                </InputAdornment>
-              )
-            }
-          }}
+          startAdornment={
+            <InputAdornment position='start'>
+              <Typography variant='body2' color='text.secondary'>🇵🇭</Typography>
+            </InputAdornment>
+          }
         />
 
         <Select

@@ -194,13 +194,9 @@ export default function ServiceFormModal({ open, service, dentists, onClose, onS
           value={form.price}
           onChange={(e) => set('price', e.target.value)}
           placeholder='Optional'
-          slotProps={{
-            input: {
-              startAdornment: form.price !== '' && (
-                <InputAdornment position='start'>₱</InputAdornment>
-              )
-            }
-          }}
+          startAdornment={form.price !== '' ? (
+            <InputAdornment position='start'>₱</InputAdornment>
+          ) : undefined}
         />
 
         {/* Assigned Dentists */}

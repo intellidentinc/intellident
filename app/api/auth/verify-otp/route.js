@@ -37,6 +37,7 @@ export async function POST(request) {
           select: {
             id: true, email: true, firstName: true, lastName: true, clinicId: true, role: true,
             termsAcceptedAt: true, mustChangePassword: true, passwordExpiresAt: true,
+            wrappedKey: true, keySalt: true,
           },
         },
       },
@@ -97,7 +98,14 @@ export async function POST(request) {
     // Post-authentication: device fingerprint, suspicious detection, session creation, audit, flags.
     const flags = await finalizeLogin({ user, clinic, rememberMe: mfa.rememberMe, ip, userAgent });
 
-    return NextResponse.json({ clinicId: user.clinicId, ...flags });
+    // Only now — after the second factor is confirmed — is the E2EE key material
+    // released so the client can unwrap the master key locally.
+    return NextResponse.json({
+      clinicId: user.clinicId,
+      wrappedKey: user.wrappedKey,
+      keySalt: user.keySalt,
+      ...flags,
+    });
   } catch (error) {
     console.error('Verify OTP error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -66,10 +66,17 @@ export async function POST(request) {
   if (!detected)
     return NextResponse.json({ error: 'Only PDF, JPG, and PNG files are accepted.' }, { status: 400 })
 
-  // Ensure bucket exists — ignore "already exists" error, surface anything else
-  const { error: bucketError } = await supabase.storage.createBucket(BUCKET, { public: true })
-  if (bucketError && !bucketError.message?.includes('already exists')) {
-    console.error('[clinic-docs] bucket creation error:', bucketError)
+  // Ensure bucket exists as PRIVATE — these are sensitive onboarding documents
+  // (BIR filings, business permits, government IDs, PRC licenses). They must never
+  // be publicly readable; the super admin views them via short-lived signed URLs.
+  const { error: bucketError } = await supabase.storage.createBucket(BUCKET, { public: false })
+  if (bucketError) {
+    if (bucketError.message?.includes('already exists')) {
+      // Enforce private on a pre-existing bucket that may have been created public.
+      await supabase.storage.updateBucket(BUCKET, { public: false }).catch(() => {})
+    } else {
+      console.error('[clinic-docs] bucket creation error:', bucketError)
+    }
   }
 
   // Extension and content-type come from magic-byte detection, not the client

@@ -187,9 +187,12 @@ export async function POST(request) {
       );
     }
 
-    // wrappedKey/keySalt are handed to the client now so the master key can be unwrapped after OTP.
+    // E2EE key material (wrappedKey/keySalt) is intentionally NOT returned here.
+    // Returning it before the OTP is verified would let a password-only attacker
+    // exfiltrate it and decrypt records offline, defeating MFA. It is handed to the
+    // client only after a successful OTP check in POST /api/auth/verify-otp.
     return NextResponse.json(
-      { mfaPending: true, pendingToken, wrappedKey: user.wrappedKey, keySalt: user.keySalt },
+      { mfaPending: true, pendingToken },
       { status: 200 }
     );
   } catch (error) {

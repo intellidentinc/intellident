@@ -108,10 +108,11 @@ export default function VerifyOtpPage() {
         return;
       }
 
-      // Derive master key from stored credentials and unwrap
-      const salt = fromBase64(stored.keySalt);
+      // The E2EE key material is returned by verify-otp (only after the OTP passes).
+      // Derive the KEK from the stored password and unwrap the master key locally.
+      const salt = fromBase64(data.keySalt);
       const kek = await deriveKEK(stored.password, salt);
-      const masterKey = await unwrapMasterKey(stored.wrappedKey, kek);
+      const masterKey = await unwrapMasterKey(data.wrappedKey, kek);
       setMasterKey(masterKey);
 
       sessionStorage.removeItem('mfa_pending');
