@@ -108,6 +108,27 @@ export async function POST(request) {
     return NextResponse.json({ error: 'patientId, serviceIds, and scheduledAt are required' }, { status: 400 })
   }
 
+  // Tenant check: the patient must belong to the caller's clinic — prevents
+  // referencing another clinic's patient record (cross-tenant manipulation/leak).
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, clinicId: caller.clinicId, isDeleted: false },
+    select: { id: true },
+  })
+  if (!patient) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
+  }
+
+  // Tenant check: the chosen dentist (if any) must belong to the caller's clinic.
+  if (dentistId) {
+    const dentist = await prisma.dentist.findFirst({
+      where: { id: dentistId, clinicId: caller.clinicId, isDeleted: false },
+      select: { id: true },
+    })
+    if (!dentist) {
+      return NextResponse.json({ error: 'Dentist not found' }, { status: 404 })
+    }
+  }
+
   // Fetch all services for duration/buffer aggregation
   const services = await prisma.service.findMany({
     where: { id: { in: serviceIds }, clinicId: caller.clinicId, isDeleted: false },
@@ -163,6 +184,7 @@ export async function POST(request) {
   if (dentistId) {
     const overlap = await prisma.appointment.findFirst({
       where: {
+        clinicId: caller.clinicId,
         dentistId,
         isDeleted: false,
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
