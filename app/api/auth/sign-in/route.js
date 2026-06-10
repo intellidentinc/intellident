@@ -177,7 +177,15 @@ export async function POST(request) {
       data: { userId: user.id, pendingToken, codeHash, rememberMe, expiresAt },
     });
 
-    sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp }).catch(() => {});
+    try {
+      await sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
+    } catch (emailError) {
+      console.error('Failed to send MFA OTP email:', emailError);
+      return NextResponse.json(
+        { error: 'Failed to send the verification code email. Please try again.' },
+        { status: 502 }
+      );
+    }
 
     // wrappedKey/keySalt are handed to the client now so the master key can be unwrapped after OTP.
     return NextResponse.json(

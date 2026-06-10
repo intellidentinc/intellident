@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { verifyCookie } from '@/lib/session-cookie';
+import { ROLES } from '@/lib/roles';
 
 const getClinicEnabled = unstable_cache(
   async (clinicId) => {
@@ -70,8 +71,16 @@ export async function middleware(request) {
       // DB error: fall through to the redirect below (page-level guards handle it)
     }
 
-    const dest = session.clinicId ? `/${session.clinicId}/dashboard` : '/sign-in';
-    return NextResponse.redirect(new URL(dest, request.url));
+    if (session.clinicId) {
+      return NextResponse.redirect(new URL(`/${session.clinicId}/dashboard`, request.url));
+    }
+    if (session.role === ROLES.SUPERADMIN) {
+      return NextResponse.redirect(new URL('/super', request.url));
+    }
+    // Session with no clinic and not superadmin — broken state; clear it and stay on the auth page
+    const res = NextResponse.next();
+    res.cookies.delete('user');
+    return res;
   }
 
   // Unauthenticated user hitting dashboard → redirect to sign-in
