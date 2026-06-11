@@ -58,7 +58,10 @@ export async function POST(request) {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: user.id },
-        data: { password: hashedPassword, passwordHistory: newHistory, wrappedKey, keySalt },
+        // A reset mints a fresh master key, so the old envelope keypair (its private key
+        // was encrypted under the now-lost master key) is unrecoverable. Clear it; a fresh
+        // keypair is provisioned on next login and record access auto-heals via reshare.
+        data: { password: hashedPassword, passwordHistory: newHistory, wrappedKey, keySalt, publicKey: null, encryptedPrivateKey: null, privateKeyIv: null },
       }),
       prisma.passwordResetToken.update({
         where: { id: resetToken.id },

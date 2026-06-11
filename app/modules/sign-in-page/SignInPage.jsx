@@ -15,7 +15,7 @@ import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
 import { useToast } from '@/app/providers/ToastProvider';
 import { useCrypto } from '@/app/providers/CryptoProvider';
-import { deriveKEK, unwrapMasterKey, fromBase64 } from '@/lib/crypto';
+import { loadOrProvisionKeys } from '@/lib/clientKeys';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -26,7 +26,7 @@ export default function SignInPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const { setMasterKey } = useCrypto();
+  const { setKeys } = useCrypto();
 
   useEffect(() => {
     const verified = searchParams.get('verified');
@@ -78,13 +78,9 @@ export default function SignInPage() {
         return;
       }
 
-      // Unwrap the master key client-side using the password — server cannot do this
-      const salt = fromBase64(data.keySalt);
-      const kek = await deriveKEK(password, salt);
-      const masterKey = await unwrapMasterKey(data.wrappedKey, kek);
-
-      // Store master key in memory for the session
-      setMasterKey(masterKey);
+      // Unwrap the master key + load/provision the envelope keypair client-side
+      const keys = await loadOrProvisionKeys(data, password);
+      setKeys(keys);
       showToast('Signed in successfully!', 'success');
       if (data.requiresTerms) {
         const params = new URLSearchParams()

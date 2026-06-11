@@ -12,7 +12,8 @@ import { ArticleOutlined, ShieldOutlined, LockOutlined } from '@mui/icons-materi
 import Button from '@/components/commons/Button'
 import { useToast } from '@/app/providers/ToastProvider'
 import { useCrypto } from '@/app/providers/CryptoProvider'
-import { decryptData, toBase64 } from '@/lib/crypto'
+import { toBase64 } from '@/lib/crypto'
+import { decryptRecordNotes, reshareRecord } from '@/lib/recordCrypto'
 import dayjs from 'dayjs'
 
 const STATUS_CHIP = {
@@ -23,7 +24,7 @@ const STATUS_CHIP = {
 export default function RecordViewModal({ open, record, onClose }) {
   const router = useRouter()
   const { showToast } = useToast()
-  const { masterKey } = useCrypto()
+  const { privateKey } = useCrypto()
 
   const [notes, setNotes] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -37,7 +38,7 @@ export default function RecordViewModal({ open, record, onClose }) {
     setKeyMissing(false)
 
     async function fetchAndDecrypt() {
-      if (!masterKey) {
+      if (!privateKey) {
         setKeyMissing(true)
         return
       }
@@ -46,16 +47,24 @@ export default function RecordViewModal({ open, record, onClose }) {
         const res = await fetch(`/api/patient/records/${record.id}`)
         if (!res.ok) throw new Error()
         const data = await res.json()
-        const { encryptedData, dataIv, contentHash, patientId } = data.record
+        const { encryptedData, dataIv, contentHash, patientId, wrappedKey } = data.record
 
         if (!encryptedData || !dataIv) {
           setNotes('')
           return
         }
 
-        let plaintext
+        if (!wrappedKey) {
+          showToast('Could not decrypt this record. It may have been created before encryption was enabled.', 'warning')
+          setNotes('')
+          return
+        }
+
+        let plaintext, cek
         try {
-          plaintext = await decryptData(masterKey, encryptedData, dataIv, patientId)
+          const out = await decryptRecordNotes({ wrappedKey, encryptedData, dataIv, patientId, privateKey })
+          plaintext = out.notes
+          cek = out.cek
         } catch {
           showToast('Could not decrypt this record. It may have been created before encryption was enabled.', 'warning')
           setNotes('')
@@ -68,6 +77,10 @@ export default function RecordViewModal({ open, record, onClose }) {
           const recomputed = toBase64(hashBuf)
           if (recomputed !== contentHash) setTampered(true)
         }
+
+        // The patient always holds a wrap → heal access for any treating dentist
+        // still missing one (e.g. a dentist who joined after the record was written).
+        reshareRecord({ patientId, recordId: record.id, cek })
 
         setNotes(plaintext)
       } catch {
@@ -165,7 +178,7 @@ export default function RecordViewModal({ open, record, onClose }) {
               Integrity check failed
             </Typography>
             <Typography variant='body2' color='text.secondary'>
-              This record's notes may have been modified outside the application. Please contact your dentist.
+              This record&apos;s notes may have been modified outside the application. Please contact your dentist.
             </Typography>
           </Box>
         ) : notes === '' ? (

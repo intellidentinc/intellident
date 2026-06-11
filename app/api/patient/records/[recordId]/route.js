@@ -41,7 +41,15 @@ export async function GET(request, { params }) {
 
   if (!record) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
 
+  // Envelope: hand the patient their own CEK wrap so the client can unwrap + decrypt.
+  const myWrap = await prisma.recordKey.findUnique({
+    where: { recordId_userId: { recordId, userId: session.userId } },
+    select: { wrappedKey: true },
+  })
+
   const { ip, userAgent } = getRequestMeta(request)
   logAudit({ userId: session.userId, clinicId: user.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: recordId, ipAddress: ip, userAgent })
-  return NextResponse.json({ record: { ...record, patientId: patient.id } })
+  return NextResponse.json({
+    record: { ...record, patientId: patient.id, wrappedKey: myWrap?.wrappedKey ?? null, needsReshare: !!record.encryptedData && !myWrap },
+  })
 }

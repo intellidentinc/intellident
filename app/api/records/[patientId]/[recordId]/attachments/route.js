@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
 import { supabase } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rateLimit'
+import { getRecordsDentist, dentistTreatsPatient } from '@/lib/records-access'
 
 const MAX_SIZE = 5 * 1024 * 1024
 const BUCKET   = 'record-attachments'
@@ -35,28 +35,12 @@ function isCompressed(buf) {
   return COMPRESSED_SIGNATURES.some(sig => sig.every((b, i) => buf[i] === b))
 }
 
-async function getDentistForClinic(session) {
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true }
-  })
-  if (!caller || caller.role !== ROLES.DENTIST) return null
-
-  const dentist = await prisma.dentist.findUnique({
-    where: { userId: session.userId },
-    select: { id: true, clinicId: true }
-  })
-  if (!dentist || dentist.clinicId !== caller.clinicId) return null
-
-  return { ...caller, dentistId: dentist.id }
-}
-
 // POST /api/records/[patientId]/[recordId]/attachments
 export async function POST(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const dentist = await getDentistForClinic(session)
+  const dentist = await getRecordsDentist(session)
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
@@ -64,6 +48,10 @@ export async function POST(request, { params }) {
   if (!allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
   const { patientId, recordId } = await params
+
+  if (!(await dentistTreatsPatient({ dentistId: dentist.dentistId, patientId, clinicId: dentist.clinicId }))) {
+    return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+  }
 
   const record = await prisma.patientRecord.findFirst({
     where: { id: recordId, patientId, clinicId: dentist.clinicId, isDeleted: false }

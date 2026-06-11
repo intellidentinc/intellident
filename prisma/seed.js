@@ -41,10 +41,59 @@ async function generateKeyMaterial(password) {
 
   const wrapped = await globalThis.crypto.subtle.wrapKey('raw', masterKey, kek, 'AES-KW');
 
+  // Asymmetric envelope keypair: public key stored plaintext, private key encrypted
+  // under the master key (mirrors lib/crypto.js generateKeyPair/encryptPrivateKey).
+  const keyPair = await globalThis.crypto.subtle.generateKey(
+    { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true,
+    ['wrapKey', 'unwrapKey']
+  );
+  const publicKey = toBase64(await globalThis.crypto.subtle.exportKey('spki', keyPair.publicKey));
+  const pkcs8 = await globalThis.crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+  const privIv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const encryptedPrivateKey = await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv: privIv }, masterKey, pkcs8);
+
   return {
     wrappedKey: toBase64(wrapped),
     keySalt: toBase64(salt),
+    publicKey,
+    encryptedPrivateKey: toBase64(encryptedPrivateKey),
+    privateKeyIv: toBase64(privIv),
   };
+}
+
+// Backfills an envelope keypair onto a pre-existing seeded user (whose password is
+// the known seed PASSWORD). Derives the master key from PASSWORD + stored keySalt,
+// then generates a keypair and stores the private key encrypted under the master key.
+// Returns false (no-op) for users already provisioned or whose password isn't PASSWORD
+// (real signup users) — those self-provision on next login.
+async function backfillKeypairIfMissing(existing, password) {
+  if (existing.publicKey || !existing.wrappedKey || !existing.keySalt) return false;
+  const salt = Uint8Array.from(Buffer.from(existing.keySalt, 'base64'));
+  const keyMaterial = await globalThis.crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  const kek = await globalThis.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' },
+    keyMaterial, { name: 'AES-KW', length: 256 }, false, ['unwrapKey']
+  );
+  let masterKey;
+  try {
+    masterKey = await globalThis.crypto.subtle.unwrapKey(
+      'raw', Uint8Array.from(Buffer.from(existing.wrappedKey, 'base64')), kek, 'AES-KW',
+      { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+    );
+  } catch {
+    return false; // password isn't the seed PASSWORD — leave for lazy login provisioning
+  }
+  const keyPair = await globalThis.crypto.subtle.generateKey(
+    { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true, ['wrapKey', 'unwrapKey']
+  );
+  const publicKey = toBase64(await globalThis.crypto.subtle.exportKey('spki', keyPair.publicKey));
+  const pkcs8 = await globalThis.crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const encryptedPrivateKey = toBase64(await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, masterKey, pkcs8));
+  await prisma.user.update({ where: { id: existing.id }, data: { publicKey, encryptedPrivateKey, privateKeyIv: toBase64(iv) } });
+  return true;
 }
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
@@ -195,11 +244,14 @@ async function main() {
             console.log(`  Backfilled Receptionist profile: ${u.email}`);
           }
         }
+        if (await backfillKeypairIfMissing(existing, PASSWORD)) {
+          console.log(`  Backfilled envelope keypair: ${u.email}`);
+        }
         console.log(`  Skip (exists): ${u.email}`);
         continue;
       }
 
-      const { wrappedKey, keySalt } = await generateKeyMaterial(PASSWORD);
+      const { wrappedKey, keySalt, publicKey, encryptedPrivateKey, privateKeyIv } = await generateKeyMaterial(PASSWORD);
 
       const createdUser = await prisma.user.create({
         data: {
@@ -211,6 +263,9 @@ async function main() {
           clinicId:   clinic.id,
           wrappedKey,
           keySalt,
+          publicKey,
+          encryptedPrivateKey,
+          privateKeyIv,
         },
       });
 

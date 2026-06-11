@@ -18,7 +18,8 @@ import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import { useToast } from '@/app/providers/ToastProvider'
 import { useCrypto } from '@/app/providers/CryptoProvider'
-import { encryptData, decryptData, toBase64 } from '@/lib/crypto'
+import { toBase64 } from '@/lib/crypto'
+import { encryptRecordNotes, decryptRecordNotes, reshareRecord } from '@/lib/recordCrypto'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import Timeline from '@mui/lab/Timeline'
@@ -56,7 +57,7 @@ function formatBytes(bytes) {
 export default function RecordFormModal({ open, patientId, record, onClose, onSuccess }) {
   const router = useRouter()
   const { showToast } = useToast()
-  const { masterKey } = useCrypto()
+  const { privateKey } = useCrypto()
   const fileInputRef = useRef(null)
 
   const [form, setForm] = useState(EMPTY_FORM)
@@ -81,7 +82,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     setKeyMissing(false)
 
     async function fetchAndDecrypt() {
-      if (!masterKey) {
+      if (!privateKey) {
         setKeyMissing(true)
         return
       }
@@ -90,21 +91,41 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
         const res = await fetch(`/api/records/${patientId}/${record.id}`)
         if (!res.ok) throw new Error()
         const data = await res.json()
-        const { encryptedData, dataIv, contentHash, title, status, attachments: atts } = data.record
+        const { encryptedData, dataIv, contentHash, title, status, attachments: atts, wrappedKey, needsReshare } = data.record
 
         let notes = ''
-        try {
-          notes = await decryptData(masterKey, encryptedData, dataIv, patientId)
-        } catch {
-          showToast('Failed to decrypt record. The data may be corrupted.', 'error')
-          onClose()
-          return
-        }
+        if (encryptedData) {
+          if (!wrappedKey) {
+            // This dentist has no key wrap yet (joined the care team after the record
+            // was written). Access self-heals once a current key-holder views it.
+            showToast(needsReshare
+              ? 'This record is not yet shared with you. It becomes readable after the patient or original dentist next opens it.'
+              : 'Could not decrypt this record.', 'warning')
+            setForm({ title, notes: '', status: status ?? 'ACTIVE' })
+            setInitialForm({ title, status: status ?? 'ACTIVE' })
+            setInitialNotes('')
+            setAttachments(atts ?? [])
+            return
+          }
+          let cek
+          try {
+            const out = await decryptRecordNotes({ wrappedKey, encryptedData, dataIv, patientId, privateKey })
+            notes = out.notes
+            cek = out.cek
+          } catch {
+            showToast('Failed to decrypt record. The data may be corrupted.', 'error')
+            onClose()
+            return
+          }
 
-        const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(notes))
-        const recomputed = toBase64(hashBuf)
-        if (recomputed !== contentHash) {
-          showToast('Record may have been tampered with', 'warning')
+          const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(notes))
+          const recomputed = toBase64(hashBuf)
+          if (recomputed !== contentHash) {
+            showToast('Record may have been tampered with', 'warning')
+          }
+
+          // Holder view: heal access for any reader still missing a wrap (best-effort).
+          reshareRecord({ patientId, recordId: record.id, cek })
         }
 
         setForm({ title, notes, status: status ?? 'ACTIVE' })
@@ -187,21 +208,23 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
 
   async function handleSubmit() {
     if (!validate()) return
-    if (!masterKey) {
-      setKeyMissing(true)
-      return
-    }
     setLoading(true)
     try {
-      const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(form.notes))
-      const contentHash = toBase64(hashBuf)
-      const { ciphertext: encryptedData, iv: dataIv } = await encryptData(masterKey, form.notes, patientId)
+      const notesChanged = !isEdit || form.notes !== initialNotes
+      const body = { title: form.title.trim() }
+      if (isEdit) body.status = form.status
 
-      const body = { title: form.title.trim(), encryptedData, dataIv, contentHash }
-      if (isEdit) {
-        body.status = form.status
-        body.notesChanged = form.notes !== initialNotes
+      // Only (re-)encrypt when creating or when the notes actually changed — re-encrypting
+      // mints a fresh CEK + wraps, which the PATCH route applies only when notesChanged.
+      if (notesChanged) {
+        const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(form.notes))
+        const { encryptedData, dataIv, keys } = await encryptRecordNotes({ notes: form.notes, patientId })
+        body.encryptedData = encryptedData
+        body.dataIv = dataIv
+        body.contentHash = toBase64(hashBuf)
+        body.keys = keys
       }
+      if (isEdit) body.notesChanged = notesChanged
 
       const url = isEdit ? `/api/records/${patientId}/${record.id}` : `/api/records/${patientId}`
       const res = await fetch(url, {

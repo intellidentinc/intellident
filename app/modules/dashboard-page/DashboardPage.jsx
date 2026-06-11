@@ -24,6 +24,7 @@ async function PatientDashboard({ session }) {
           where: { ...baseWhere, status: { in: ['PENDING', 'CONFIRMED'] }, scheduledAt: { gte: now } },
           include: {
             service: { select: { name: true } },
+            services: { include: { service: { select: { name: true } } }, orderBy: { order: 'asc' } },
             dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
           },
           orderBy: { scheduledAt: 'asc' },
@@ -47,7 +48,9 @@ async function PatientDashboard({ session }) {
   stats.forEach((s) => { countByStatus[s.status] = s._count.id })
 
   const nextAppt = nextApptRaw ? {
-    serviceName: nextApptRaw.service.name,
+    serviceName: nextApptRaw.service?.name
+      || nextApptRaw.services?.map((s) => s.service?.name).filter(Boolean).join(', ')
+      || 'Appointment',
     dentistName: nextApptRaw.dentist ? `${nextApptRaw.dentist.user.firstName} ${nextApptRaw.dentist.user.lastName}` : null,
     scheduledAtFormatted: new Date(nextApptRaw.scheduledAt).toLocaleString('en-PH', FMT_FULL),
     scheduledAtRaw: nextApptRaw.scheduledAt.toISOString(),

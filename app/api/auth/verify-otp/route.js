@@ -38,6 +38,7 @@ export async function POST(request) {
             id: true, email: true, firstName: true, lastName: true, clinicId: true, role: true,
             termsAcceptedAt: true, mustChangePassword: true, passwordExpiresAt: true,
             wrappedKey: true, keySalt: true,
+            publicKey: true, encryptedPrivateKey: true, privateKeyIv: true,
           },
         },
       },
@@ -104,6 +105,9 @@ export async function POST(request) {
       clinicId: user.clinicId,
       wrappedKey: user.wrappedKey,
       keySalt: user.keySalt,
+      publicKey: user.publicKey,
+      encryptedPrivateKey: user.encryptedPrivateKey,
+      privateKeyIv: user.privateKeyIv,
       ...flags,
     });
   } catch (error) {

@@ -184,7 +184,7 @@ export default function MyRecordsPage() {
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                             <Typography variant='body2' fontWeight={600}>
-                              {visit.service.name}
+                              {visit.service?.name ?? 'Appointment'}
                             </Typography>
                             <Chip
                               label={chip.label}

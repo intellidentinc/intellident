@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { parseJsonBody, str, secret } from '@/lib/validate'
 import { logAudit, getRequestMeta } from '@/lib/audit'
+import { getRecordRecipients, validateWraps } from '@/lib/records-access'
 
 async function getDentistForClinic(session) {
   const caller = await prisma.user.findUnique({
@@ -93,16 +94,37 @@ export async function POST(request, { params }) {
   })
   if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
 
-  const record = await prisma.patientRecord.create({
-    data: {
-      patientId,
-      clinicId: dentist.clinicId,
-      title,
-      encryptedData: encryptedData || null,
-      dataIv: dataIv || null,
-      contentHash: contentHash || null,
-    },
-    select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
+  // Envelope encryption: when notes are present, the client sends one CEK wrap per
+  // authorized reader. The server re-derives the authoritative recipient set and
+  // requires exact coverage (never trusting the client's list).
+  let wrapRows = []
+  if (encryptedData) {
+    const result = await getRecordRecipients({ patientId, clinicId: dentist.clinicId })
+    if (!result) return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
+    const recipientIds = new Set(result.recipients.map((r) => r.userId))
+    const validation = validateWraps({ keys: parsed.body.keys, recipientIds })
+    if (!validation.ok) return NextResponse.json({ error: `Record key wrapping failed: ${validation.error}` }, { status: 400 })
+    wrapRows = validation.rows
+  }
+
+  const record = await prisma.$transaction(async (tx) => {
+    const created = await tx.patientRecord.create({
+      data: {
+        patientId,
+        clinicId: dentist.clinicId,
+        title,
+        encryptedData: encryptedData || null,
+        dataIv: dataIv || null,
+        contentHash: contentHash || null,
+      },
+      select: { id: true, title: true, encryptedData: true, dataIv: true, contentHash: true, status: true, createdAt: true, updatedAt: true }
+    })
+    if (wrapRows.length > 0) {
+      await tx.recordKey.createMany({
+        data: wrapRows.map((w) => ({ recordId: created.id, userId: w.userId, wrappedKey: w.wrappedKey })),
+      })
+    }
+    return created
   })
 
   const { ip, userAgent } = getRequestMeta(request)

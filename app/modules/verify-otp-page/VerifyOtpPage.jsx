@@ -10,7 +10,7 @@ import TextField from '@mui/material/TextField';
 import Button from '@/components/commons/Button';
 import { useToast } from '@/app/providers/ToastProvider';
 import { useCrypto } from '@/app/providers/CryptoProvider';
-import { deriveKEK, unwrapMasterKey, fromBase64 } from '@/lib/crypto';
+import { loadOrProvisionKeys } from '@/lib/clientKeys';
 import { ShieldCheck } from 'lucide-react';
 
 const OTP_LENGTH = 6;
@@ -19,7 +19,7 @@ export default function VerifyOtpPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const { setMasterKey } = useCrypto();
+  const { setKeys } = useCrypto();
 
   const [digits, setDigits] = useState(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
@@ -109,11 +109,9 @@ export default function VerifyOtpPage() {
       }
 
       // The E2EE key material is returned by verify-otp (only after the OTP passes).
-      // Derive the KEK from the stored password and unwrap the master key locally.
-      const salt = fromBase64(data.keySalt);
-      const kek = await deriveKEK(stored.password, salt);
-      const masterKey = await unwrapMasterKey(data.wrappedKey, kek);
-      setMasterKey(masterKey);
+      // Unwrap the master key + load/provision the envelope keypair locally.
+      const keys = await loadOrProvisionKeys(data, stored.password);
+      setKeys(keys);
 
       sessionStorage.removeItem('mfa_pending');
       showToast('Signed in successfully!', 'success');

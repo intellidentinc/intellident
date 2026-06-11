@@ -107,43 +107,43 @@ enum DataRequestStatus {
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model Clinic {
-  id        String    @id @default(cuid())
-  name      String
-  code      String?
-  address   String?
-  phone     String?
-  landline  String?
-  logoUrl   String?
-  email     String?
-  reservationFeeAmount  Float   @default(0)
-  paymongoEnabled       Boolean @default(false)
-  passwordExpiryEnabled Boolean @default(false)
-  singleSessionEnabled  Boolean @default(false)
-  notifConfig           Json?
-  reminder1Hours        Int     @default(24)
-  reminder2Hours        Int     @default(2)
-  auditLogRetentionDays         Int?
-  patientRecordRetentionDays    Int?
-  billingRetentionDays          Int?
-  isEnabled Boolean   @default(true)
-  isDeleted Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id                         String    @id @default(cuid())
+  name                       String
+  code                       String?
+  address                    String?
+  phone                      String?
+  landline                   String?
+  logoUrl                    String?
+  email                      String?
+  reservationFeeAmount       Float     @default(0)
+  paymongoEnabled            Boolean   @default(false)
+  passwordExpiryEnabled      Boolean   @default(false)
+  singleSessionEnabled       Boolean   @default(false)
+  notifConfig                Json?
+  reminder1Hours             Int       @default(24)
+  reminder2Hours             Int       @default(2)
+  auditLogRetentionDays      Int?
+  patientRecordRetentionDays Int?
+  billingRetentionDays       Int?
+  isEnabled                  Boolean   @default(true)
+  isDeleted                  Boolean   @default(false)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  deletedAt                  DateTime?
 
-  users            User[]
-  receptionists    Receptionist[]
-  dentists         Dentist[]
-  patients         Patient[]
-  services         Service[]
-  appointments     Appointment[]
-  auditLogs        AuditLog[]
-  schedule         ClinicSchedule?
-  closures         ClinicClosure[]
-  schedulePresets  SchedulePreset[]
-  chatSessions     ChatSession[]
-  applications     ClinicApplication[]
-  dataRequests     DataRequest[]
+  users           User[]
+  receptionists   Receptionist[]
+  dentists        Dentist[]
+  patients        Patient[]
+  services        Service[]
+  appointments    Appointment[]
+  auditLogs       AuditLog[]
+  schedule        ClinicSchedule?
+  closures        ClinicClosure[]
+  schedulePresets SchedulePreset[]
+  chatSessions    ChatSession[]
+  applications    ClinicApplication[]
+  dataRequests    DataRequest[]
 
   @@map("clinics")
 }
@@ -205,22 +205,22 @@ model PasswordResetToken {
 }
 
 model EmailVerification {
-  id         String   @id @default(cuid())
-  token         String   @unique
-  email         String
-  firstName     String?
-  middleInitial String?
-  lastName      String?
-  phone      String?
-  address    String?
-  dateOfBirth DateTime?
-  password   String
-  wrappedKey String
-  keySalt    String
-  clinicId   String?
+  id              String    @id @default(cuid())
+  token           String    @unique
+  email           String
+  firstName       String?
+  middleInitial   String?
+  lastName        String?
+  phone           String?
+  address         String?
+  dateOfBirth     DateTime?
+  password        String
+  wrappedKey      String
+  keySalt         String
+  clinicId        String?
   termsAcceptedAt DateTime?
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
 
   @@index([email])
   @@map("email_verifications")
@@ -256,69 +256,73 @@ model ClinicApplication {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  firstName     String?
-  middleInitial String?
-  lastName      String?
-  phone       String?
-  address     String?
-  dateOfBirth DateTime?
-  gender      Gender?
-  password        String
-  passwordHistory String[] @default([])
-  role            Int       @default(4)
-  wrappedKey String?
-  keySalt    String?
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  firstName           String?
+  middleInitial       String?
+  lastName            String?
+  phone               String?
+  address             String?
+  dateOfBirth         DateTime?
+  gender              Gender?
+  password            String
+  passwordHistory     String[]  @default([])
+  role                Int       @default(4)
+  wrappedKey          String?
+  keySalt             String?
+  publicKey           String?
+  encryptedPrivateKey String?
+  privateKeyIv        String?
   clinicId            String?
   failedLoginAttempts Int       @default(0)
   lastFailedAt        DateTime?
   lockedUntil         DateTime?
-  isDeleted             Boolean   @default(false)
-  isActive              Boolean   @default(true)
-  username              String?   @unique
-  mustChangePassword    Boolean   @default(false)
-  passwordExpiresAt     DateTime?
-  termsAcceptedAt       DateTime?
-  createdAt             DateTime  @default(now())
+  isDeleted           Boolean   @default(false)
+  isActive            Boolean   @default(true)
+  username            String?   @unique
+  mustChangePassword  Boolean   @default(false)
+  passwordExpiresAt   DateTime?
+  termsAcceptedAt     DateTime?
+  createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
 
-  clinic                  Clinic?                    @relation(fields: [clinicId], references: [id])
-  patient                 Patient?
-  receptionist            Receptionist?
-  dentist                 Dentist?
-  auditLogs               AuditLog[]
+  clinic                   Clinic?                    @relation(fields: [clinicId], references: [id])
+  patient                  Patient?
+  receptionist             Receptionist?
+  dentist                  Dentist?
+  auditLogs                AuditLog[]
   appointmentStatusChanges AppointmentStatusHistory[]
-  inAppNotifications      InAppNotification[]
-  mfaOtps                 MfaOtp[]
-  chatSessions            ChatSession[]
-  dataRequests            DataRequest[]
-  recordHistories         RecordHistory[]
-  sessions                UserSession[]
-  knownDevices            KnownDevice[]
+  inAppNotifications       InAppNotification[]
+  mfaOtps                  MfaOtp[]
+  chatSessions             ChatSession[]
+  dataRequests             DataRequest[]
+  recordHistories          RecordHistory[]
+  sessions                 UserSession[]
+  knownDevices             KnownDevice[]
+  recordKeys               RecordKey[]
 
   @@index([clinicId])
   @@map("users")
 }
 
 model Patient {
-  id              String        @id @default(cuid())
-  userId          String        @unique
-  clinicId        String
-  patientCode     String?       @unique
-  firstName       String
-  lastName        String
-  dateOfBirth     DateTime?
-  gender          Gender?
-  phone           String?
-  address         String?
-  consentStatus   ConsentStatus @default(PENDING)
-  consentGivenAt  DateTime?
-  isDeleted       Boolean       @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  clinicId       String
+  patientCode    String?       @unique
+  firstName      String
+  lastName       String
+  dateOfBirth    DateTime?
+  gender         Gender?
+  phone          String?
+  address        String?
+  consentStatus  ConsentStatus @default(PENDING)
+  consentGivenAt DateTime?
+  isDeleted      Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
 
   user          User            @relation(fields: [userId], references: [id])
   clinic        Clinic          @relation(fields: [clinicId], references: [id])
@@ -371,7 +375,7 @@ model Service {
   clinicId    String
   name        String
   description String?
-  duration    Int       // minutes
+  duration    Int // minutes
   price       Float?
   bufferTime  Int       @default(0) // minutes (0–30)
   isDeleted   Boolean   @default(false)
@@ -407,11 +411,11 @@ model Appointment {
   updatedAt       DateTime          @updatedAt
   deletedAt       DateTime?
 
-  clinic        Clinic                       @relation(fields: [clinicId], references: [id])
-  patient       Patient                      @relation(fields: [patientId], references: [id])
-  dentist       Dentist?                     @relation(fields: [dentistId], references: [id])
-  service       Service?                     @relation(fields: [serviceId], references: [id])
-  services      AppointmentService[]
+  clinic             Clinic                     @relation(fields: [clinicId], references: [id])
+  patient            Patient                    @relation(fields: [patientId], references: [id])
+  dentist            Dentist?                   @relation(fields: [dentistId], references: [id])
+  service            Service?                   @relation(fields: [serviceId], references: [id])
+  services           AppointmentService[]
   billing            Billing?
   notifications      Notification[]
   inAppNotifications InAppNotification[]
@@ -460,22 +464,42 @@ model PatientRecord {
   patientId     String
   clinicId      String
   title         String
-  encryptedData String?      // AES-GCM encrypted blob (client-side E2EE)
-  dataIv        String?      // IV for decryption
-  contentHash   String?      // SHA-256 hash for tamper detection
+  encryptedData String? // AES-GCM encrypted blob (client-side E2EE)
+  dataIv        String? // IV for decryption
+  contentHash   String? // SHA-256 hash for tamper detection
   status        RecordStatus @default(ACTIVE)
   isDeleted     Boolean      @default(false)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?
 
-  patient     Patient       @relation(fields: [patientId], references: [id])
+  patient     Patient         @relation(fields: [patientId], references: [id])
   attachments Attachment[]
   history     RecordHistory[]
+  recordKeys  RecordKey[]
 
   @@index([patientId])
   @@index([clinicId])
   @@map("patient_records")
+}
+
+// Envelope-encryption key wraps: the per-record content key (CEK), wrapped to each
+// authorized reader's RSA public key. The server stores only the wrapped (encrypted)
+// CEK — it can never unwrap it. One row per (record, authorized reader).
+model RecordKey {
+  id         String   @id @default(cuid())
+  recordId   String
+  userId     String
+  wrappedKey String
+  createdAt  DateTime @default(now())
+
+  record PatientRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@unique([recordId, userId])
+  @@index([recordId])
+  @@index([userId])
+  @@map("record_keys")
 }
 
 model Attachment {
@@ -605,7 +629,7 @@ model AuditLog {
   userId    String?
   clinicId  String?
   action    AuditAction
-  entity    String      // e.g. "Appointment", "PatientRecord"
+  entity    String // e.g. "Appointment", "PatientRecord"
   entityId  String?
   ipAddress String?
   userAgent String?

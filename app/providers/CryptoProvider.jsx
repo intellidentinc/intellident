@@ -32,11 +32,26 @@ export function useCrypto() {
 
 export default function CryptoProvider({ children }) {
   const [masterKey, setMasterKey] = useState(null)
+  // Asymmetric envelope keys: the RSA private key unwraps per-record content keys (CEKs);
+  // the public key wraps CEKs to this user. Both held in memory only, cleared on sign-out.
+  const [privateKey, setPrivateKey] = useState(null)
+  const [publicKey, setPublicKey] = useState(null)
 
-  const clearKey = () => setMasterKey(null)
+  // Sets all three keys at once after login/unwrap.
+  const setKeys = ({ masterKey: mk = null, privateKey: pk = null, publicKey: pub = null }) => {
+    setMasterKey(mk)
+    setPrivateKey(pk)
+    setPublicKey(pub)
+  }
+
+  const clearKey = () => {
+    setMasterKey(null)
+    setPrivateKey(null)
+    setPublicKey(null)
+  }
 
   return (
-    <CryptoContext.Provider value={{ masterKey, setMasterKey, clearKey }}>
+    <CryptoContext.Provider value={{ masterKey, setMasterKey, privateKey, setPrivateKey, publicKey, setPublicKey, setKeys, clearKey }}>
       {children}
     </CryptoContext.Provider>
   )
