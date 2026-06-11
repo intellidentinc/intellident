@@ -85,7 +85,7 @@ export async function POST(request) {
       chatSession.messages.slice(-MAX_HISTORY),
       message.trim(),
       tools,
-      buildExecutor({ ...session, clinicId: caller.clinicId }),
+      buildExecutor({ ...session, role: caller.role, clinicId: caller.clinicId }),
     )).trim()
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)

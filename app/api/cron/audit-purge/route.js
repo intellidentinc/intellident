@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { isAuthorizedCron } from '@/lib/cron-auth'
 
 /**
  * GET /api/cron/audit-purge — Vercel Cron Job (daily at 01:00 UTC)
@@ -10,8 +11,7 @@ import { prisma } from '@/lib/prisma'
  *   - Soft-deleted billing records (+ their payments) older than billingRetentionDays
  */
 export async function GET(request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -30,6 +30,15 @@ const MAX_ATTEMPTS     = parseInt(process.env.LOCKOUT_MAX_ATTEMPTS      ?? '5');
 const WINDOW_MS        = parseInt(process.env.LOCKOUT_WINDOW_MINUTES    ?? '5')  * 60 * 1000;
 const LOCK_DURATION_MS = parseInt(process.env.LOCKOUT_DURATION_MINUTES  ?? '15') * 60 * 1000;
 
+// Generic credential error — identical for "unknown email" and "wrong password"
+// so the response cannot be used to enumerate which emails are registered.
+const INVALID_CREDENTIALS = 'Invalid email or password.';
+
+// A real cost-10 bcrypt hash of a throwaway random string. When no user exists,
+// we still run bcrypt.compare against this so the response time matches the
+// real-user path and closes the timing side-channel.
+const DUMMY_HASH = '$2b$10$jtrtp9o.NH0UwwP3zEE8leTJvkenXS2YO56rTyN21XlAAgsjeLS7m';
+
 export async function POST(request) {
   try {
     const { ip, userAgent } = getRequestMeta(request);
@@ -62,18 +71,19 @@ export async function POST(request) {
     }
 
     if (!user || user.isDeleted) {
+      // Run bcrypt against a dummy hash so the no-user path takes the same time
+      // as a real comparison (kills the timing oracle), then return the generic
+      // error that's byte-identical to the wrong-password response.
+      await bcrypt.compare(password, DUMMY_HASH);
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: INVALID_CREDENTIALS },
         { status: 401 }
       );
     }
 
-    if (!user.isActive) {
-      return NextResponse.json(
-        { error: 'Your account has been deactivated. Please contact your administrator.' },
-        { status: 403 }
-      );
-    }
+    // Note: the deactivated-account check is deliberately deferred until AFTER the
+    // password is verified (see below) so account status cannot be probed without
+    // valid credentials.
 
     // Check if account is currently locked
     if (user.lockedUntil && user.lockedUntil > new Date()) {
@@ -130,10 +140,20 @@ export async function POST(request) {
         );
       }
 
-      const remaining = MAX_ATTEMPTS - attemptsInWindow;
+      // Generic response (no remaining-attempts count) so a wrong password is
+      // indistinguishable from an unknown email.
       return NextResponse.json(
-        { error: `Invalid credentials. ${remaining} attempt(s) remaining before lockout.` },
+        { error: INVALID_CREDENTIALS },
         { status: 401 }
+      );
+    }
+
+    // Password is valid — only now reveal a deactivated-account status, which
+    // requires the attacker to already know the correct password.
+    if (!user.isActive) {
+      return NextResponse.json(
+        { error: 'Your account has been deactivated. Please contact your administrator.' },
+        { status: 403 }
       );
     }
 

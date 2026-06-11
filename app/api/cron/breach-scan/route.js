@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { ROLES } from '@/lib/roles'
 import { sendBreachAlertEmail } from '@/lib/email'
+import { isAuthorizedCron } from '@/lib/cron-auth'
 
 const WINDOW_MS             = 24 * 60 * 60 * 1000
 const BRUTE_FORCE_THRESHOLD = 3   // distinct accounts locked from same IP
@@ -10,8 +11,7 @@ const MASS_VIEW_THRESHOLD   = 100 // patient records viewed by one user
 const BULK_EXPORT_THRESHOLD = 5   // exports by one user
 
 export async function GET(request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

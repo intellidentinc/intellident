@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendAppointmentReminder } from '@/lib/notifications'
+import { isAuthorizedCron } from '@/lib/cron-auth'
 
 /**
  * GET /api/cron/reminders — Vercel Cron Job (daily at 08:00 UTC)
@@ -12,8 +13,7 @@ import { sendAppointmentReminder } from '@/lib/notifications'
  * Idempotency: reminderSent24h / reminderSent2h flags prevent duplicate sends.
  */
 export async function GET(request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
