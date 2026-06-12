@@ -118,18 +118,27 @@ export async function POST(request) {
 
   const apptDate = new Date(scheduledAt)
 
-  // Validate working day
+  // Reject past-dated bookings
+  if (isNaN(apptDate.getTime()) || apptDate.getTime() <= Date.now()) {
+    return NextResponse.json({ error: 'Appointment time must be in the future' }, { status: 400 })
+  }
+
+  // Evaluate the calendar day in Manila time so the working-day and closure checks match
+  // the clinic's local calendar (mirrors the receptionist route).
+  const apptPHT = dayjs(apptDate).tz('Asia/Manila')
+
+  // Validate working day (PHT)
   if (schedule?.workingDays?.length) {
     const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-    const dayName = DAY_NAMES[apptDate.getDay()]
+    const dayName = DAY_NAMES[apptPHT.day()]
     if (!schedule.workingDays.includes(dayName)) {
       return NextResponse.json({ error: `${dayName} is not a working day` }, { status: 400 })
     }
   }
 
-  // Validate not a closure
-  const dateStr = apptDate.toISOString().slice(0, 10)
-  if (closures.some(c => new Date(c.date).toISOString().slice(0, 10) === dateStr)) {
+  // Validate not a closure (PHT)
+  const dateStr = apptPHT.format('YYYY-MM-DD')
+  if (closures.some(c => dayjs(c.date).tz('Asia/Manila').format('YYYY-MM-DD') === dateStr)) {
     return NextResponse.json({ error: 'This date is a clinic closure' }, { status: 400 })
   }
 

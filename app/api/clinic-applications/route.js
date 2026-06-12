@@ -3,25 +3,11 @@ import { prisma } from '@/lib/prisma'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 import { checkRateLimit } from '@/lib/rateLimit'
 import { sendClinicApplicationReceived } from '@/lib/email'
+import { isValidDocRef } from '@/lib/clinicDocs'
 
 const PHONE_RE   = /^\+63\d{10}$/
 const MAX_DOCS   = 5
 const MAX_SERVICES = 50
-const BUCKET     = 'clinic-documents'
-
-// Validate that a URL points to our own Supabase storage bucket — rejects arbitrary external URLs
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set')
-}
-const SUPABASE_ORIGIN   = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
-const DOC_PATH_PREFIX   = `/storage/v1/object/public/${BUCKET}/`
-
-function isOwnStorageUrl(url) {
-  try {
-    const u = new URL(url)
-    return u.origin === SUPABASE_ORIGIN && u.pathname.startsWith(DOC_PATH_PREFIX)
-  } catch { return false }
-}
 
 export async function POST(request) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
@@ -45,19 +31,19 @@ export async function POST(request) {
   const termsAcceptedAtRaw  = str(body.termsAcceptedAt, 30)
   const termsAcceptedAt     = termsAcceptedAtRaw ? new Date(termsAcceptedAtRaw) : null
   const birDocuments = Array.isArray(body.birDocuments)
-    ? body.birDocuments.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    ? body.birDocuments.filter(isValidDocRef).slice(0, MAX_DOCS)
     : []
   const businessPermitDocs = Array.isArray(body.businessPermitDocs)
-    ? body.businessPermitDocs.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    ? body.businessPermitDocs.filter(isValidDocRef).slice(0, MAX_DOCS)
     : []
   const dtiSecDocs = Array.isArray(body.dtiSecDocs)
-    ? body.dtiSecDocs.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    ? body.dtiSecDocs.filter(isValidDocRef).slice(0, MAX_DOCS)
     : []
   const applicantIds = Array.isArray(body.applicantIds)
-    ? body.applicantIds.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    ? body.applicantIds.filter(isValidDocRef).slice(0, MAX_DOCS)
     : []
   const prcLicenseDocs = Array.isArray(body.prcLicenseDocs)
-    ? body.prcLicenseDocs.filter(isOwnStorageUrl).slice(0, MAX_DOCS)
+    ? body.prcLicenseDocs.filter(isValidDocRef).slice(0, MAX_DOCS)
     : []
 
   const rawServices = Array.isArray(body.proposedServices) ? body.proposedServices.slice(0, MAX_SERVICES) : []

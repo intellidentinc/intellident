@@ -187,7 +187,7 @@ export async function POST(request) {
 
     // MFA (email OTP) step — credentials are valid; issue a one-time code and defer session
     // creation to POST /api/auth/verify-otp, which runs finalizeLogin() once the code is confirmed.
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const otp = String(crypto.randomInt(100000, 1000000));
     const pendingToken = crypto.randomBytes(32).toString('hex');
     const codeHash = await bcrypt.hash(otp, 8);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes

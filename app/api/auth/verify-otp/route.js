@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { finalizeLogin } from '@/lib/login';
 import { getRequestMeta } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { parseJsonBody, hexToken, secret } from '@/lib/validate';
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -23,8 +24,11 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
     }
 
-    const body = await request.json();
-    const { pendingToken, code } = body;
+    const parsed = await parseJsonBody(request);
+    if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+
+    const pendingToken = hexToken(parsed.body.pendingToken);
+    const code = secret(parsed.body.code, 16);
 
     if (!pendingToken || !code) {
       return NextResponse.json({ error: 'Missing token or code' }, { status: 400 });

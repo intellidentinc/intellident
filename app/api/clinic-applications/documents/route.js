@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { supabase } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rateLimit'
+import { DOC_BUCKET as BUCKET } from '@/lib/clinicDocs'
 
 const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
-const BUCKET   = 'clinic-documents'
 
 // Magic-byte signatures — truth comes from the file buffer, not the client header
 const SIGNATURES = [
@@ -35,7 +35,7 @@ function isCompressed(buf) {
 
 export async function POST(request) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  const { allowed } = await checkRateLimit(`${ip}:clinic-docs`, 50, 3600)
+  const { allowed } = await checkRateLimit(`${ip}:clinic-docs`, 20, 3600)
   if (!allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
   let formData
@@ -73,7 +73,12 @@ export async function POST(request) {
   if (bucketError) {
     if (bucketError.message?.includes('already exists')) {
       // Enforce private on a pre-existing bucket that may have been created public.
-      await supabase.storage.updateBucket(BUCKET, { public: false }).catch(() => {})
+      // Do not silently swallow a failure here — a public bucket would expose these
+      // sensitive documents, so the failure must at least be logged for follow-up.
+      const { error: updateError } = await supabase.storage
+        .updateBucket(BUCKET, { public: false })
+        .catch((e) => ({ error: e }))
+      if (updateError) console.error('[clinic-docs] failed to enforce private bucket:', updateError)
     } else {
       console.error('[clinic-docs] bucket creation error:', bucketError)
     }
@@ -91,7 +96,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 })
   }
 
-  const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path)
-
-  return NextResponse.json({ url: publicUrl, name: file.name })
+  // Return the bucket-relative object path — NOT a public URL. The bucket is private;
+  // the super admin views documents via short-lived signed URLs generated at view time.
+  return NextResponse.json({ url: path, name: file.name })
 }

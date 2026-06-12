@@ -49,7 +49,7 @@ export async function POST(request, { params }) {
     data: { usedAt: new Date() },
   })
 
-  const otp = String(Math.floor(100000 + Math.random() * 900000))
+  const otp = String(crypto.randomInt(100000, 1000000))
   const pendingToken = crypto.randomBytes(32).toString('hex')
   const codeHash = await bcrypt.hash(otp, 8)
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000)

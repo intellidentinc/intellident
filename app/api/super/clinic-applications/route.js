@@ -3,28 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { supabase } from '@/lib/supabase'
-
-const DOC_BUCKET    = 'clinic-documents'
-const DOC_FIELDS    = ['birDocuments', 'businessPermitDocs', 'dtiSecDocs', 'applicantIds', 'prcLicenseDocs']
-const PUBLIC_PREFIX  = `/storage/v1/object/public/${DOC_BUCKET}/`
-const SIGNED_PREFIX  = `/storage/v1/object/sign/${DOC_BUCKET}/`
-
-// Stored values are bucket-relative paths or legacy public URLs. Extract the object
-// path so it can be re-signed regardless of which form was persisted.
-function toObjectPath(stored) {
-  if (typeof stored !== 'string' || !stored) return null
-  try {
-    const u = new URL(stored)
-    for (const prefix of [PUBLIC_PREFIX, SIGNED_PREFIX]) {
-      const i = u.pathname.indexOf(prefix)
-      if (i !== -1) return decodeURIComponent(u.pathname.slice(i + prefix.length))
-    }
-    return null
-  } catch {
-    // Not a URL — treat as a raw object path.
-    return stored.replace(/^\/+/, '')
-  }
-}
+import { DOC_BUCKET, DOC_FIELDS, toObjectPath } from '@/lib/clinicDocs'
 
 // Replaces stored document references with short-lived signed URLs (private bucket).
 async function signApplicationDocs(applications) {

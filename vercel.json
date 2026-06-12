@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/keep-alive",
       "schedule": "0 6 1,6,11,16,21,26 * *"
+    },
+    {
+      "path": "/api/cron/orphan-docs",
+      "schedule": "0 3 * * *"
     }
   ]
 }

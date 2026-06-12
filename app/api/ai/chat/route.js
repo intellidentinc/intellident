@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { chatWithTools } from '@/lib/ai'
 import { buildSystemPrompt } from '@/lib/ai-prompt'
 import { getToolsForRole, buildExecutor } from '@/lib/ai-tools'
+import { parseJsonBody } from '@/lib/validate'
 
 async function getCaller(session) {
   const user = await prisma.user.findUnique({
@@ -39,14 +40,9 @@ export async function POST(request) {
   const caller = await getCaller(session)
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  let body
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
-  }
-
-  const { message, sessionId } = body
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { message, sessionId } = parsed.body
   if (!message?.trim()) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
   if (message.trim().length > 2000) return NextResponse.json({ error: 'Message too long (max 2000 characters)' }, { status: 400 })
 
