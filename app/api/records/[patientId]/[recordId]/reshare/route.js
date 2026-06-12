@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRecordsDentist, dentistTreatsPatient, getRecordRecipients } from '@/lib/records-access'
+import { parseJsonBody } from '@/lib/validate'
 
 /**
  * POST /api/records/[patientId]/[recordId]/reshare
@@ -52,12 +53,9 @@ export async function POST(request, { params }) {
   })
   if (!record) return NextResponse.json({ error: 'Record not found' }, { status: 404 })
 
-  let body
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const body = parsed.body
   if (!Array.isArray(body.keys)) return NextResponse.json({ error: 'keys must be an array' }, { status: 400 })
 
   // Re-derive the authoritative recipient set; only accept wraps for those users.

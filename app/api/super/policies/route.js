@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { parseJsonBody } from '@/lib/validate'
 
 async function requireSuperAdmin() {
   const session = await getSession()
@@ -48,14 +49,9 @@ export async function POST(request) {
   const session = await requireSuperAdmin()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-
-  const { clinicIds, patch } = body
+  const parsed = await parseJsonBody(request)
+  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const { clinicIds, patch } = parsed.body
 
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
     return NextResponse.json({ error: 'patch is required' }, { status: 400 })
