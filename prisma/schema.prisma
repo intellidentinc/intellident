@@ -422,8 +422,8 @@ model Appointment {
   statusHistory      AppointmentStatusHistory[]
 
   @@index([clinicId])
-  @@index([patientId])
-  @@index([dentistId])
+  @@index([patientId, scheduledAt])
+  @@index([dentistId, scheduledAt])
   @@index([scheduledAt])
   @@index([clinicId, status])
   @@index([clinicId, scheduledAt])
@@ -538,7 +538,7 @@ model Billing {
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   payments    Payment[]
 
-  @@index([clinicId])
+  @@index([clinicId, createdAt])
   @@index([patientId])
   @@index([status])
   @@map("billings")
@@ -603,6 +603,7 @@ model InAppNotification {
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
 
   @@index([userId, isRead])
+  @@index([userId, createdAt])
   @@index([clinicId])
   @@map("in_app_notifications")
 }
@@ -640,7 +641,7 @@ model AuditLog {
   clinic Clinic? @relation(fields: [clinicId], references: [id])
 
   @@index([userId])
-  @@index([clinicId])
+  @@index([clinicId, createdAt])
   @@index([entity, entityId])
   @@index([createdAt])
   @@index([action, createdAt])
@@ -685,7 +686,7 @@ model RateLimit {
   count     Int      @default(1)
   windowEnd DateTime
 
-  @@index([key])
+  @@index([key, windowEnd])
   @@index([windowEnd])
   @@map("rate_limits")
 }

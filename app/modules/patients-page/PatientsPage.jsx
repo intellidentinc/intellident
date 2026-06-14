@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Table from '@mui/material/Table'
@@ -32,10 +32,10 @@ const HEAD_CELLS = [
   { id: 'actions', label: 'Actions', sortable: false, align: 'center' },
 ]
 
-export default function PatientsPage() {
+export default function PatientsPage({ initialRows = [], initialTotal = 0 }) {
   const { showToast } = useToast()
-  const [rows, setRows] = useState([])
-  const [rowCount, setRowCount] = useState(0)
+  const [rows, setRows] = useState(initialRows)
+  const [rowCount, setRowCount] = useState(initialTotal)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
@@ -45,7 +45,11 @@ export default function PatientsPage() {
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
+  // The first page is server-rendered, so skip the redundant initial fetch.
+  const seeded = useRef(true)
+
   const fetchPatients = useCallback(async () => {
+    if (seeded.current) { seeded.current = false; return }
     setLoading(true)
     try {
       const params = new URLSearchParams({

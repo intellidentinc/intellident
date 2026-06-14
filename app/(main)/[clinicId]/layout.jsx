@@ -1,10 +1,27 @@
 import { redirect } from 'next/navigation';
+import { unstable_cache } from 'next/cache';
 import { getSession, isSuspiciousSession, isStepUpValid } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/app/modules/dashboard-page/AppSidebar';
 import AIChatButton from '@/app/modules/ai-chat/AIChatButton';
 import { ROLES } from '@/lib/roles';
+
+// Clinic name/logo/isEnabled rarely change, so cache them to avoid a DB hit on
+// every navigation. 60s window self-heals; Settings updates to name/logo can
+// also call `revalidateTag('clinic-profile-<clinicId>')` for instant refresh.
+// Role and pendingCount are intentionally NOT cached (role changes must apply
+// immediately; the pending badge must stay live).
+const getClinicProfile = (clinicId) =>
+  unstable_cache(
+    async () =>
+      prisma.clinic.findUnique({
+        where: { id: clinicId },
+        select: { name: true, logoUrl: true, isEnabled: true },
+      }),
+    ['clinic-profile', clinicId],
+    { revalidate: 60, tags: [`clinic-profile-${clinicId}`] }
+  )();
 
 export default async function ClinicLayout({ children, params }) {
   const session = await getSession();
@@ -25,7 +42,7 @@ export default async function ClinicLayout({ children, params }) {
 
   const [user, clinic, rawPendingCount] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } }),
-    prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true, logoUrl: true, isEnabled: true } }),
+    getClinicProfile(clinicId),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
   ]);
 

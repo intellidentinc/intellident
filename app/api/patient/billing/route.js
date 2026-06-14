@@ -30,7 +30,7 @@ export async function GET() {
           appointmentCode: true,
           scheduledAt: true,
           service: { select: { name: true, price: true } },
-          dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
+          dentist: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
         },
       },
       payments: { where: { isDeleted: false }, orderBy: { paidAt: 'asc' } },

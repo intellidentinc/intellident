@@ -100,7 +100,7 @@ function formatCalendarLabel(view, date) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function AppointmentsPage() {
+export default function AppointmentsPage({ initialCalendar = [], initialDentists = [], initialServices = [] }) {
   const { showToast } = useToast()
 
   // View + navigation
@@ -113,12 +113,12 @@ export default function AppointmentsPage() {
   const [serviceFilter, setServiceFilter] = useState('')
   const [statusFilter, setStatusFilter]   = useState('')
 
-  // Filter options
-  const [allDentists, setAllDentists] = useState([])
-  const [allServices, setAllServices] = useState([])
+  // Filter options (seeded from server-rendered props)
+  const [allDentists, setAllDentists] = useState(initialDentists)
+  const [allServices, setAllServices] = useState(initialServices)
 
-  // Calendar data
-  const [calendarAppts, setCalendarAppts] = useState([])
+  // Calendar data (seeded with the server-rendered default Week view)
+  const [calendarAppts, setCalendarAppts] = useState(initialCalendar)
   const [calendarLoading, setCalendarLoading] = useState(false)
 
   // List data
@@ -146,20 +146,14 @@ export default function AppointmentsPage() {
     return () => clearTimeout(searchTimeout.current)
   }, [search])
 
-  // Load filter options once
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/services/dentists').then(r => r.ok ? r.json() : { dentists: [] }),
-      fetch('/api/appointments/services').then(r => r.ok ? r.json() : { services: [] }),
-    ]).then(([dentistsData, servicesData]) => {
-      setAllDentists(dentistsData.dentists ?? [])
-      setAllServices(servicesData.services ?? [])
-    }).catch(() => {})
-  }, [])
+  // The server already rendered the default Week view, so skip the first
+  // client-side calendar fetch to avoid an immediate redundant round-trip.
+  const calendarSeeded = useRef(true)
 
   // ── Calendar fetch ──────────────────────────────────────────────────────────
   const fetchCalendar = useCallback(async () => {
     if (viewMode === 'list') return
+    if (calendarSeeded.current) { calendarSeeded.current = false; return }
     const range = getCalendarRange(viewMode, calendarDate)
     if (!range) return
     setCalendarLoading(true)

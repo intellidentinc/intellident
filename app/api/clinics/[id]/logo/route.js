@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
 import { ROLES, isAdmin } from '@/lib/roles';
+import { revalidateTag } from 'next/cache';
 
 const LOGO_SIGNATURES = [
   { mime: 'image/jpeg', ext: 'jpg', magic: [0xFF, 0xD8, 0xFF] },
@@ -96,6 +97,8 @@ export async function POST(request, { params }) {
     where: { id },
     data: { logoUrl: publicUrl },
   });
+
+  revalidateTag(`clinic-profile-${id}`); // refresh cached sidebar logo immediately
 
   return NextResponse.json({ logoUrl: publicUrl });
 }

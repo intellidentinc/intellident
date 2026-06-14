@@ -49,12 +49,12 @@ function php(n) {
   return '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export default function BillingPage() {
+export default function BillingPage({ initialRows = [], initialTotal = 0 }) {
   const { clinicId } = useParams()
 
-  const [rows, setRows]         = useState([])
-  const [total, setTotal]       = useState(0)
-  const [loading, setLoading]   = useState(true)
+  const [rows, setRows]         = useState(initialRows)
+  const [total, setTotal]       = useState(initialTotal)
+  const [loading, setLoading]   = useState(false)
   const [page, setPage]         = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [status, setStatus]     = useState('')
@@ -63,8 +63,11 @@ export default function BillingPage() {
   const [detail, setDetail]     = useState(null)
 
   const debounceRef = useRef(null)
+  // The first page is server-rendered, so skip the redundant initial fetch.
+  const seeded = useRef(true)
 
   const fetchBillings = useCallback(async () => {
+    if (seeded.current) { seeded.current = false; return }
     setLoading(true)
     try {
       const params = new URLSearchParams({

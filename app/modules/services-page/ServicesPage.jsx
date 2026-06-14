@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
@@ -33,11 +33,11 @@ const HEAD_CELLS = [
   { label: 'Actions', align: 'center' }
 ]
 
-export default function ServicesPage() {
+export default function ServicesPage({ initialServices = [], initialDentists = [] }) {
   const { showToast } = useToast()
-  const [rows, setRows] = useState([])
+  const [rows, setRows] = useState(initialServices)
   const [loading, setLoading] = useState(false)
-  const [dentists, setDentists] = useState([])
+  const [dentists, setDentists] = useState(initialDentists)
   const [formOpen, setFormOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -67,7 +67,10 @@ export default function ServicesPage() {
     }
   }, [])
 
+  // Services + dentists are server-rendered, so skip the redundant initial fetch.
+  const seeded = useRef(true)
   useEffect(() => {
+    if (seeded.current) { seeded.current = false; return }
     fetchServices()
     fetchDentists()
   }, [fetchServices, fetchDentists])

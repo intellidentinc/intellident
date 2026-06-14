@@ -24,41 +24,43 @@ export async function GET(request) {
 
   if (!patient) return NextResponse.json({ error: 'Patient record not found' }, { status: 404 })
 
-  const records = await prisma.patientRecord.findMany({
-    where: { patientId: patient.id, clinicId: user.clinicId, isDeleted: false },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-    }
-  })
-
-  // Also fetch completed/confirmed appointments as visit history
-  const visits = await prisma.appointment.findMany({
-    where: {
-      patientId: patient.id,
-      clinicId: user.clinicId,
-      isDeleted: false,
-      status: { in: ['COMPLETED', 'CONFIRMED'] }
-    },
-    orderBy: { scheduledAt: 'desc' },
-    select: {
-      id: true,
-      appointmentCode: true,
-      scheduledAt: true,
-      status: true,
-      notes: true,
-      service: { select: { name: true } },
-      dentist: {
-        select: {
-          user: { select: { firstName: true, lastName: true } }
+  // records and visits are independent — fetch in parallel
+  const [records, visits] = await Promise.all([
+    prisma.patientRecord.findMany({
+      where: { patientId: patient.id, clinicId: user.clinicId, isDeleted: false },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    }),
+    // Also fetch completed/confirmed appointments as visit history
+    prisma.appointment.findMany({
+      where: {
+        patientId: patient.id,
+        clinicId: user.clinicId,
+        isDeleted: false,
+        status: { in: ['COMPLETED', 'CONFIRMED'] }
+      },
+      orderBy: { scheduledAt: 'desc' },
+      select: {
+        id: true,
+        appointmentCode: true,
+        scheduledAt: true,
+        status: true,
+        notes: true,
+        service: { select: { name: true } },
+        dentist: {
+          select: {
+            user: { select: { firstName: true, lastName: true } }
+          }
         }
       }
-    }
-  })
+    }),
+  ])
 
   const { ip, userAgent } = getRequestMeta(request)
   logAudit({ userId: session.userId, clinicId: user.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: patient.id, ipAddress: ip, userAgent })

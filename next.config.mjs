@@ -17,6 +17,17 @@ const cspHeader = [
 const nextConfig = {
   compress: true,
   poweredByHeader: false,
+  experimental: {
+    optimizePackageImports: [
+      '@mui/material',
+      '@mui/icons-material',
+      '@mui/lab',
+      '@mui/x-date-pickers',
+      'lucide-react',
+      'framer-motion',
+      'react-big-calendar',
+    ],
+  },
   images: {
     remotePatterns: [
       {

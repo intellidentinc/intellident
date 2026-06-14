@@ -26,7 +26,7 @@ export async function GET() {
     include: {
       dentists: {
         where: { isDeleted: false },
-        include: { user: { select: { firstName: true, lastName: true } } }
+        select: { id: true, user: { select: { firstName: true, lastName: true } } }
       }
     },
     orderBy: { createdAt: 'desc' }
@@ -67,7 +67,7 @@ export async function POST(request) {
     include: {
       dentists: {
         where: { isDeleted: false },
-        include: { user: { select: { firstName: true, lastName: true } } }
+        select: { id: true, user: { select: { firstName: true, lastName: true } } }
       }
     }
   })

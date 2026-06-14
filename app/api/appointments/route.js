@@ -79,7 +79,7 @@ export async function GET(request) {
       where,
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, patientCode: true } },
-        dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
+        dentist: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
         service: { select: { id: true, name: true, duration: true } },
       },
       orderBy: { [field]: order },

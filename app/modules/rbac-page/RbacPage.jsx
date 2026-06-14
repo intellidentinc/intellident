@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
@@ -71,10 +71,10 @@ function StatusChip({ isActive }) {
   )
 }
 
-export default function RbacPage({ isSuperAdmin = false }) {
+export default function RbacPage({ isSuperAdmin = false, initialRows = [], initialTotal = 0 }) {
   const { showToast } = useToast()
-  const [rows, setRows] = useState([])
-  const [rowCount, setRowCount] = useState(0)
+  const [rows, setRows] = useState(initialRows)
+  const [rowCount, setRowCount] = useState(initialTotal)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
@@ -85,7 +85,11 @@ export default function RbacPage({ isSuperAdmin = false }) {
   const [addOpen, setAddOpen] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
 
+  // The first page is server-rendered, so skip the redundant initial fetch.
+  const seeded = useRef(true)
+
   const fetchUsers = useCallback(async () => {
+    if (seeded.current) { seeded.current = false; return }
     setLoading(true)
     try {
       const params = new URLSearchParams({

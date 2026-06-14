@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
+import { revalidateTag } from 'next/cache'
 
 async function getAdminForClinic(clinicId) {
   const session = await getSession()
@@ -117,6 +118,7 @@ export async function PATCH(request, { params }) {
       data: { name, address: address && typeof address === 'object' ? JSON.stringify(address) : null, email, phone: phone || null, landline: landline || null },
       select: FULL_SELECT
     })
+    revalidateTag(`clinic-profile-${id}`) // refresh cached sidebar name/logo immediately
     return NextResponse.json(clinic)
   }
 
