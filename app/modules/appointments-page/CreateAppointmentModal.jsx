@@ -403,6 +403,11 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
                   </MenuItem>
                 ))}
               </MuiSelect>
+              {!errors.dentistId && form.serviceIds.length > 0 && dentists.length === 0 && (
+                <Typography variant='caption' sx={{ mt: 0.5, ml: 1.75, color: '#854d0e', display: 'block' }}>
+                  No dentists are assigned to the selected service(s). Assign one in Services for specific scheduling.
+                </Typography>
+              )}
               {errors.dentistId && (
                 <Typography variant='caption' color='error' sx={{ mt: 0.5, ml: 1.75 }}>{errors.dentistId}</Typography>
               )}

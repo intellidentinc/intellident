@@ -21,6 +21,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hexToken } from '@/lib/validate';
+import { generatePatientCode } from '@/lib/patients';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -79,6 +80,7 @@ export async function GET(request) {
       });
 
       if (newUser.clinicId) {
+        const patientCode = await generatePatientCode(newUser.clinicId, tx);
         await tx.patient.create({
           data: {
             userId: newUser.id,
@@ -88,6 +90,7 @@ export async function GET(request) {
             phone: pending.phone || null,
             dateOfBirth: pending.dateOfBirth || null,
             address: pending.address || null,
+            patientCode,
           },
         });
       }

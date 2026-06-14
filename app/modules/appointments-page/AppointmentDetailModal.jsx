@@ -45,11 +45,18 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
   const [loading, setLoading] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [noShowRisk, setNoShowRisk] = useState(null)
+  const [dentists, setDentists] = useState([])
+  const [assignDentistId, setAssignDentistId] = useState('')
+
+  // "Any Available" bookings have no dentist; one must be assigned when confirming.
+  const needsDentist = appointment != null && !appointment.dentist
 
   useEffect(() => {
     if (!open || !appointment) return
     setNewStatus(appointment.status)
     setNoShowRisk(null)
+    setAssignDentistId('')
+    setDentists([])
     setHistoryLoading(true)
 
     const patientId = appointment.patient?.id
@@ -60,19 +67,33 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
       setHistory(detail.statusHistory ?? [])
       setNoShowRisk(risk)
     }).catch(() => {}).finally(() => setHistoryLoading(false))
+
+    // Pre-load assignable dentists for "Any Available" bookings so the picker is ready on Confirm.
+    if (!appointment.dentist && appointment.service?.id) {
+      fetch(`/api/appointments/dentists?serviceIds=${appointment.service.id}`)
+        .then(r => r.ok ? r.json() : { dentists: [] })
+        .then(d => setDentists(d.dentists ?? []))
+        .catch(() => {})
+    }
   }, [open, appointment])
 
   const transitions = TRANSITIONS[appointment?.status] ?? []
   const isTerminal = transitions.length === 0
 
+  const mustAssignDentist = needsDentist && newStatus === 'CONFIRMED'
+
   async function handleSave() {
     if (newStatus === appointment.status) { onClose(); return }
+    if (mustAssignDentist && !assignDentistId) {
+      showToast('Assign a dentist before confirming this appointment', 'error')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch(`/api/appointments/${appointment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, ...(mustAssignDentist ? { dentistId: assignDentistId } : {}) }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -214,6 +235,39 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
                 ))}
               </MuiSelect>
             </FormControl>
+
+            {/* "Any Available" bookings must be assigned a dentist on confirmation */}
+            {mustAssignDentist && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography variant='body2' fontWeight={500} color='text.primary' sx={{ mb: 0.75 }}>
+                  Assign Dentist <Typography component='span' color='error'>*</Typography>
+                </Typography>
+                {dentists.length === 0 ? (
+                  <Box sx={{ bgcolor: '#fef9c3', color: '#854d0e', borderRadius: 2, px: 2, py: 1.25 }}>
+                    <Typography variant='caption'>
+                      No dentist is assigned to this service. Assign one in Services before confirming.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <FormControl fullWidth size='small'>
+                    <MuiSelect
+                      value={assignDentistId}
+                      onChange={(e) => setAssignDentistId(e.target.value)}
+                      displayEmpty
+                    >
+                      <MenuItem value='' disabled>
+                        <Typography variant='body2' color='text.disabled'>Select a dentist</Typography>
+                      </MenuItem>
+                      {dentists.map((d) => (
+                        <MenuItem key={d.id} value={d.id}>
+                          {d.user.firstName} {d.user.lastName}
+                        </MenuItem>
+                      ))}
+                    </MuiSelect>
+                  </FormControl>
+                )}
+              </Box>
+            )}
           </Box>
         )}
 
@@ -279,7 +333,12 @@ export default function AppointmentDetailModal({ open, appointment, onClose, onS
           </Button>
         )}
         {!isTerminal && (
-          <Button variant='contained' onClick={handleSave} loading={loading} disabled={newStatus === appointment.status}>
+          <Button
+            variant='contained'
+            onClick={handleSave}
+            loading={loading}
+            disabled={newStatus === appointment.status || (mustAssignDentist && !assignDentistId)}
+          >
             Save changes
           </Button>
         )}

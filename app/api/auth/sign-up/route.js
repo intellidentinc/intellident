@@ -99,7 +99,7 @@ export async function POST(request) {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
-        { error: 'This email is already registered. Please sign in instead.' },
+        { error: 'This email already has an account — your clinic may have created it for you. Please sign in, or use "Forgot password" to set your password and claim it.' },
         { status: 409 }
       );
     }

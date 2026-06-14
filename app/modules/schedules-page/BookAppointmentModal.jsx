@@ -344,22 +344,30 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
             <Box>
               <SectionLabel step={2} label='Dentist preference' />
               {errors.dentist && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.dentist}</Typography>}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <DentistChip
-                  label='Any Available'
-                  selected={dentistId === 'ANY'}
-                  onClick={() => { setDentistId('ANY'); setErrors(p => ({ ...p, dentist: undefined })) }}
-                />
-                {dentists.map(d => (
+              {dentists.length === 0 ? (
+                <Box sx={{ bgcolor: '#fef9c3', color: '#854d0e', borderRadius: 2, px: 2, py: 1.5 }}>
+                  <Typography variant='body2' sx={{ fontWeight: 500 }}>
+                    No dentist is currently available for the selected service(s). Please choose another service or contact the clinic to book.
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   <DentistChip
-                    key={d.id}
-                    label={`Dr. ${d.user.firstName} ${d.user.lastName}`}
-                    sub={d.specialty}
-                    selected={dentistId === d.id}
-                    onClick={() => { setDentistId(d.id); setErrors(p => ({ ...p, dentist: undefined })) }}
+                    label='Any Available'
+                    selected={dentistId === 'ANY'}
+                    onClick={() => { setDentistId('ANY'); setErrors(p => ({ ...p, dentist: undefined })) }}
                   />
-                ))}
-              </Box>
+                  {dentists.map(d => (
+                    <DentistChip
+                      key={d.id}
+                      label={`Dr. ${d.user.firstName} ${d.user.lastName}`}
+                      sub={d.specialty}
+                      selected={dentistId === d.id}
+                      onClick={() => { setDentistId(d.id); setErrors(p => ({ ...p, dentist: undefined })) }}
+                    />
+                  ))}
+                </Box>
+              )}
             </Box>
           )}
 

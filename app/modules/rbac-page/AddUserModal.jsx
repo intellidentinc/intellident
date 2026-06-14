@@ -26,6 +26,9 @@ const ROLE_OPTIONS = [
   { value: ROLES.RECEPTIONIST, label: 'Receptionist' },
 ]
 
+// Super admins may also create a clinic ADMIN (e.g. the first admin of a new clinic).
+const ADMIN_ROLE_OPTION = { value: ROLES.ADMIN, label: 'Administrator' }
+
 function normalizeName(value) {
   return value
     .split(' ')
@@ -36,8 +39,9 @@ function normalizeName(value) {
 const EMPTY = { firstName: '', middleInitial: '', lastName: '', email: '', phone: '', role: '' }
 const EMPTY_ERRORS = { firstName: '', middleInitial: '', lastName: '', email: '', phone: '', role: '' }
 
-export default function AddUserModal({ open, onClose, onSuccess }) {
+export default function AddUserModal({ open, onClose, onSuccess, allowAdmin = false }) {
   const { showToast } = useToast()
+  const roleOptions = allowAdmin ? [ADMIN_ROLE_OPTION, ...ROLE_OPTIONS] : ROLE_OPTIONS
   const [form, setForm] = useState(EMPTY)
   const [errors, setErrors] = useState(EMPTY_ERRORS)
   const [loading, setLoading] = useState(false)
@@ -248,7 +252,7 @@ export default function AddUserModal({ open, onClose, onSuccess }) {
           label='Role'
           value={form.role}
           onChange={handleChange('role')}
-          options={ROLE_OPTIONS}
+          options={roleOptions}
           error={!!errors.role}
           helperText={errors.role}
           required

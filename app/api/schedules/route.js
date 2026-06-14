@@ -23,8 +23,6 @@ import { notifyStaffBooking } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
-import { createCheckoutSession } from '@/lib/paymongo'
-import { generateReceiptNumber } from '@/lib/billing'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -113,7 +111,7 @@ export async function POST(request) {
   const [schedule, closures, clinic] = await Promise.all([
     prisma.clinicSchedule.findUnique({ where: { clinicId: caller.clinicId } }),
     prisma.clinicClosure.findMany({ where: { clinicId: caller.clinicId } }),
-    prisma.clinic.findUnique({ where: { id: caller.clinicId }, select: { code: true, reservationFeeAmount: true, paymongoEnabled: true } }),
+    prisma.clinic.findUnique({ where: { id: caller.clinicId }, select: { code: true } }),
   ])
 
   const apptDate = new Date(scheduledAt)
@@ -198,8 +196,6 @@ export async function POST(request) {
   })
   const appointmentCode = `APT-${clinicCode}-${datePart}-${String(existingCount + 1).padStart(4, '0')}`
 
-  const totalPrice = orderedServices.reduce((sum, s) => sum + (s.price ?? 0), 0)
-
   const appointment = await prisma.appointment.create({
     data: {
       clinicId:   caller.clinicId,
@@ -237,46 +233,8 @@ export async function POST(request) {
 
   logAudit({ userId: caller.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'Appointment', entityId: appointment.id, ipAddress: ip, userAgent, metadata: { appointmentCode, source: 'patient-booking' } })
 
-  // Reservation fee: create billing + PayMongo checkout session if clinic has it enabled
-  let checkoutUrl = null
-  const reservationFee = clinic?.reservationFeeAmount ?? 0
-  if (clinic?.paymongoEnabled && reservationFee > 0) {
-    try {
-      const billing = await prisma.$transaction(async (tx) => {
-        const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
-        return tx.billing.create({
-          data: {
-            clinicId:      caller.clinicId,
-            patientId:     caller.patientId,
-            appointmentId: appointment.id,
-            amount:        totalPrice,
-            amountPaid:    0,
-            balance:       totalPrice,
-            status:        'UNPAID',
-            receiptNumber,
-          },
-        })
-      })
-
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
-      const session = await createCheckoutSession({
-        lineItems: [
-          {
-            amount:   Math.round(reservationFee * 100),
-            currency: 'PHP',
-            name:     `Reservation Fee — ${orderedServices.map(s => s.name).join(', ')}`,
-            quantity: 1,
-          },
-        ],
-        successUrl: `${appUrl}/${caller.clinicId}/my-billing?payment=success&billingId=${billing.id}`,
-        cancelUrl:  `${appUrl}/${caller.clinicId}/schedules`,
-        metadata:   { billingId: billing.id, clinicId: caller.clinicId, paymentType: 'RESERVATION' },
-      })
-      checkoutUrl = session.checkoutUrl
-    } catch {
-      // Reservation fee is best-effort — booking still succeeds even if checkout fails
-    }
-  }
-
-  return NextResponse.json({ appointment, checkoutUrl }, { status: 201 })
+  // Reservation fee / billing is created when staff CONFIRM the booking, not at
+  // PENDING request time — see PATCH /api/appointments/[id]. This avoids leaving an
+  // orphan bill behind when a pending request is rejected or abandoned.
+  return NextResponse.json({ appointment }, { status: 201 })
 }

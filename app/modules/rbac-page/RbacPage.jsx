@@ -71,7 +71,7 @@ function StatusChip({ isActive }) {
   )
 }
 
-export default function RbacPage() {
+export default function RbacPage({ isSuperAdmin = false }) {
   const { showToast } = useToast()
   const [rows, setRows] = useState([])
   const [rowCount, setRowCount] = useState(0)
@@ -335,6 +335,7 @@ export default function RbacPage() {
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onSuccess={() => { setAddOpen(false); fetchUsers() }}
+        allowAdmin={isSuperAdmin}
       />
     </SidebarInset>
   )

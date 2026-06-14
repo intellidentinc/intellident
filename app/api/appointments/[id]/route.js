@@ -20,11 +20,13 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { notifyPatientStatusChange, notifyStaff } from '@/lib/notifications'
+import { notifyPatientStatusChange, notifyStaff, createNotification } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { generateReceiptNumber, computeBillingStatus } from '@/lib/billing'
+import { createCheckoutSession } from '@/lib/paymongo'
+import { sendCustomAppointmentEmail } from '@/lib/email'
 
 async function getCaller() {
   const session = await getSession()
@@ -77,7 +79,7 @@ export async function PATCH(request, { params }) {
   const { id } = await params
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
-  const { status } = parsed.body
+  const { status, dentistId } = parsed.body
   const note = str(parsed.body.note, 2000)
 
   if (!status) return NextResponse.json({ error: 'status is required' }, { status: 400 })
@@ -95,10 +97,38 @@ export async function PATCH(request, { params }) {
     )
   }
 
+  // Assign a dentist when confirming an "Any Available" booking (dentistId was null).
+  // Required so a confirmed appointment is never left unassigned.
+  let assignDentistId = null
+  if (status === 'CONFIRMED' && !appointment.dentistId && dentistId) {
+    const dentist = await prisma.dentist.findFirst({
+      where: { id: dentistId, clinicId: caller.clinicId, isDeleted: false },
+      select: { id: true },
+    })
+    if (!dentist) {
+      return NextResponse.json({ error: 'Selected dentist not found in this clinic' }, { status: 400 })
+    }
+    const overlap = await prisma.appointment.findFirst({
+      where: {
+        clinicId: caller.clinicId,
+        dentistId,
+        isDeleted: false,
+        id: { not: id },
+        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+        OR: [{ scheduledAt: { lt: appointment.endsAt }, endsAt: { gt: appointment.scheduledAt } }],
+      },
+    })
+    if (overlap) {
+      return NextResponse.json({ error: 'This dentist has a conflicting appointment at that time' }, { status: 409 })
+    }
+    assignDentistId = dentist.id
+  }
+
   const updated = await prisma.appointment.update({
     where: { id },
     data: {
       status,
+      ...(assignDentistId ? { dentistId: assignDentistId } : {}),
       statusHistory: {
         create: {
           status,
@@ -196,6 +226,85 @@ export async function PATCH(request, { params }) {
       }
     } catch {
       // Billing auto-creation is non-blocking
+    }
+  }
+
+  // Reservation deposit: when staff CONFIRM a booking, create the billing record
+  // (the deposit is credited toward the full appointment total) and hand the patient a
+  // pay link. Done here — not at PENDING request time — so a rejected/abandoned request
+  // never leaves an orphan bill behind.
+  if (appointment.status === 'PENDING' && status === 'CONFIRMED') {
+    try {
+      const clinic = await prisma.clinic.findUnique({
+        where: { id: caller.clinicId },
+        select: { reservationFeeAmount: true, paymongoEnabled: true },
+      })
+      const reservationFee = clinic?.reservationFeeAmount ?? 0
+      const existingBilling = clinic?.paymongoEnabled && reservationFee > 0
+        ? await prisma.billing.findUnique({ where: { appointmentId: id } })
+        : null
+
+      if (clinic?.paymongoEnabled && reservationFee > 0 && !existingBilling) {
+        const junctionServices = await prisma.appointmentService.findMany({
+          where: { appointmentId: id },
+          include: { service: { select: { price: true } } },
+        })
+        const totalPrice = junctionServices.length > 0
+          ? junctionServices.reduce((sum, js) => sum + (js.service.price ?? 0), 0)
+          : (updated.service?.price ?? 0)
+
+        const billing = await prisma.$transaction(async (tx) => {
+          const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+          return tx.billing.create({
+            data: {
+              clinicId:      caller.clinicId,
+              patientId:     updated.patient.id,
+              appointmentId: id,
+              amount:        totalPrice,
+              amountPaid:    0,
+              balance:       totalPrice,
+              status:        'UNPAID',
+              receiptNumber,
+            },
+          })
+        })
+
+        // Best-effort: build a checkout link for the reservation deposit and send it to the patient.
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+        const { checkoutUrl } = await createCheckoutSession({
+          lineItems: [{
+            amount:   Math.round(reservationFee * 100),
+            currency: 'PHP',
+            name:     `Reservation Deposit — ${serviceName}`,
+            quantity: 1,
+          }],
+          successUrl: `${appUrl}/${caller.clinicId}/my-billing?payment=success&billingId=${billing.id}`,
+          cancelUrl:  `${appUrl}/${caller.clinicId}/my-billing`,
+          metadata:   { billingId: billing.id, clinicId: caller.clinicId, paymentType: 'RESERVATION' },
+        }).catch(() => ({ checkoutUrl: null }))
+
+        if (checkoutUrl && patientUser?.id) {
+          await createNotification({
+            userId: patientUser.id,
+            clinicId: caller.clinicId,
+            type: 'APPOINTMENT_CONFIRMED',
+            title: 'Reservation Deposit Due',
+            body: `Secure your ${serviceName} appointment by paying the ₱${reservationFee} reservation deposit (credited toward your total): ${checkoutUrl}`,
+            appointmentId: id,
+          }).catch(() => {})
+
+          if (patientUser.email) {
+            sendCustomAppointmentEmail({
+              to: patientUser.email,
+              subject: 'Secure Your Appointment — Reservation Deposit',
+              body: `Hi ${patientUser.firstName ?? ''},\n\nYour ${serviceName} appointment is confirmed. Please pay the ₱${reservationFee} reservation deposit to secure your slot:\n\n${checkoutUrl}\n\nThe deposit is credited toward your total bill.`,
+              typeKey: 'APPOINTMENT_CONFIRMED',
+            }).catch(() => {})
+          }
+        }
+      }
+    } catch {
+      // Reservation billing/deposit setup is non-blocking — confirmation still succeeds.
     }
   }
 

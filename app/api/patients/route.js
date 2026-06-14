@@ -6,6 +6,7 @@ import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
 import { sendPatientClaimEmail } from '@/lib/email'
+import { generatePatientCode } from '@/lib/patients'
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
 
@@ -125,12 +126,7 @@ export async function POST(request) {
     })
 
     // Generate patientCode: PAT-{CLINICCODE}-{YYYY}-{#####}
-    const clinic = await tx.clinic.findUnique({ where: { id: caller.clinicId }, select: { code: true } })
-    const year = new Date().getFullYear()
-    const existingCount = await tx.patient.count({
-      where: { clinicId: caller.clinicId },
-    })
-    const patientCode = `PAT-${clinic?.code ?? 'CLN'}-${year}-${String(existingCount + 1).padStart(5, '0')}`
+    const patientCode = await generatePatientCode(caller.clinicId, tx)
 
     const patient = await tx.patient.create({
       data: {

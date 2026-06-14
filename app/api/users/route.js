@@ -108,7 +108,12 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  if (![ROLES.DENTIST, ROLES.RECEPTIONIST].includes(role)) {
+  // Clinic admins may create staff (dentist/receptionist). Only super admins may
+  // create a clinic ADMIN — this is how a brand-new clinic gets its first admin.
+  const allowedRoles = caller.role === ROLES.SUPERADMIN
+    ? [ROLES.ADMIN, ROLES.DENTIST, ROLES.RECEPTIONIST]
+    : [ROLES.DENTIST, ROLES.RECEPTIONIST]
+  if (!allowedRoles.includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 
@@ -150,9 +155,10 @@ export async function POST(request) {
       }
     })
 
+    // ADMIN has no separate profile record; only dentist/receptionist do.
     if (role === ROLES.DENTIST) {
       await tx.dentist.create({ data: { userId: user.id, clinicId: clinicId } })
-    } else {
+    } else if (role === ROLES.RECEPTIONIST) {
       await tx.receptionist.create({ data: { userId: user.id, clinicId: clinicId } })
     }
 
@@ -162,7 +168,7 @@ export async function POST(request) {
   sendStaffWelcomeEmail({
     to: newUser.email,
     firstName: newUser.firstName,
-    role: role === ROLES.DENTIST ? 'Dentist' : 'Receptionist',
+    role: role === ROLES.ADMIN ? 'Administrator' : role === ROLES.DENTIST ? 'Dentist' : 'Receptionist',
     tempPassword,
     username: newUser.username,
   }).catch(() => {})

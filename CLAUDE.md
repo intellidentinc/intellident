@@ -236,7 +236,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use
 - Password reset generates fresh E2EE keys (old data inaccessible); change-password re-wraps existing key
 - Password history: cannot reuse last 3
-- MFA (email OTP): code is complete (`MfaOtp` model, `verify-otp` route, `VerifyOtpPage`) but currently disabled in `app/api/auth/sign-in/route.js` (commented out block lines 125–139)
+- MFA (email OTP): enabled and enforced on every sign-in. `app/api/auth/sign-in/route.js` issues a 6-digit OTP (bcrypt-hashed `MfaOtp`, emailed) and defers session creation to `verify-otp`; `wrappedKey`/`keySalt` are withheld until the OTP is confirmed. Code: `MfaOtp` model, `verify-otp` route, `VerifyOtpPage`
 
 **RBAC:**
 

@@ -16,6 +16,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import AddIcon from '@mui/icons-material/Add'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -207,9 +208,14 @@ export default function ServicesPage() {
                             ))}
                           </Box>
                         ) : (
-                          <Typography variant='body2' color='text.disabled'>
-                            —
-                          </Typography>
+                          <Tooltip title='Assign a dentist (Edit) so patients can book this service'>
+                            <Chip
+                              icon={<WarningAmberOutlinedIcon sx={{ fontSize: 16 }} />}
+                              label='No dentist — not bookable'
+                              size='small'
+                              sx={{ bgcolor: '#fef9c3', color: '#854d0e', fontWeight: 600, fontSize: '0.72rem', '& .MuiChip-icon': { color: '#854d0e' } }}
+                            />
+                          </Tooltip>
                         )}
                       </TableCell>
 
