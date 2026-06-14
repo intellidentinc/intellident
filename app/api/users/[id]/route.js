@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES, ROLE_LABELS, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody } from '@/lib/validate'
+import { reconcileRoleProfile } from '@/lib/userProfiles'
 
 async function getAdminCaller() {
   const session = await getSession()
@@ -22,7 +23,7 @@ async function getAdminCaller() {
 async function getTargetUser(id, clinicId) {
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { clinicId: true, isDeleted: true }
+    select: { clinicId: true, isDeleted: true, firstName: true, lastName: true, role: true }
   })
 
   if (!target || target.isDeleted || target.clinicId !== clinicId) return null
@@ -59,18 +60,43 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ ...updated, loggedOut: isSelf && !body.isActive })
   }
 
-  // Role update — only clinic-assignable roles permitted; ADMIN and SUPERADMIN cannot be granted via this endpoint
-  const { role } = body
-  const assignableRoles = [ROLES.DENTIST, ROLES.RECEPTIONIST, ROLES.PATIENT]
-  if (!assignableRoles.includes(role)) {
+  // Role update — staff-only swaps. Patients (customers) and admins are not
+  // reassignable here; staff are created via Add User. Both the new role and the
+  // target's current role must be DENTIST or RECEPTIONIST.
+  const staffRoles = [ROLES.DENTIST, ROLES.RECEPTIONIST]
+  const role = Number(body.role)
+  if (!staffRoles.includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
+  if (!staffRoles.includes(target.role)) {
+    return NextResponse.json({ error: 'Only dentist and receptionist roles can be reassigned. Create staff via Add User.' }, { status: 400 })
+  }
 
-  const updated = await prisma.user.update({
-    where: { id },
-    data: { role },
-    select: { id: true, role: true }
-  })
+  const clinicId = caller.clinicId
+
+  let updated
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id },
+        data: { role },
+        select: { id: true, role: true }
+      })
+
+      await reconcileRoleProfile(tx, {
+        userId: id,
+        role,
+        clinicId,
+        firstName: target.firstName,
+        lastName: target.lastName,
+      })
+
+      return user
+    })
+  } catch (err) {
+    console.error('Role update failed:', err)
+    return NextResponse.json({ error: 'Failed to update role' }, { status: 500 })
+  }
 
   const session = await getSession()
   const isSelf = session?.userId === id

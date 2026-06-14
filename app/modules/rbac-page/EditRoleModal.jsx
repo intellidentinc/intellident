@@ -12,10 +12,8 @@ import { ManageAccountsOutlined } from '@mui/icons-material'
 import { ROLES } from '@/lib/roles'
 
 const ROLE_OPTIONS = [
-  { value: ROLES.ADMIN,        label: 'Admin' },
   { value: ROLES.DENTIST,      label: 'Dentist' },
   { value: ROLES.RECEPTIONIST, label: 'Receptionist' },
-  { value: ROLES.PATIENT,      label: 'Patient' },
 ]
 
 export default function EditRoleModal({ open, user, onClose, onSuccess }) {
@@ -35,16 +33,19 @@ export default function EditRoleModal({ open, user, onClose, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role })
       })
-      if (!res.ok) throw new Error()
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update role')
+      }
       if (data.loggedOut) {
         window.location.href = '/sign-in'
         return
       }
       showToast('Role updated', 'success')
       onSuccess()
-    } catch {
-      showToast('Failed to update role', 'error')
+    } catch (err) {
+      console.error('Role update failed:', err)
+      showToast(err.message || 'Failed to update role', 'error')
     } finally {
       setLoading(false)
     }

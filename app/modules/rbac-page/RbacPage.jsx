@@ -277,11 +277,13 @@ export default function RbacPage({ isSuperAdmin = false, initialRows = [], initi
 
                     <TableCell align='center'>
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                        <Tooltip title='Edit role'>
-                          <IconButton size='small' onClick={() => setEditTarget(row)} sx={{ cursor: 'pointer' }}>
-                            <EditOutlinedIcon fontSize='small' />
-                          </IconButton>
-                        </Tooltip>
+                        {(row.role === ROLES.DENTIST || row.role === ROLES.RECEPTIONIST) && (
+                          <Tooltip title='Edit role'>
+                            <IconButton size='small' onClick={() => setEditTarget(row)} sx={{ cursor: 'pointer' }}>
+                              <EditOutlinedIcon fontSize='small' />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         <Tooltip title={row.isActive ? 'Deactivate user' : 'Activate user'}>
                           <IconButton
                             size='small'
