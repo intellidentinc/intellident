@@ -51,9 +51,10 @@ All email functions are fire-and-forget (`.catch(() => {})`) — email failures 
 - `PATCH /api/notifications/[id]` — mark single notification as read (owner check)
 
 ## Cron Job (Reminders)
-- **File:** `app/api/cron/reminders/route.js`
+- **File:** `app/api/cron/reminders/route.js` — one of five Vercel cron jobs (see `CLAUDE.md` for the full list)
 - **Schedule:** daily at 08:00 UTC (`0 8 * * *` in `vercel.json`)
-- **Auth:** `Authorization: Bearer {CRON_SECRET}` header — set `CRON_SECRET` env var in Vercel + `.env`
-- Finds CONFIRMED appointments in a ±30min window around 24h and 2h from now
+- **Auth:** `Authorization: Bearer {CRON_SECRET}` header, verified by `lib/cron-auth.js` (fails closed if `CRON_SECRET` is unset) — set `CRON_SECRET` in Vercel + `.env`
+- Reminder windows are configurable per clinic via `Clinic.reminder1Hours` (default 24) and `Clinic.reminder2Hours` (default 2)
+- Finds CONFIRMED appointments in a ±30min window around each reminder offset from now
 - Sends in-app + email reminders; sets `reminderSent24h` / `reminderSent2h` = true to prevent duplicates
 - Returns `{ sent24h, sent2h }` counts

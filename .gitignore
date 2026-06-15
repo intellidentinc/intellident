@@ -48,3 +48,4 @@ next-env.d.ts
 # security related files
 docs/security-findings.md
 docs/security-testing-plan.md
+docs/security-test-cases.md

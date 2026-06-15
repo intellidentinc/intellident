@@ -227,13 +227,29 @@ const data = await generateJSON(prompt)
 // returns: parsed JSON object — throws if model returns invalid JSON
 ```
 
+### `lib/ai-tools.js` — role-aware function calling
+
+The chatbot's tools come from `lib/ai-tools.js`:
+
+- `getToolsForRole(role)` returns the OpenAI tool set allowed for that role:
+  - **Patient** — `get_my_appointments(filter)`
+  - **Dentist** — `get_my_schedule(date?)`, `get_my_upcoming_appointments()`, `get_my_patients()`
+  - **Staff (ADMIN/RECEPTIONIST)** — `get_appointments_today()`, `get_pending_appointments()`, `get_appointments_by_date(date)`, `get_week_schedule()`, `get_patient_appointments(patient_name)`, `get_dentist_schedule(dentist_name, date?)`, `get_appointment_counts(date?)`, `get_dentist_list()`
+- `buildExecutor(session)` returns the async tool executor. It **re-validates** the requested tool against the caller's role on every call (defense against prompt injection) and runs every query clinic-scoped, formatting dates/times in `en-PH` locale.
+
+### `lib/ai-prompt.js` — system prompts
+
+Builds the role-based system prompt from cached templates so the static prefix can be reused across turns (prompt caching).
+
 ---
 
 ## File Map
 
 ```
 lib/
-└── ai.js                                  OpenAI client + chatWithTools + generateJSON
+├── ai.js                                  OpenAI client + chatWithTools + generateJSON
+├── ai-prompt.js                           Role-based system-prompt builder (cached templates)
+└── ai-tools.js                            Role-filtered tool definitions + buildExecutor(session)
 
 app/api/ai/
 ├── chat/route.js                          GET (list sessions) + POST (send message)

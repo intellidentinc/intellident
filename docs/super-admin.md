@@ -96,6 +96,9 @@ The API:
 | `app/modules/super-page/ApplicationsTab.jsx` | Clinic application list; approve/reject UI |
 | `app/api/super/enter/route.js` | Sets session clinicId + superAdmin flag |
 | `app/api/super/exit/route.js` | Resets session to super state |
+| `app/api/super/policies/route.js` | `GET` clinic policy fields + `POST` bulk policy push (see below) |
+| `app/api/super/clinics/[id]/route.js` | `PATCH` (update) + `DELETE` (soft-delete) a clinic |
+| `app/api/super/clinics/[id]/toggle/route.js` | `POST` — enable/disable a clinic (`Clinic.isEnabled`) |
 | `app/api/super/clinic-applications/route.js` | `GET` — list all applications (filterable by status) |
 | `app/api/super/clinic-applications/[id]/route.js` | `PATCH` — approve or reject an application |
 | `app/api/clinic-applications/route.js` | `POST` — public submission (rate-limited: 5/hr per IP) |
@@ -107,6 +110,21 @@ The API:
 | `app/modules/super-page/RestoreModal.jsx` | 3-step restore wizard UI |
 | `lib/roles.js` | `ROLES.SUPERADMIN = 0` |
 | `lib/auth.js` | `setSession(..., superAdmin)` — stores flag in cookie |
+
+---
+
+## Clinic Policies (bulk push)
+
+`GET/POST /api/super/policies` lets the super admin read and push policy settings across clinics without entering each one.
+
+- **GET** — returns all non-deleted clinics with their policy fields.
+- **POST** — body `{ clinicIds: ["all"] | ["clinicId", ...], patch: { ... } }`. Applies `patch` to every targeted clinic. Allowed fields, validated server-side:
+  - `passwordExpiryEnabled` (boolean)
+  - `singleSessionEnabled` (boolean)
+  - `reminder1Hours`, `reminder2Hours` (1–72)
+  - `auditLogRetentionDays`, `patientRecordRetentionDays`, `billingRetentionDays` (≥1, or `null` = keep forever)
+
+Requires role `0`.
 
 ---
 

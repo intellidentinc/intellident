@@ -26,6 +26,7 @@ import { notifyPatientStatusChange } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
+import { generateAppointmentCode } from '@/lib/appointments'
 
 async function getCaller() {
   const session = await getSession()
@@ -201,47 +202,43 @@ export async function POST(request) {
   // Generate appointmentCode: APT-{CLINICCODE}-{YYYY/MM/DD}-{####} (date in Manila timezone)
   const clinicCode = clinic?.code ?? 'CLN'
   const datePart = apptManila.format('YYYY/MM/DD')
-  const existingCount = await prisma.appointment.count({
-    where: {
-      clinicId: caller.clinicId,
-      scheduledAt: {
-        gte: apptManila.clone().startOf('day').toDate(),
-        lt:  apptManila.clone().endOf('day').toDate(),
-      },
-    },
-  })
-  const appointmentCode = `APT-${clinicCode}-${datePart}-${String(existingCount + 1).padStart(4, '0')}`
 
   const initialStatus = ['PENDING', 'CONFIRMED'].includes(status) ? status : 'PENDING'
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      clinicId: caller.clinicId,
-      patientId,
-      serviceId: service.id,
-      dentistId: dentistId || null,
-      scheduledAt: apptDate,
-      endsAt,
-      status: initialStatus,
-      notes: notes || null,
-      appointmentCode,
-      services: {
-        create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
-      },
-      statusHistory: {
-        create: {
-          status: initialStatus,
-          changedById: caller.id,
+  // Code generation + create run in one transaction so the advisory lock in
+  // generateAppointmentCode holds until the row is written (no duplicate codes).
+  const appointment = await prisma.$transaction(async (tx) => {
+    const appointmentCode = await generateAppointmentCode(caller.clinicId, clinicCode, datePart, tx)
+    return tx.appointment.create({
+      data: {
+        clinicId: caller.clinicId,
+        patientId,
+        serviceId: service.id,
+        dentistId: dentistId || null,
+        scheduledAt: apptDate,
+        endsAt,
+        status: initialStatus,
+        notes: notes || null,
+        appointmentCode,
+        services: {
+          create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+        },
+        statusHistory: {
+          create: {
+            status: initialStatus,
+            changedById: caller.id,
+          },
         },
       },
-    },
-    include: {
-      patient: {
-        include: { user: { select: { id: true, email: true, firstName: true } } },
+      include: {
+        patient: {
+          include: { user: { select: { id: true, email: true, firstName: true } } },
+        },
+        service: { select: { name: true } },
       },
-      service: { select: { name: true } },
-    },
+    })
   })
+  const { appointmentCode } = appointment
 
   // If created directly as CONFIRMED, notify the patient
   if (initialStatus === 'CONFIRMED') {

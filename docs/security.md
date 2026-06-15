@@ -24,11 +24,14 @@ Using the Web Crypto API — **the server never sees plaintext user data.**
 - Cleared from memory on sign-out
 
 **Data:**
-- Encrypt with `encryptData(masterKey, plaintext)` → returns `{ ciphertext, iv }`
-- Decrypt with `decryptData(masterKey, ciphertext, iv)`
+- Encrypt with `encryptData(key, plaintext, patientId)` → returns `{ ciphertext, iv }`
+- Decrypt with `decryptData(key, ciphertext, iv, patientId)`
+- `patientId` is bound as **AES-GCM Additional Authenticated Data (AAD)** — ciphertext cannot be moved to another patient's record without failing decryption. Decryption falls back to no-AAD for records written before AAD was introduced.
 - Server stores only encrypted blobs — unreadable without the user's password
 
-**Important:** Developers cannot read user data. There is no password recovery that restores access to existing encrypted data. This is intentional.
+**Multi-reader records (RSA-OAEP envelope):** patient-record notes must be readable by more than one person (the patient + treating dentists), so they use an asymmetric-envelope scheme rather than the single master key: each record gets a fresh content key (CEK) that is wrapped to every authorized reader's RSA public key. The server never sees the CEK, any private key, or plaintext. Full detail: [`records.md`](./records.md).
+
+**Important:** Developers cannot read user data. There is no password recovery that restores access to existing encrypted data — password reset provisions fresh keys and discards access to old encrypted records. This is intentional.
 
 ## Password Policy
 Enforced on both client and server (`app/api/auth/sign-up/route.js`):
@@ -39,9 +42,13 @@ Enforced on both client and server (`app/api/auth/sign-up/route.js`):
 - At least 1 special character
 
 ## Session Policy
+- **Signed cookie:** the `user` cookie is HMAC-SHA256-signed with `SESSION_SECRET` (`lib/session-cookie.js`) so its payload cannot be forged or modified client-side. Signing/verification **fails closed** if `SESSION_SECRET` is unset — a misconfigured environment never emits unsigned cookies. Verification uses a constant-time comparison.
+- **DB-backed validation:** every `getSession()` also validates the cookie's `sessionToken` (32 random bytes) against the `UserSession` table and checks `terminatedAt`, so a token cannot be reused after sign-out/termination.
 - **Token expiry:** 10 minutes (`lib/auth.js` — `maxAge: 60 * 10`)
 - **Remember Me:** extends session to 3 days (`maxAge: 60 * 60 * 24 * 3`) — checkbox on sign-in page
+- **Absolute cap:** middleware enforces an 8-hour hard limit regardless of sliding renewal
 - **Inactivity logout:** 30 minutes — tracked in `InactivityProvider`; clears master key and redirects to `/sign-in?reason=inactivity`
+- **Step-up re-auth:** sensitive actions (patient-record access, clinic data export) require a recent password re-entry (15-min TTL); see `isStepUpValid` in `lib/auth.js` and `POST /api/auth/step-up`
 
 ## Rate Limiting
 
@@ -64,9 +71,9 @@ On limit exceeded: `429 Too Many Requests`. Rate limit checks complement the per
 
 ## Multi-Factor Authentication (Email OTP)
 
-> **Status:** Code is fully implemented but currently **disabled** in `app/api/auth/sign-in/route.js` (MFA block is commented out; `sendMfaOtpEmail` import is also commented out). The `MfaOtp` table, `verify-otp` API, and `VerifyOtpPage` are all in place and ready to re-enable.
+> **Status:** **Enabled and enforced** for all users on every sign-in (`app/api/auth/sign-in/route.js`). Backed by the `MfaOtp` table, the `verify-otp` API, and `VerifyOtpPage`.
 
-When enabled: MFA is enforced for **all users** on every sign-in. After credentials are verified, a 6-digit OTP is emailed and the user must enter it before a session is created.
+MFA is enforced for **all users** on every sign-in. After credentials are verified, a 6-digit OTP is emailed and the user must enter it before a session is created. `wrappedKey`/`keySalt` (and the envelope keypair fields) are withheld from the response until the OTP is confirmed, so E2EE material is never released on credentials alone.
 
 ### Flow
 

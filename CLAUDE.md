@@ -21,11 +21,11 @@ IntelliDent is a capstone project by four BS Information Technology (Cybersecuri
 | Calendar | `react-big-calendar` + `dayjsLocalizer` |
 | Animation | Framer Motion (`AnimatePresence` + `motion.div`) |
 | Database ORM | Prisma + PostgreSQL (Neon) |
-| Auth | Custom session-based (cookies via `lib/auth.js`) |
-| Encryption | Web Crypto API — AES-GCM E2EE, PBKDF2 key derivation |
-| File Storage | Supabase Storage (`clinic-logos` bucket) |
-| Email | Gmail SMTP via nodemailer (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `GMAIL_FROM_NAME`) |
-| Cron | Vercel Cron Jobs (3 daily jobs) → `CRON_SECRET` bearer token; reminders 08:00 UTC, audit-purge 01:00 UTC, breach-scan 02:00 UTC |
+| Auth | Custom session-based — HMAC-signed cookie (`lib/session-cookie.js`, `SESSION_SECRET`) + DB-backed `UserSession` validation; helpers in `lib/auth.js` |
+| Encryption | Web Crypto API — AES-GCM-256 E2EE, PBKDF2 (210k) key derivation; patient records use an RSA-OAEP envelope (per-record content key wrapped to each authorized reader) — see [`docs/records.md`](./docs/records.md) |
+| File Storage | Supabase Storage (`clinic-logos`, `clinic-documents`, `record-attachments` buckets) |
+| Email | Gmail SMTP via nodemailer (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `GMAIL_FROM_NAME`, optional `GMAIL_REPLY_TO`) |
+| Cron | Vercel Cron Jobs (5 jobs) → `CRON_SECRET` bearer token (`lib/cron-auth.js`); reminders 08:00 UTC, audit-purge 01:00 UTC, breach-scan 02:00 UTC, orphan-docs 03:00 UTC, keep-alive 06:00 UTC every 5 days; health-check at `/api/health` |
 | AI | OpenAI gpt-5 — slot suggestions (`app/api/ai/slots`) + virtual assistant chatbot (`app/api/ai/chat`); helper: `lib/ai.js` |
 | Analytics | Vercel Analytics |
 
@@ -61,31 +61,37 @@ app/
 │   ├── sign-in/page.jsx
 │   └── sign-up/page.jsx
 ├── api/
-│   ├── auth/                 # Auth API routes (signin, signout, signup, verify, forgot-password, reset-password, change-password, verify-otp)
-│   │                         # Note: sign-up creates EmailVerification (not User); verify creates the User + profile
-│   ├── users/                # User list + PATCH role / DELETE / activate (ADMIN only)
+│   ├── auth/                 # Auth API routes (sign-in, sign-out, sign-up, verify, verify-otp, forgot-password, reset-password, change-password, step-up, accept-terms)
+│   │                         # Note: sign-up creates EmailVerification (not User); verify creates the User + profile; step-up = re-auth for sensitive actions (15-min TTL)
+│   ├── users/                # User list + PATCH role/isActive / DELETE (ADMIN only)
 │   ├── patients/             # GET (paginated) + POST (RECEPTIONIST); [id]/ PATCH + DELETE
 │   ├── services/             # GET + POST (ADMIN); [id]/ PATCH + DELETE; dentists/ GET
-│   ├── profile/              # GET + PATCH (any authenticated user)
+│   ├── profile/              # GET + PATCH (any authenticated user); keys/ POST — provision E2EE envelope keypair (set-if-null)
 │   ├── appointments/         # See Appointments API section below
 │   ├── schedules/            # Patient-facing booking API (PATIENT role); [id]/ PATCH cancel; slots/ GET
 │   ├── schedule/             # Dentist's own schedule API (DENTIST role only)
-│   ├── records/              # DENTIST: GET patient list; [patientId]/[recordId]/ POST + PATCH + DELETE (E2EE)
+│   ├── records/              # E2EE patient records — see docs/records.md. DENTIST: GET patient list; [patientId]/ GET+POST; [patientId]/[recordId]/ GET+PATCH+DELETE;
+│   │                         # [patientId]/recipients/ GET; [patientId]/[recordId]/{reshare,history}/; .../attachments/ POST + [attachmentId]/ DELETE
 │   ├── billing/              # GET + POST (ADMIN/RECEPTIONIST); [id]/ GET + PATCH; [id]/checkout/ POST (PayMongo)
 │   ├── audit-log/            # GET paginated + filtered; export/ GET (CSV/PDF, up to 5000 rows) — ADMIN only
 │   ├── reports/              # GET aggregated data (appointments/revenue/patients); export/ GET raw rows — ADMIN only
-│   ├── patient/              # Patient-scoped routes: billing/ GET, records/ GET
+│   ├── data-requests/        # DSAR — GET + POST (ACCESS/CORRECTION/DELETION); [id]/ PATCH (ADMIN resolve)
+│   ├── patient/              # Patient-scoped routes: billing/ GET, records/ GET + [recordId]/ GET
 │   ├── notifications/        # GET list + PATCH mark-all-read; [id]/ PATCH mark-one-read
-│   ├── ai/                   # slots/ GET (AI slot suggestions); chat/ POST (multi-turn chatbot); risk/ GET (no-show risk)
+│   ├── health/               # GET — DB ping health check (CRON_SECRET-protected)
+│   ├── ai/                   # slots/ GET (AI slot suggestions); chat/ GET+POST + [sessionId]/ GET+DELETE (multi-turn chatbot); risk/[patientId]/ GET (no-show risk)
 │   ├── super/                # enter/ POST + exit/ POST — SuperAdmin clinic switching; clinic-applications/ GET + [id]/ PATCH (approve/reject)
+│   │                         # policies/ GET + POST — bulk per-clinic policy push; clinics/[id]/ PATCH+DELETE + toggle/ POST (enable/disable)
 │   │                         # clinics/[id]/backup/ GET — data export (step-up required); clinics/[id]/restore/request-otp/ POST + confirm/ POST — OTP-confirmed restore
 │   ├── clinic-applications/  # POST — public submission (rate-limited 5/hr); documents/ POST — Supabase upload (rate-limited 50/hr)
 │   ├── webhooks/
-│   │   └── paymongo/         # POST — HMAC-verified PayMongo webhook (idempotent)
-│   ├── cron/
-│   │   ├── reminders/        # GET — daily at 08:00 UTC; sends 24h + 2h appointment reminders
-│   │   ├── audit-purge/      # GET — daily at 01:00 UTC; purges soft-deleted records per per-clinic retention config (audit logs, patient records, billing)
-│   │   └── breach-scan/      # GET — daily at 02:00 UTC; detects distributed brute-force, mass record access, bulk export; BREACH_ALERT audit entries + admin email
+│   │   └── paymongo/         # POST — HMAC-verified PayMongo webhook (idempotent); lib/paymongo.js
+│   ├── cron/                 # All CRON_SECRET-protected via lib/cron-auth.js
+│   │   ├── reminders/        # GET — daily 08:00 UTC; sends 24h + 2h appointment reminders
+│   │   ├── audit-purge/      # GET — daily 01:00 UTC; purges soft-deleted records per per-clinic retention config (audit logs, patient records, billing)
+│   │   ├── breach-scan/      # GET — daily 02:00 UTC; detects distributed brute-force, mass record access, bulk export; BREACH_ALERT audit entries + admin email
+│   │   ├── orphan-docs/      # GET — daily 03:00 UTC; deletes unreferenced clinic-application docs (>48h) from Supabase
+│   │   └── keep-alive/       # GET — 06:00 UTC every 5 days; DB ping to prevent Neon cold sleep
 │   └── clinics/
 │       ├── route.js          # GET — public (unauthenticated); lists all clinics for sign-in/sign-up selector
 │       ├── schedule/         # GET session-based (any role) — for appointment form
@@ -228,9 +234,9 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 **Key rules:**
 - Zero trust on every request: session → role → clinicId → permission → log
 - Input sanitization on all auth routes via `lib/validate.js`: 16 KB payload cap, type checking, field length limits, email normalization, hex token validation — applied before any DB call
-- E2EE via Web Crypto API (AES-GCM-256 + PBKDF2) — server never sees plaintext; `lib/crypto.js`
+- E2EE via Web Crypto API (AES-GCM-256 + PBKDF2 210k) — server never sees plaintext; `lib/crypto.js`. Patient records use an RSA-OAEP envelope (per-record content key wrapped to each authorized reader) with `patientId` bound as AAD — see [`docs/records.md`](./docs/records.md)
 - Password policy: 8+ chars, upper, lower, digit, special — enforced client + server
-- Session: 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`)
+- Session: HMAC-signed cookie (`lib/session-cookie.js`, fails closed if `SESSION_SECRET` unset) + DB-backed `UserSession` token validated on every request; 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`), absolute 8-hour cap; step-up re-auth (15-min TTL) for sensitive actions
 - Account lockout: 5 failed attempts / 5 min → locked 15 min
 - Rate limiting: DB-backed IP rate limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` Prisma model; sign-in 20/15 min, sign-up 10/hour, forgot-password 5/hour, verify-otp 15/15 min; clinic-apply 5/hour, clinic-docs 50/hour
 - Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use
@@ -593,15 +599,19 @@ const { data: { publicUrl } } = supabase.storage.from('clinic-logos').getPublicU
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Neon PostgreSQL connection string |
-| `SESSION_SECRET` | Cookie signing secret |
+| `SESSION_SECRET` | HMAC secret for signing the session cookie (`lib/session-cookie.js`); auth fails closed if unset |
 | `GMAIL_USER` | Gmail sender address |
 | `GMAIL_APP_PASSWORD` | Gmail App Password (not the account password) |
 | `GMAIL_FROM_NAME` | Sender display name |
+| `GMAIL_REPLY_TO` | (optional) Reply-To address for outgoing email |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
 | `NEXT_PUBLIC_APP_URL` | Public base URL of the app (e.g. `https://intellident-ai.org`) — used in verification, password-reset, and clinic approval emails |
-| `CRON_SECRET` | Bearer token protecting `/api/cron/reminders`; must match Vercel env var |
+| `CRON_SECRET` | Bearer token protecting all `/api/cron/*` jobs + `/api/health` (`lib/cron-auth.js`); must match Vercel env var |
 | `OPENAI_API_KEY` | OpenAI API key — used by `lib/ai.js` for chat and slot recommendations |
+| `PAYMONGO_SECRET_KEY` | PayMongo API secret key — checkout sessions (`lib/paymongo.js`) |
+| `PAYMONGO_WEBHOOK_SECRET` | PayMongo webhook signing secret — HMAC verification + replay protection |
+| `NOSHOW_RISK_THRESHOLD` | (optional) min prior no-shows to flag a patient high-risk; default 2 |
 | `LOCKOUT_MAX_ATTEMPTS` | (optional) default 5 |
 | `LOCKOUT_WINDOW_MINUTES` | (optional) default 5 |
 | `LOCKOUT_DURATION_MINUTES` | (optional) default 15 |

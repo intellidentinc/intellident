@@ -1,6 +1,6 @@
 # IntelliDent — Completion Report
 
-**Date:** May 12, 2026 (updated June 10, 2026)  
+**Date:** May 12, 2026 (updated June 15, 2026)  
 **Project:** IntelliDent — AI-Powered Dental Clinic Scheduling & Records System  
 **Team:** BS Information Technology (Cybersecurity), FEU Institute of Technology
 
@@ -13,7 +13,7 @@ This report assesses the current completion state of IntelliDent across two dime
 | Dimension | Completion |
 |---|---|
 | System Functionality | ~100% |
-| Security Implementation | ~99% |
+| Security Implementation | ~100% |
 
 ---
 
@@ -74,16 +74,16 @@ None.
 
 ---
 
-## 2. Security Implementation (~99%)
+## 2. Security Implementation (~100%)
 
 ### 2.1 Security Controls — Implemented
 
 | Control | Status | Details |
 |---|---|---|
-| Multi-Factor Authentication | ⚠️ Code Complete / Disabled | Email OTP — 6-digit, 10-min expiry, 5-attempt limit, bcrypt-hashed; `MfaOtp` model + `verify-otp` route ready; currently disabled in sign-in route (commented out) |
+| Multi-Factor Authentication | ✅ Complete | Email OTP — 6-digit, 10-min expiry, 5-attempt limit, bcrypt-hashed; enabled + enforced for all users on every sign-in (`MfaOtp` model, `verify-otp` route, `VerifyOtpPage`); E2EE key material withheld until OTP confirmed |
 | Rate Limiting | ✅ Complete | IP-based limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` DB table; sign-in 20/15 min, sign-up 10/hr, forgot-password 5/hr, verify-otp 15/15 min; returns 429 on limit exceeded |
 | Account Lockout | ✅ Complete | 5 failed attempts / 5 min → locked 15 min; configurable via env vars |
-| Session Management | ✅ Complete | DB-backed sessions via `UserSession` model; `sessionToken` validated on every request; 10-min cookie, 3-day Remember Me, 8-hour hard cap in middleware, 30-min inactivity auto-logout (`InactivityProvider`) |
+| Session Management | ✅ Complete | HMAC-signed cookie via `lib/session-cookie.js` (`SESSION_SECRET`, fails closed) + DB-backed sessions via `UserSession`; `sessionToken` validated on every request; 10-min cookie, 3-day Remember Me, 8-hour hard cap in middleware, 30-min inactivity auto-logout (`InactivityProvider`) |
 | Session Termination | ✅ Complete | Server-side session invalidation via `terminatedAt` on `UserSession`; terminates previous session on new login; single-session mode per clinic |
 | Known Device Tracking | ✅ Complete | `KnownDevice` model tracks user agent hash + IP; `firstSeenAt` + `lastSeenAt` per device per user |
 | Step-Up Authentication | ✅ Complete | `POST /api/auth/step-up` re-verifies password before sensitive exports; `StepUpModal.jsx`; 15-minute TTL; applied to audit log + report exports |
@@ -96,7 +96,7 @@ None.
 | Multi-Tenancy Isolation | ✅ Complete | Every DB query scoped to `clinicId`; no cross-clinic data access possible |
 | Soft Deletes | ✅ Complete | All major models use `isDeleted + deletedAt`; data never permanently removed |
 | Input Sanitization (All API Routes) | ✅ Complete | `lib/validate.js` applied to all auth + non-auth API routes: 16 KB payload cap, type checking, length limits, email normalization, hex token validation |
-| E2EE Architecture | ✅ Complete | Web Crypto API (AES-GCM-256 + PBKDF2) in `lib/crypto.js` and `CryptoProvider`; fully wired to patient record create/read/update on both dentist and patient sides |
+| E2EE Architecture | ✅ Complete | Web Crypto API (AES-GCM-256 + PBKDF2 210k) in `lib/crypto.js` and `CryptoProvider`; patient records use an RSA-OAEP envelope (per-record content key wrapped to each authorized reader) with `patientId` bound as AAD; fully wired to create/read/update on both dentist and patient sides — see `docs/records.md` |
 | Integrity Verification (contentHash) | ✅ Complete | SHA-256 of plaintext computed before encryption on every write; recomputed and verified against stored hash on every read; mismatch surfaces a tamper warning |
 | Record Edit History | ✅ Complete | `RecordHistory` model stores diffs on every `PatientRecord` edit; `GET /api/records/[patientId]/[recordId]/history` |
 | File Upload Security | ✅ Complete | Magic-byte validation (JPEG/PNG/PDF) + compressed archive rejection on all upload endpoints including clinic logo; `detectLogoType()` replaces client-supplied MIME |
@@ -111,25 +111,29 @@ None.
 
 ### 2.2 Security Controls — Remaining Gaps
 
-| Control | Status | Risk | Details |
-|---|---|---|---|
-| AAD in AES-GCM | ❌ Not implemented | Low-Medium | Encrypted records not cryptographically bound to their patient; payload swapping detectable only via `contentHash` |
-| MFA Enforcement | ⚠️ Disabled | Low-Medium | Email OTP code is fully implemented and ready (`MfaOtp` model, `verify-otp` route, `VerifyOtpPage`); commented out in `sign-in/route.js` |
+All previously tracked security gaps are now closed:
+
+| Control | Status | Details |
+|---|---|---|
+| AAD in AES-GCM | ✅ Implemented | Record ciphertext is bound to `patientId` as AES-GCM AAD (`lib/crypto.js`); a payload cannot be moved to another patient's record without failing decryption |
+| MFA Enforcement | ✅ Enabled | Email OTP enforced for all users on every sign-in (`sign-in/route.js` + `verify-otp/route.js`) |
+
+All static-analysis findings in `docs/security-findings.md` are now resolved — **LOW-01** (the count-based code-generation race for `patientCode`/`appointmentCode`) was closed on 2026-06-15 by applying the billing advisory-lock + max-sequence pattern to `lib/patients.js` and the new `lib/appointments.js`.
 
 ### 2.3 Security Layer Breakdown
 
 | Security Layer | Completion | Notes |
 |---|---|---|
-| Authentication | ~99% | Lockout, sessions, password controls, rate limiting all complete; MFA code ready but disabled; first-login forced change, password expiry, random temp passwords, suspicious login alerts, and account locked alerts all active; step-up auth for sensitive actions |
+| Authentication | ~100% | Lockout, sessions, password controls, rate limiting all complete; MFA (email OTP) enabled + enforced on every sign-in; first-login forced change, password expiry, random temp passwords, suspicious login alerts, and account locked alerts all active; step-up auth for sensitive actions |
 | Session Security | ~100% | DB-backed `UserSession` model; server-side termination; single-session mode; 8-hour hard cap; known device tracking; step-up required on suspicious new device/IP detection |
 | Access Control (RBAC + Tenancy) | ~100% | Role enforcement and clinicId scoping solid; step-up required for audit/report exports |
-| Data Protection (E2EE) | ~100% | Fully wired to patient records on both dentist and patient sides; tamper detection active; record diff history via `RecordHistory` |
+| Data Protection (E2EE) | ~100% | RSA-OAEP envelope (per-record content key wrapped to each authorized reader) + AAD patient binding; fully wired to patient records on both dentist and patient sides; tamper detection active; record diff history via `RecordHistory`; see `docs/records.md` |
 | Input Validation & Rate Limiting | ~100% | All routes covered; IP rate limits on all auth endpoints; TOCTOU race fixed with atomic SQL UPDATE (2026-06-07) |
 | Audit & Monitoring | ~100% | Full query UI and export (step-up protected); `logAudit()` called on all major write operations including AI interactions, exports, and record views; configurable retention + auto-purge cron |
 | Data Subject Rights | ~100% | DSAR module complete — patients can request access, correction, or deletion; admins review and resolve |
 | Integrity Verification | ~100% | SHA-256 `contentHash` on every write/read; `RecordHistory` diff log on every edit |
 | Transport & Platform Security | ~98% | `poweredByHeader: false`, `compress: true`; CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy all set via `next.config.mjs` (2026-06-07); CSP uses `unsafe-inline` for scripts |
-| **Overall Security** | **~99%** | |
+| **Overall Security** | **~100%** | |
 
 ---
 
@@ -181,8 +185,9 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | 17 | ~~Magic-byte file type validation on clinic logo upload~~ | ✅ Done | — |
 | 18 | ~~Security HTTP headers (CSP, HSTS, X-Frame-Options)~~ | ✅ Done | — |
 | 19 | ~~Rate limiter TOCTOU race (atomic SQL UPDATE in `lib/rateLimit.js`)~~ | ✅ Done | — |
-| 20 | AAD in AES-GCM (bind ciphertext to patientId) | ⏳ Pending | Low |
-| 21 | Enable MFA enforcement in sign-in flow | ⏳ Pending | Low |
+| 20 | ~~AAD in AES-GCM (bind ciphertext to patientId)~~ | ✅ Done | — |
+| 21 | ~~Enable MFA enforcement in sign-in flow~~ | ✅ Done | — |
+| 22 | ~~HMAC-signed session cookie (CRIT-01)~~ | ✅ Done | — |
 
 ---
 
@@ -191,7 +196,7 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 | Standard | Status | Gap |
 |---|---|---|
 | Philippine Data Privacy Act (RA 10173) | ⚠️ Near-Complete | PHI encrypted at rest (E2EE) with tamper detection; data subject rights (ACCESS/CORRECTION/DELETION) implemented; audit log with configurable retention and auto-purge; automated breach detection active (daily scan + admin alerting); breach notification to data subjects not yet formalized |
-| ISO/IEC 27001 | ⚠️ Partial | Access control (RBAC, zero trust, step-up), authentication (lockout, MFA-ready, session hardening), and audit logging strong; automated breach detection via daily cron; incident response controls not formalized |
+| ISO/IEC 27001 | ⚠️ Partial | Access control (RBAC, zero trust, step-up), authentication (lockout, enforced email MFA, signed-cookie + DB-backed session hardening), and audit logging strong; automated breach detection via daily cron; incident response controls not formalized |
 | NIST CSF | ⚠️ Partial | Identify ✅, Protect ✅ (E2EE + input validation + rate limiting + session hardening + step-up auth), Detect ✅ (audit log queryable + record history + automated breach alerting via daily cron), Respond ⚠️ (DSAR process in place; no formal incident playbook), Recover ⚠️ (backup/restore tooling in place; no formal DR plan) |
 
 ---
@@ -200,6 +205,14 @@ Ranked by impact for a healthcare/cybersecurity capstone:
 
 **Session hardening note (2026-06-03):** Sessions are now DB-backed via the `UserSession` model. Every `getSession()` call validates the `sessionToken` against the DB and checks `terminatedAt`. Clinics can optionally enable single-session mode, which terminates any existing session on new login. `clearSession()` now also writes `terminatedAt` to the DB for immediate server-side invalidation.
 
-**Step-up auth note (2026-06-03):** Sensitive export endpoints (audit log CSV/PDF, reports CSV/PDF) require step-up authentication — the user must re-enter their password before the export is served. Step-up validity is 15 minutes and is tracked in the session cookie via `stepUpGrantedAt`.
+**Step-up auth note (2026-06-03):** Sensitive export endpoints (audit log CSV/PDF, reports CSV/PDF) and patient-record access require step-up authentication — the user must re-enter their password before the action is served. Step-up validity is 15 minutes and is tracked in the session cookie via `stepUpGrantedAt`.
+
+**Record-sharing envelope note (2026-06-15):** Patient-record E2EE moved from a single symmetric master key to an RSA-OAEP envelope so the patient and treating dentists can each read a record without sharing a key. Each record has a per-record content key wrapped to every authorized reader; access self-heals for late-added dentists via reshare. `patientId` is bound as AES-GCM AAD. New model `RecordKey` and `User` envelope fields (`publicKey`, `encryptedPrivateKey`, `privateKeyIv`). Full detail: `docs/records.md`.
+
+**MFA + signed cookie note (2026-06-15):** Email-OTP MFA is now enabled and enforced on every sign-in, and the session cookie is HMAC-signed with `SESSION_SECRET` (fails closed). These close the last two security gaps (LOW-05, CRIT-01).
+
+**Cron note (2026-06-15):** Five Vercel cron jobs run now (reminders, audit-purge, breach-scan, plus **orphan-docs** at 03:00 UTC cleaning unreferenced clinic-application uploads, and **keep-alive** every 5 days to prevent Neon cold sleep), all protected by `lib/cron-auth.js`. A `/api/health` DB-ping endpoint is also available.
+
+**Super-admin policies note (2026-06-15):** `GET/POST /api/super/policies` lets a super admin push per-clinic policy settings (password expiry, single-session, reminder windows, retention) to one, several, or all clinics at once.
 
 *Generated from CLAUDE.md feature checklist and architecture documentation.*

@@ -25,9 +25,10 @@ IntelliDent uses a relational PostgreSQL database managed via Prisma ORM. The sc
 
 Enums define the allowed values for status and category fields across the schema.
 
+> **Note:** `User.role` is **not** a Prisma enum — it is stored as an `Int` (0=SUPERADMIN, 1=ADMIN, 2=DENTIST, 3=RECEPTIONIST, 4=PATIENT). See `lib/roles.js` for the canonical mapping. `data-models.md` is the authoritative model reference.
+
 | Enum | Values | Used In |
 |---|---|---|
-| `UserRole` | `PATIENT`, `STAFF`, `ADMIN` | User |
 | `Gender` | `MALE`, `FEMALE`, `OTHER`, `PREFER_NOT_TO_SAY` | Patient |
 | `AppointmentStatus` | `PENDING`, `CONFIRMED`, `RESCHEDULED`, `CANCELLED`, `COMPLETED`, `NO_SHOW` | Appointment |
 | `RecordStatus` | `ACTIVE`, `ARCHIVED` | PatientRecord |
@@ -73,9 +74,12 @@ Handles authentication and account management. Linked to either a `Patient` or `
 | `email` | `String` | Unique login identifier |
 | `name` | `String?` | Display name |
 | `password` | `String` | bcrypt-hashed password |
-| `role` | `UserRole` | Access level: PATIENT, STAFF, ADMIN |
+| `role` | `Int` | Access level: 0=SUPERADMIN, 1=ADMIN, 2=DENTIST, 3=RECEPTIONIST, 4=PATIENT (`lib/roles.js`) |
 | `wrappedKey` | `String?` | AES-GCM master key wrapped with PBKDF2-derived KEK |
 | `keySalt` | `String?` | PBKDF2 salt used to derive the KEK (base64) |
+| `publicKey` | `String?` | RSA-OAEP public key (SPKI base64) for E2EE record sharing |
+| `encryptedPrivateKey` | `String?` | RSA private key (PKCS8), AES-GCM-encrypted under the master key |
+| `privateKeyIv` | `String?` | IV for `encryptedPrivateKey` |
 | `clinicId` | `String?` | Tenant scope |
 | `isDeleted` | `Boolean` | Soft delete flag |
 | `createdAt` | `DateTime` | Record creation timestamp |
@@ -196,7 +200,25 @@ Stores treatment history, notes, and clinical data. All sensitive content is E2E
 
 > **Tamper Detection:** `contentHash` stores a SHA-256 hash of the original plaintext. On read, the decrypted content is re-hashed and compared. Any mismatch indicates tampering.
 
-**Relations:** has many `Attachment`
+> **Multi-reader E2EE:** notes are encrypted with a per-record content key (CEK) bound to `patientId` (AAD). The CEK is wrapped to each authorized reader's public key in a `RecordKey` row, so the patient and treating dentists each decrypt without sharing a key. Full model: [`records.md`](./records.md).
+
+**Relations:** has many `Attachment`, `RecordKey`, `RecordHistory`
+
+---
+
+### RecordKey
+
+One row per authorized reader, holding the record's content key wrapped (RSA-OAEP) to that reader's public key.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `String` (cuid) | Primary key |
+| `recordId` | `String` | Linked patient record (cascade delete) |
+| `userId` | `String` | The authorized reader |
+| `wrappedKey` | `String` | The record CEK, RSA-OAEP-wrapped to the reader's public key |
+| `createdAt` | `DateTime` | Created timestamp |
+
+Unique on `(recordId, userId)`.
 
 ---
 
@@ -339,24 +361,27 @@ Request received
 
 ```
 Registration:
-  password → PBKDF2 (150,000 iterations) → KEK
+  password → PBKDF2 (210,000 iterations) → KEK
   generateMasterKey() → AES-GCM-256 key
   wrapMasterKey(masterKey, KEK) → wrappedKey (base64)
   → server stores: wrappedKey + keySalt only
 
 Login:
-  server returns: wrappedKey + keySalt
+  server returns: wrappedKey + keySalt (+ envelope keypair fields)
   password + salt → PBKDF2 → KEK
   unwrapMasterKey(wrappedKey, KEK) → masterKey (in memory only)
+  loadOrProvisionKeys(): decrypt or lazily generate the RSA keypair
 
-Data write:
-  encryptData(masterKey, plaintext) → { ciphertext, iv }
-  → server stores: ciphertext + iv only
-
-Data read:
-  server returns: ciphertext + iv
-  decryptData(masterKey, ciphertext, iv) → plaintext (browser only)
+Multi-reader record (RSA-OAEP envelope):
+  write:  generateContentKey() → CEK
+          encryptData(CEK, notes, patientId) → { ciphertext, iv }   (patientId = AAD)
+          wrapContentKey(CEK, readerPublicKey) per authorized reader → RecordKey rows
+          → server stores: ciphertext + iv + one wrapped CEK per reader
+  read:   server returns ciphertext + iv + the caller's wrapped CEK
+          unwrapContentKey(wrap, privateKey) → CEK → decryptData → plaintext (browser only)
 ```
+
+See [`records.md`](./records.md) for authorized-reader derivation and reshare/self-healing.
 
 ### Compliance Alignment
 

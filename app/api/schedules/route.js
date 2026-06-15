@@ -23,6 +23,7 @@ import { notifyStaffBooking } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
+import { generateAppointmentCode } from '@/lib/appointments'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -185,36 +186,32 @@ export async function POST(request) {
   // Generate appointmentCode
   const clinicCode = clinic?.code ?? 'CLN'
   const datePart = `${apptDate.getFullYear()}/${String(apptDate.getMonth() + 1).padStart(2, '0')}/${String(apptDate.getDate()).padStart(2, '0')}`
-  const existingCount = await prisma.appointment.count({
-    where: {
-      clinicId: caller.clinicId,
-      scheduledAt: {
-        gte: new Date(apptDate.getFullYear(), apptDate.getMonth(), apptDate.getDate()),
-        lt:  new Date(apptDate.getFullYear(), apptDate.getMonth(), apptDate.getDate() + 1),
-      },
-    },
-  })
-  const appointmentCode = `APT-${clinicCode}-${datePart}-${String(existingCount + 1).padStart(4, '0')}`
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      clinicId:   caller.clinicId,
-      patientId:  caller.patientId,
-      serviceId:  service.id,
-      dentistId:  dentistId || null,
-      scheduledAt: apptDate,
-      endsAt,
-      status: 'PENDING',
-      notes: notes || null,
-      appointmentCode,
-      services: {
-        create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+  // Code generation + create run in one transaction so the advisory lock in
+  // generateAppointmentCode holds until the row is written (no duplicate codes).
+  const appointment = await prisma.$transaction(async (tx) => {
+    const appointmentCode = await generateAppointmentCode(caller.clinicId, clinicCode, datePart, tx)
+    return tx.appointment.create({
+      data: {
+        clinicId:   caller.clinicId,
+        patientId:  caller.patientId,
+        serviceId:  service.id,
+        dentistId:  dentistId || null,
+        scheduledAt: apptDate,
+        endsAt,
+        status: 'PENDING',
+        notes: notes || null,
+        appointmentCode,
+        services: {
+          create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+        },
+        statusHistory: {
+          create: { status: 'PENDING', changedById: caller.userId },
+        },
       },
-      statusHistory: {
-        create: { status: 'PENDING', changedById: caller.userId },
-      },
-    },
+    })
   })
+  const { appointmentCode } = appointment
 
   // Notify all receptionists and admins of the new booking request
   const patient = await prisma.patient.findUnique({

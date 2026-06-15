@@ -278,7 +278,7 @@ const { checkoutSessionId, checkoutUrl } = await createCheckoutSession({
 const valid = verifyWebhookSignature(rawBody, request.headers.get('paymongo-signature'))
 ```
 
-**Supported payment methods:** GCash, Maya, card (debit/credit), DOB, BancNet online banking (Landbank, Metrobank).
+**Supported payment methods:** keyed off `PAYMONGO_SECRET_KEY`. Live keys (`sk_live_*`) enable `card`, `gcash`, `paymaya`, `qrph`, `dob`, `brankas_landbank`, `brankas_metrobank`; test keys enable `card`, `gcash`, `qrph`.
 
 **Note:** `amount` is in **centavos** (PHP × 100). The client library handles conversion both ways.
 
@@ -286,7 +286,7 @@ const valid = verifyWebhookSignature(rawBody, request.headers.get('paymongo-sign
 
 PayMongo sends: `paymongo-signature: t=<timestamp>,te=<test_hmac>,li=<live_hmac>`
 
-Verification: `HMAC-SHA256(secret, "${timestamp}.${rawBody}")` must match either `te` (test) or `li` (live).
+Verification (`verifyWebhookSignature`): the timestamp must be **within 300 seconds** of now (replay protection), then `HMAC-SHA256(secret, "${timestamp}.${rawBody}")` must match either `te` (test) or `li` (live) via constant-time comparison. Fails closed if `PAYMONGO_WEBHOOK_SECRET` is unset.
 
 ### Setting Up Webhooks in PayMongo Dashboard
 

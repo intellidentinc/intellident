@@ -16,10 +16,19 @@ const ROLES = { SUPERADMIN: 0, ADMIN: 1, DENTIST: 2, RECEPTIONIST: 3, PATIENT: 4
 const prisma = new PrismaClient();
 
 async function generatePatientCode(clinicId, tx) {
+  // Mirrors lib/patients.js: per-clinic advisory lock + highest-existing-sequence
+  // (not a count) so concurrent/repeated runs can't mint duplicate codes.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(('x' || substr(md5(${clinicId}), 1, 16))::bit(64)::bigint)`;
   const clinic = await tx.clinic.findUnique({ where: { id: clinicId }, select: { code: true } });
   const year = new Date().getFullYear();
-  const existingCount = await tx.patient.count({ where: { clinicId } });
-  return `PAT-${clinic?.code ?? 'CLN'}-${year}-${String(existingCount + 1).padStart(5, '0')}`;
+  const prefix = `PAT-${clinic?.code ?? 'CLN'}-${year}-`;
+  const last = await tx.patient.findFirst({
+    where: { clinicId, patientCode: { startsWith: prefix } },
+    orderBy: { patientCode: 'desc' },
+    select: { patientCode: true },
+  });
+  const lastSeq = last ? parseInt(last.patientCode.slice(prefix.length), 10) || 0 : 0;
+  return `${prefix}${String(lastSeq + 1).padStart(5, '0')}`;
 }
 
 async function reconcileRoleProfile(tx, { userId, role, clinicId, firstName, lastName }) {
