@@ -18,7 +18,7 @@
  *     - On CANCELLED: additionally notifies all staff in-app via notifyStaff
  */
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyPatientStatusChange, notifyStaff, createNotification } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
@@ -31,10 +31,7 @@ import { sendCustomAppointmentEmail } from '@/lib/email'
 async function getCaller() {
   const session = await getSession()
   if (!session) return null
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true, id: true, firstName: true, lastName: true },
-  })
+  const caller = await getAuthContext()
   if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(caller.role)) return null
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
   return { ...caller, clinicId }

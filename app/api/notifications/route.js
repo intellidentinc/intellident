@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 async function getUser() {
   const session = await getSession()
   if (!session) return null
-  return prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, clinicId: true, role: true },
-  })
+  return getAuthContext()
 }
 
 // GET /api/notifications — fetch current user's notifications + unread count

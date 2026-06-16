@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAdmin, ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
@@ -12,10 +12,7 @@ export async function PATCH(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
+  const caller = await getAuthContext()
   if (!caller || !isAdmin(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

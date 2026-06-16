@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
@@ -9,10 +9,7 @@ import { generateReceiptNumber, computeBillingStatus } from '@/lib/billing'
 async function getCaller() {
   const session = await getSession()
   if (!session) return null
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true, id: true },
-  })
+  const caller = await getAuthContext()
   if (!caller || ![ROLES.ADMIN, ROLES.RECEPTIONIST, ROLES.SUPERADMIN].includes(caller.role)) return null
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
   return { ...caller, clinicId }

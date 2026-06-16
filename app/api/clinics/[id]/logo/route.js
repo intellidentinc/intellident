@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getAuthContext } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
 import { ROLES, isAdmin } from '@/lib/roles';
@@ -33,10 +33,7 @@ async function getAdminForClinic(clinicId) {
   const session = await getSession();
   if (!session) return null;
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  });
+  const caller = await getAuthContext();
 
   if (!caller || !isAdmin(caller.role)) return null;
   const effectiveClinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId;

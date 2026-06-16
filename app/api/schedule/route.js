@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 
@@ -7,10 +7,7 @@ export async function GET(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
+  const caller = await getAuthContext()
   if (!caller || caller.role !== ROLES.DENTIST) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

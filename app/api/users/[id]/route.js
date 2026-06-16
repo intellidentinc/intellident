@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession, clearSession } from '@/lib/auth'
+import { getSession, clearSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, ROLE_LABELS, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
@@ -10,10 +10,7 @@ async function getAdminCaller() {
   const session = await getSession()
   if (!session) return null
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true }
-  })
+  const caller = await getAuthContext()
 
   if (!caller || !isAdmin(caller.role)) return null
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId

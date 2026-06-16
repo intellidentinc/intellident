@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { revalidateTag } from 'next/cache'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
@@ -8,7 +8,7 @@ import { getRequestMeta, logAudit } from '@/lib/audit'
 async function requireSuperAdmin(request) {
   const session = await getSession()
   if (!session) return null
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } })
+  const user = await getAuthContext()
   if (!user || user.role !== ROLES.SUPERADMIN) return null
   return session
 }

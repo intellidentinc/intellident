@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { chatWithTools } from '@/lib/ai'
 import { buildSystemPrompt } from '@/lib/ai-prompt'
@@ -7,10 +7,7 @@ import { getToolsForRole, buildExecutor } from '@/lib/ai-tools'
 import { parseJsonBody } from '@/lib/validate'
 
 async function getCaller(session) {
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
+  const user = await getAuthContext()
   if (!user) return null
   const clinicId = user.clinicId ?? session.clinicId
   return { ...user, clinicId }

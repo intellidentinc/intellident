@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcrypt'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
@@ -25,10 +25,7 @@ export async function GET(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true }
-  })
+  const caller = await getAuthContext()
 
   if (!caller || !isAdmin(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -80,10 +77,7 @@ export async function POST(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true }
-  })
+  const caller = await getAuthContext()
 
   if (!caller || !isAdmin(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

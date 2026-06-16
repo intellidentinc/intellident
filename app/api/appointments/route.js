@@ -20,7 +20,7 @@
  */
 import { NextResponse } from 'next/server'
 import moment from 'moment-timezone'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyPatientStatusChange } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
@@ -31,10 +31,7 @@ import { generateAppointmentCode } from '@/lib/appointments'
 async function getCaller() {
   const session = await getSession()
   if (!session) return null
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true, id: true },
-  })
+  const caller = await getAuthContext()
   if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(caller.role)) return null
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
   return { ...caller, clinicId }

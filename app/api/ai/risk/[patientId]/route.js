@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 
@@ -9,10 +9,7 @@ export async function GET(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
+  const caller = await getAuthContext()
 
   // Staff only (role 1–3); role comes from DB, not the cookie
   if (!caller || caller.role > 3) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRecordsDentist, dentistTreatsPatient, getRecordRecipients } from '@/lib/records-access'
@@ -23,10 +23,7 @@ export async function POST(request, { params }) {
 
   const { patientId, recordId } = await params
 
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
+  const caller = await getAuthContext()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // Authorize: a treating dentist, or the patient who owns the record.

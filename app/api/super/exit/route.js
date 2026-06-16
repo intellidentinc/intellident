@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession, setSession } from '@/lib/auth'
+import { getSession, setSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 
@@ -7,7 +7,7 @@ export async function POST() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } })
+  const user = await getAuthContext()
   if (!user || user.role !== ROLES.SUPERADMIN) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

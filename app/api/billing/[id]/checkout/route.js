@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { createCheckoutSession } from '@/lib/paymongo'
@@ -7,10 +7,7 @@ import { createCheckoutSession } from '@/lib/paymongo'
 async function getCaller() {
   const session = await getSession()
   if (!session) return null
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
+  const user = await getAuthContext()
   if (!user) return null
 
   if ([ROLES.ADMIN, ROLES.RECEPTIONIST, ROLES.SUPERADMIN].includes(user.role)) {

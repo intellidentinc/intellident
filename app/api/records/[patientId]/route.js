@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession, isStepUpValid } from '@/lib/auth'
+import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { parseJsonBody, str, secret } from '@/lib/validate'
@@ -7,10 +7,7 @@ import { logAudit, getRequestMeta } from '@/lib/audit'
 import { getRecordRecipients, validateWraps } from '@/lib/records-access'
 
 async function getDentistForClinic(session) {
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true }
-  })
+  const caller = await getAuthContext()
   if (!caller || caller.role !== ROLES.DENTIST) return null
 
   const dentist = await prisma.dentist.findUnique({
