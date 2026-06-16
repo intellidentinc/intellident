@@ -17,7 +17,7 @@ export default function Footer() {
 
           {/* Center text */}
           <p className="text-xs text-slate-400 text-center">
-            Built by BS IT (Cybersecurity) students — FEU Institute of Technology &middot; &copy; 2026
+            Built by PenTech 4 — BS IT (Cybersecurity) students, FEU Institute of Technology &middot; &copy; 2026
           </p>
 
           {/* Compliance badges */}

@@ -21,7 +21,7 @@ const features = [
       </svg>
     ),
     title: 'End-to-End Encrypted',
-    description: 'Patient data is encrypted in the browser with AES-GCM-256. The server never sees plaintext — ever.',
+    description: 'Patient data is encrypted in the browser. The server never sees plaintext — ever.',
   },
   {
     icon: (

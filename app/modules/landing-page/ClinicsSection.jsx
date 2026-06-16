@@ -6,21 +6,21 @@ import { motion, useInView } from 'framer-motion';
 const clinics = [
   {
     name: 'Maria Laura Cruz Dental Clinic',
-    location: 'Quezon City',
+    location: 'Pasig City',
     initials: 'MLC',
     color: 'bg-blue-600',
     specialty: 'General Dentistry & Orthodontics',
   },
   {
     name: 'KH Dental Aesthetics',
-    location: 'Makati City',
+    location: 'Quezon City',
     initials: 'KH',
     color: 'bg-indigo-600',
     specialty: 'Cosmetic & Aesthetic Dentistry',
   },
   {
     name: 'Cabasal Dental Clinic',
-    location: 'Pasig City',
+    location: 'San Juan City',
     initials: 'CD',
     color: 'bg-violet-600',
     specialty: 'Oral Surgery & Periodontics',
