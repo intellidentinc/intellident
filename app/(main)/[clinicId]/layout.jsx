@@ -62,7 +62,7 @@ export default async function ClinicLayout({ children, params }) {
     : 0
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <AppSidebar session={session} role={effectiveRole} clinicName={clinic?.name} clinicLogo={clinic?.logoUrl} pendingCount={pendingCount} isSuperAdmin={session.superAdmin === true} />
       {children}
       <AIChatButton role={effectiveRole} />

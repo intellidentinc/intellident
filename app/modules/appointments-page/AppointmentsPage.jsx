@@ -47,6 +47,7 @@ import dayjs from 'dayjs'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
+import { STATUS_CHIP } from '@/components/commons/statusColors'
 const AppointmentCalendar = dynamic(() => import('./AppointmentCalendar'), { ssr: false })
 const CreateAppointmentModal = dynamic(() => import('./CreateAppointmentModal'))
 const AppointmentDetailModal = dynamic(() => import('./AppointmentDetailModal'))
@@ -54,15 +55,6 @@ const CancelAppointmentModal = dynamic(() => import('./CancelAppointmentModal'))
 const RescheduleAppointmentModal = dynamic(() => import('./RescheduleAppointmentModal'))
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const STATUS_CHIP = {
-  PENDING:     { bg: '#fef9c3', color: '#854d0e', label: 'Pending' },
-  CONFIRMED:   { bg: '#dbeafe', color: '#1d4ed8', label: 'Confirmed' },
-  COMPLETED:   { bg: '#dcfce7', color: '#15803d', label: 'Completed' },
-  CANCELLED:   { bg: '#fee2e2', color: '#b91c1c', label: 'Cancelled' },
-  NO_SHOW:     { bg: '#f1f5f9', color: '#475569', label: 'No-show' },
-  RESCHEDULED: { bg: '#ede9fe', color: '#7c3aed', label: 'Rescheduled' },
-}
 
 const VIEWS = [
   { key: 'day',   label: 'Day' },
@@ -472,26 +464,26 @@ export default function AppointmentsPage({ initialCalendar = [], initialDentists
                           <Chip label={chip.label} size='small' sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.72rem' }} />
                         </TableCell>
                         <TableCell align='center'>
-                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          <Box sx={{ display: 'inline-grid', gridTemplateColumns: 'repeat(3, 34px)', justifyItems: 'center', alignItems: 'center', gap: 0.5 }}>
                             <Tooltip title='View / edit'>
                               <IconButton size='small' onClick={() => setDetailTarget(row)} sx={{ cursor: 'pointer' }}>
                                 <EditOutlinedIcon fontSize='small' />
                               </IconButton>
                             </Tooltip>
-                            {row.status === 'CONFIRMED' && (
+                            {row.status === 'CONFIRMED' ? (
                               <Tooltip title='Reschedule'>
                                 <IconButton size='small' onClick={() => setRescheduleTarget(row)} sx={{ cursor: 'pointer', color: '#7c3aed' }}>
                                   <EventRepeatIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
-                            )}
-                            {!isTerminal(row.status) && (
+                            ) : <span />}
+                            {!isTerminal(row.status) ? (
                               <Tooltip title='Cancel'>
                                 <IconButton size='small' onClick={() => setCancelTarget(row)} sx={{ cursor: 'pointer', color: '#b91c1c' }}>
                                   <CancelOutlinedIcon fontSize='small' />
                                 </IconButton>
                               </Tooltip>
-                            )}
+                            ) : <span />}
                           </Box>
                         </TableCell>
                       </TableRow>

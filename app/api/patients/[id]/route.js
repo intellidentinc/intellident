@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 
@@ -14,9 +14,11 @@ export async function PATCH(request, { params }) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
+  if (!caller || !(caller.role === ROLES.RECEPTIONIST || isAdmin(caller.role))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
@@ -36,7 +38,7 @@ export async function PATCH(request, { params }) {
     select: { id: true, clinicId: true, isDeleted: true, role: true },
   })
 
-  if (!target || target.isDeleted || target.clinicId !== caller.clinicId || target.role !== 'PATIENT') {
+  if (!target || target.isDeleted || target.clinicId !== clinicId || target.role !== ROLES.PATIENT) {
     return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
   }
 
@@ -70,7 +72,7 @@ export async function PATCH(request, { params }) {
     })
   })
 
-  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'UPDATE', entity: 'Patient', entityId: id, ipAddress: ip, userAgent })
+  logAudit({ userId: session.userId, clinicId, action: 'UPDATE', entity: 'Patient', entityId: id, ipAddress: ip, userAgent })
 
   return NextResponse.json({ success: true })
 }
@@ -84,9 +86,11 @@ export async function DELETE(request, { params }) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
+  if (!caller || !(caller.role === ROLES.RECEPTIONIST || isAdmin(caller.role))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { ip: deleteIp, userAgent: deleteUa } = getRequestMeta(request)
   const { id } = await params
@@ -96,7 +100,7 @@ export async function DELETE(request, { params }) {
     select: { id: true, clinicId: true, isDeleted: true, role: true },
   })
 
-  if (!target || target.isDeleted || target.clinicId !== caller.clinicId || target.role !== 'PATIENT') {
+  if (!target || target.isDeleted || target.clinicId !== clinicId || target.role !== ROLES.PATIENT) {
     return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
   }
 
@@ -114,7 +118,7 @@ export async function DELETE(request, { params }) {
     })
   })
 
-  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'DELETE', entity: 'Patient', entityId: id, ipAddress: deleteIp, userAgent: deleteUa })
+  logAudit({ userId: session.userId, clinicId, action: 'DELETE', entity: 'Patient', entityId: id, ipAddress: deleteIp, userAgent: deleteUa })
 
   return NextResponse.json({ success: true })
 }

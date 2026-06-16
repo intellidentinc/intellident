@@ -19,7 +19,10 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
+import PageContainer from '@/components/commons/PageContainer'
+import EmptyState from '@/components/commons/EmptyState'
 import { useToast } from '@/app/providers/ToastProvider'
+import { Stethoscope } from 'lucide-react'
 import dynamic from 'next/dynamic'
 const ServiceFormModal = dynamic(() => import('./ServiceFormModal'))
 const DeleteServiceModal = dynamic(() => import('./DeleteServiceModal'))
@@ -79,17 +82,10 @@ export default function ServicesPage({ initialServices = [], initialDentists = [
     <SidebarInset>
       <PageHeader title='Services' />
 
-      <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3 }}>
-          <Box>
-            <Typography variant='h5' fontWeight={700} color='text.primary'>
-              Service Catalog
-            </Typography>
-            <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
-              Manage dental services offered at this clinic
-            </Typography>
-          </Box>
+      <PageContainer
+        title='Service Catalog'
+        subtitle='Manage dental services offered at this clinic'
+        action={
           <Tooltip title='Add service'>
             <Box
               onClick={() => {
@@ -116,8 +112,8 @@ export default function ServicesPage({ initialServices = [], initialDentists = [
               </Typography>
             </Box>
           </Tooltip>
-        </Box>
-
+        }
+      >
         {/* Table */}
         <Box
           sx={{
@@ -162,11 +158,13 @@ export default function ServicesPage({ initialServices = [], initialDentists = [
                 )}
 
                 {!loading && rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} align='center' sx={{ py: 6 }}>
-                      <Typography variant='body2' color='text.disabled'>
-                        No services added yet
-                      </Typography>
+                  <TableRow sx={{ '&:hover': { bgcolor: 'transparent' } }}>
+                    <TableCell colSpan={6} sx={{ border: 0 }}>
+                      <EmptyState
+                        icon={Stethoscope}
+                        title='No services added yet'
+                        description='Add the dental services your clinic offers to start accepting bookings.'
+                      />
                     </TableCell>
                   </TableRow>
                 )}
@@ -249,7 +247,7 @@ export default function ServicesPage({ initialServices = [], initialDentists = [
             </Table>
           </TableContainer>
         </Box>
-      </Box>
+      </PageContainer>
 
       <ServiceFormModal
         open={formOpen}

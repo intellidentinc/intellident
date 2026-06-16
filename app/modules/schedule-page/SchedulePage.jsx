@@ -14,6 +14,7 @@ import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 const AppointmentCalendar = dynamic(() => import('@/app/modules/appointments-page/AppointmentCalendar'), { ssr: false })
 import ScheduleEventModal from './ScheduleEventModal'
+import { STATUS_CHIP } from '@/components/commons/statusColors'
 
 const VIEWS = [
   { key: 'day',  label: 'Day' },
@@ -30,15 +31,6 @@ function formatLabel(view, date) {
   const d = dayjs(date)
   if (view === 'week') return `${d.startOf('week').format('MMM D')} – ${d.endOf('week').format('MMM D, YYYY')}`
   return d.format('dddd, MMMM D, YYYY')
-}
-
-const STATUS_CHIP = {
-  PENDING:     { bg: '#fef9c3', color: '#854d0e', label: 'Pending' },
-  CONFIRMED:   { bg: '#dbeafe', color: '#1d4ed8', label: 'Confirmed' },
-  COMPLETED:   { bg: '#dcfce7', color: '#15803d', label: 'Completed' },
-  CANCELLED:   { bg: '#fee2e2', color: '#b91c1c', label: 'Cancelled' },
-  NO_SHOW:     { bg: '#f1f5f9', color: '#475569', label: 'No-show' },
-  RESCHEDULED: { bg: '#ede9fe', color: '#7c3aed', label: 'Rescheduled' },
 }
 
 export default function SchedulePage() {

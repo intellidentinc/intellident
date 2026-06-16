@@ -3,9 +3,14 @@
 import { motion } from 'framer-motion'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import Chip from '@mui/material/Chip'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Clock, CalendarDays, CalendarCheck, Users, CreditCard, User, ArrowRight, ChevronRight, CalendarX2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { colors, radii, shadows } from '@/components/commons/theme'
+import StatCard from '@/components/commons/StatCard'
+import SectionCard from '@/components/commons/SectionCard'
+import EmptyState from '@/components/commons/EmptyState'
+import PageContainer from '@/components/commons/PageContainer'
+import StatusChip from '@/components/commons/statusColors'
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -14,36 +19,10 @@ function getGreeting() {
   return 'Good evening'
 }
 
-function useCounter(target, duration = 800) {
-  const [count, setCount] = useState(0)
-  useEffect(() => {
-    if (!target) { setCount(0); return }
-    const start = performance.now()
-    const tick = (now) => {
-      const p = Math.min((now - start) / duration, 1)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setCount(Math.floor(eased * target))
-      if (p < 1) requestAnimationFrame(tick)
-      else setCount(target)
-    }
-    requestAnimationFrame(tick)
-  }, [target, duration])
-  return count
-}
-
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.07 } } }
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] } },
-}
-
-const STATUS_CHIP = {
-  PENDING:     { bg: '#fef9c3', color: '#854d0e',  label: 'Pending' },
-  CONFIRMED:   { bg: '#dbeafe', color: '#1d4ed8',  label: 'Confirmed' },
-  COMPLETED:   { bg: '#dcfce7', color: '#15803d',  label: 'Completed' },
-  CANCELLED:   { bg: '#fee2e2', color: '#b91c1c',  label: 'Cancelled' },
-  NO_SHOW:     { bg: '#f1f5f9', color: '#475569',  label: 'No-show' },
-  RESCHEDULED: { bg: '#ede9fe', color: '#7c3aed',  label: 'Rescheduled' },
 }
 
 function getInitials(name) {
@@ -51,49 +30,26 @@ function getInitials(name) {
   return ((parts[0]?.[0] ?? '') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase()
 }
 
-function StatCard({ label, value, href, urgent }) {
-  const count = useCounter(value)
-  const inner = (
-    <Box sx={{
-      bgcolor: '#fff',
-      border: '1px solid',
-      borderColor: urgent && value > 0 ? '#fde68a' : '#e2e8f0',
-      borderLeft: urgent && value > 0 ? '3px solid #d97706' : undefined,
-      borderRadius: 2.5,
-      p: 2.5,
-      height: '100%',
-      transition: 'border-color 0.18s, box-shadow 0.18s',
-      '&:hover': { borderColor: urgent && value > 0 ? '#fbbf24' : '#cbd5e1', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-    }}>
-      <Typography
-        variant='h4'
-        fontWeight={800}
-        sx={{ lineHeight: 1, letterSpacing: -0.5, mb: 0.5, color: urgent && value > 0 ? '#b45309' : '#0f172a' }}
-      >
-        {count}
-      </Typography>
-      <Typography variant='body2' sx={{ color: '#64748b' }}>{label}</Typography>
-    </Box>
-  )
-  if (href) return <Box component='a' href={href} sx={{ textDecoration: 'none', display: 'block', height: '100%' }}>{inner}</Box>
-  return inner
-}
+const QUICK_LINKS = [
+  { label: 'Appointments', desc: 'View & manage all',   href: 'appointments', icon: CalendarDays },
+  { label: 'Patients',     desc: 'Patient directory',   href: 'patients',     icon: Users },
+  { label: 'Billing',      desc: 'Payments & invoices', href: 'billing',      icon: CreditCard },
+  { label: 'My Profile',   desc: 'Account settings',    href: 'profile',      icon: User },
+]
 
 export default function ReceptionistDashboardClient({ session, pending, todayTotal, todayConfirmed, totalPatients, recentAppts }) {
   const [greeting, setGreeting] = useState('Hello')
   useEffect(() => { setGreeting(getGreeting()) }, [])
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+    <PageContainer>
       <motion.div variants={stagger} initial='hidden' animate='visible'>
 
         {/* Hero */}
         <motion.div variants={fadeUp}>
           <Box sx={{ mb: 4 }}>
-            <Typography variant='h5' fontWeight={700} color='#0f172a' sx={{ letterSpacing: -0.3 }}>
-              {greeting}, {session.firstName}
-            </Typography>
-            <Typography variant='body2' sx={{ color: '#94a3b8', mt: 0.5 }}>
+            <Typography variant='h5'>{greeting}, {session.firstName}</Typography>
+            <Typography variant='body2' sx={{ color: colors.faint, mt: 0.5 }}>
               {new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </Typography>
           </Box>
@@ -102,10 +58,10 @@ export default function ReceptionistDashboardClient({ session, pending, todayTot
         {/* Stats */}
         <motion.div variants={fadeUp}>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
-            <StatCard label='Pending bookings'   value={pending}        href='appointments' urgent />
-            <StatCard label="Today's appointments" value={todayTotal}   href='appointments' />
-            <StatCard label='Confirmed upcoming'  value={todayConfirmed} href='appointments' />
-            <StatCard label='Total patients'      value={totalPatients}  href='patients' />
+            <StatCard label='Pending bookings'      value={pending}        href='appointments' icon={Clock} urgent />
+            <StatCard label="Today's appointments"  value={todayTotal}     href='appointments' icon={CalendarDays} />
+            <StatCard label='Confirmed upcoming'    value={todayConfirmed} href='appointments' icon={CalendarCheck} />
+            <StatCard label='Total patients'        value={totalPatients}  href='patients'     icon={Users} />
           </Box>
         </motion.div>
 
@@ -116,7 +72,7 @@ export default function ReceptionistDashboardClient({ session, pending, todayTot
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               flexWrap: 'wrap', gap: 1.5,
               border: '1px solid #fde68a', borderLeft: '3px solid #d97706',
-              borderRadius: 2.5, p: 2, mb: 3, bgcolor: '#fffbeb',
+              borderRadius: `${radii.md}px`, p: 2, mb: 3, bgcolor: '#fffbeb',
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <AlertTriangle size={16} color='#d97706' />
@@ -125,12 +81,13 @@ export default function ReceptionistDashboardClient({ session, pending, todayTot
                 </Typography>
               </Box>
               <Box component='a' href='appointments' sx={{
+                display: 'inline-flex', alignItems: 'center', gap: 0.5,
                 px: 2.5, py: 0.75, bgcolor: '#d97706', color: '#fff',
-                borderRadius: 1.5, fontWeight: 600, fontSize: '0.78rem',
+                borderRadius: `${radii.sm}px`, fontWeight: 600, fontSize: '0.78rem',
                 textDecoration: 'none', whiteSpace: 'nowrap',
                 transition: 'background 0.15s', '&:hover': { bgcolor: '#b45309' },
               }}>
-                Review now
+                Review now <ArrowRight size={14} />
               </Box>
             </Box>
           </motion.div>
@@ -138,99 +95,90 @@ export default function ReceptionistDashboardClient({ session, pending, todayTot
 
         {/* Bottom: recent appointments + quick links */}
         <motion.div variants={fadeUp}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.5fr 1fr' }, gap: 3 }}>
 
             {/* Recent appointments */}
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                <Typography variant='overline' sx={{ color: '#94a3b8', fontWeight: 700, letterSpacing: 1.2, fontSize: '0.68rem' }}>
-                  Recent Appointments
-                </Typography>
-                <Box component='a' href='appointments' sx={{ fontSize: '0.78rem', fontWeight: 600, color: '#2563eb', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
-                  View all →
+            <SectionCard
+              title='Recent Appointments'
+              icon={CalendarDays}
+              noPadding
+              action={
+                <Box component='a' href='appointments' sx={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0.25,
+                  fontSize: '0.78rem', fontWeight: 600, color: colors.primaryBlue,
+                  textDecoration: 'none', '&:hover': { textDecoration: 'underline' },
+                }}>
+                  View all <ChevronRight size={14} />
                 </Box>
-              </Box>
-
-              <Box sx={{ bgcolor: '#fff', border: '1px solid #e2e8f0', borderRadius: 2.5, overflow: 'hidden' }}>
-                {recentAppts.length === 0 ? (
-                  <Box sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography variant='body2' sx={{ color: '#94a3b8' }}>No appointments yet</Typography>
+              }
+            >
+              {recentAppts.length === 0 ? (
+                <EmptyState icon={CalendarX2} title='No appointments yet' description='New bookings will show up here.' />
+              ) : (
+                recentAppts.map((a, i) => (
+                  <Box
+                    key={a.id}
+                    sx={{
+                      display: 'flex', alignItems: 'center', gap: 2, px: 2.5, py: 1.75,
+                      borderBottom: i < recentAppts.length - 1 ? `1px solid ${colors.surface}` : 'none',
+                      transition: 'background 0.12s', '&:hover': { bgcolor: colors.surface },
+                    }}
+                  >
+                    <Box sx={{
+                      width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                      bgcolor: colors.paleBlue, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: colors.primaryBlue }}>
+                        {getInitials(a.patientName)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant='body2' fontWeight={600} color={colors.ink} noWrap>{a.patientName}</Typography>
+                      <Typography variant='caption' sx={{ color: colors.faint }} noWrap>
+                        {a.serviceName} · {a.dateFormatted}
+                      </Typography>
+                    </Box>
+                    <StatusChip status={a.status} sx={{ flexShrink: 0 }} />
                   </Box>
-                ) : (
-                  recentAppts.map((a, i) => {
-                    const chip = STATUS_CHIP[a.status] ?? { bg: '#f1f5f9', color: '#475569', label: a.status }
-                    const initials = getInitials(a.patientName)
-                    return (
-                      <Box
-                        key={a.id}
-                        sx={{
-                          display: 'flex', alignItems: 'center', gap: 2,
-                          px: 2.5, py: 1.75,
-                          borderBottom: i < recentAppts.length - 1 ? '1px solid #f8fafc' : 'none',
-                          transition: 'background 0.12s',
-                          '&:hover': { bgcolor: '#fafafa' },
-                        }}
-                      >
-                        <Box sx={{
-                          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                          bgcolor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <Typography sx={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', letterSpacing: 0.2 }}>
-                            {initials}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant='body2' fontWeight={600} color='#0f172a' noWrap>{a.patientName}</Typography>
-                          <Typography variant='caption' sx={{ color: '#94a3b8' }} noWrap>
-                            {a.serviceName} · {a.dateFormatted}
-                          </Typography>
-                        </Box>
-                        <Chip
-                          label={chip.label}
-                          size='small'
-                          sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.68rem', flexShrink: 0 }}
-                        />
-                      </Box>
-                    )
-                  })
-                )}
-              </Box>
-            </Box>
+                ))
+              )}
+            </SectionCard>
 
             {/* Quick links */}
-            <Box>
-              <Typography variant='overline' sx={{ color: '#94a3b8', fontWeight: 700, letterSpacing: 1.2, fontSize: '0.68rem', display: 'block', mb: 1.5 }}>
-                Quick Actions
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                {[
-                  { label: 'Appointments', desc: 'View & manage all',   href: 'appointments' },
-                  { label: 'Patients',     desc: 'Patient directory',   href: 'patients' },
-                  { label: 'Billing',      desc: 'Payments & invoices', href: 'billing' },
-                  { label: 'My Profile',   desc: 'Account settings',    href: 'profile' },
-                ].map((link) => (
+            <SectionCard title='Quick Actions' icon={ArrowRight} noPadding>
+              <Box sx={{ p: 1.5, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                {QUICK_LINKS.map((link) => (
                   <Box
                     key={link.href}
                     component='a'
                     href={link.href}
                     sx={{
-                      display: 'block', textDecoration: 'none',
-                      bgcolor: '#fff', border: '1px solid #e2e8f0', borderRadius: 2.5, p: 2,
-                      transition: 'border-color 0.18s, box-shadow 0.18s',
-                      '&:hover': { borderColor: '#cbd5e1', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
+                      display: 'flex', flexDirection: 'column', gap: 0.75, textDecoration: 'none',
+                      bgcolor: '#fff', border: `1px solid ${colors.border}`, borderRadius: `${radii.md}px`, p: 1.75,
+                      transition: 'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
+                      '&:hover': { borderColor: colors.borderStrong, boxShadow: shadows.hover, transform: 'translateY(-2px)' },
                     }}
                   >
-                    <Typography variant='body2' fontWeight={600} color='#0f172a'>{link.label}</Typography>
-                    <Typography variant='caption' sx={{ color: '#94a3b8', display: 'block', mt: 0.25 }}>{link.desc}</Typography>
+                    <Box sx={{
+                      width: 32, height: 32, borderRadius: `${radii.sm}px`,
+                      bgcolor: colors.paleBlue, color: colors.primaryBlue,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <link.icon size={16} />
+                    </Box>
+                    <Box>
+                      <Typography variant='body2' fontWeight={600} color={colors.ink}>{link.label}</Typography>
+                      <Typography variant='caption' sx={{ color: colors.faint, display: 'block' }}>{link.desc}</Typography>
+                    </Box>
                   </Box>
                 ))}
               </Box>
-            </Box>
+            </SectionCard>
 
           </Box>
         </motion.div>
 
       </motion.div>
-    </Box>
+    </PageContainer>
   )
 }

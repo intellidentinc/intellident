@@ -19,7 +19,10 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
+import PageContainer from '@/components/commons/PageContainer'
+import EmptyState from '@/components/commons/EmptyState'
 import { useToast } from '@/app/providers/ToastProvider'
+import { Users } from 'lucide-react'
 import dynamic from 'next/dynamic'
 const AddPatientModal = dynamic(() => import('./AddPatientModal'))
 const EditPatientModal = dynamic(() => import('./EditPatientModal'))
@@ -88,17 +91,10 @@ export default function PatientsPage({ initialRows = [], initialTotal = 0 }) {
     <SidebarInset>
       <PageHeader title='Patients' />
 
-      <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3 }}>
-          <Box>
-            <Typography variant='h5' fontWeight={700} color='text.primary'>
-              Patients
-            </Typography>
-            <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
-              Manage patient records for this clinic
-            </Typography>
-          </Box>
+      <PageContainer
+        title='Patients'
+        subtitle='Manage patient records for this clinic'
+        action={
           <Tooltip title='Register patient'>
             <Box
               onClick={() => setAddOpen(true)}
@@ -122,8 +118,8 @@ export default function PatientsPage({ initialRows = [], initialTotal = 0 }) {
               </Typography>
             </Box>
           </Tooltip>
-        </Box>
-
+        }
+      >
         {/* Table */}
         <Box
           sx={{
@@ -170,11 +166,13 @@ export default function PatientsPage({ initialRows = [], initialTotal = 0 }) {
                 )}
 
                 {!loading && rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} align='center' sx={{ py: 6 }}>
-                      <Typography variant='body2' color='text.disabled'>
-                        No patients found
-                      </Typography>
+                  <TableRow sx={{ '&:hover': { bgcolor: 'transparent' } }}>
+                    <TableCell colSpan={4} sx={{ border: 0 }}>
+                      <EmptyState
+                        icon={Users}
+                        title='No patients yet'
+                        description='Registered patients for this clinic will appear here.'
+                      />
                     </TableCell>
                   </TableRow>
                 )}
@@ -228,7 +226,7 @@ export default function PatientsPage({ initialRows = [], initialTotal = 0 }) {
             sx={{ borderTop: '1px solid', borderColor: 'divider' }}
           />
         </Box>
-      </Box>
+      </PageContainer>
 
       <AddPatientModal
         open={addOpen}

@@ -6,15 +6,7 @@ import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
 import Chip from '@mui/material/Chip'
 import Button from '@/components/commons/Button'
-
-const STATUS_CHIP = {
-  PENDING:     { bg: '#fef9c3', color: '#854d0e', label: 'Pending' },
-  CONFIRMED:   { bg: '#dbeafe', color: '#1d4ed8', label: 'Confirmed' },
-  COMPLETED:   { bg: '#dcfce7', color: '#15803d', label: 'Completed' },
-  CANCELLED:   { bg: '#fee2e2', color: '#b91c1c', label: 'Cancelled' },
-  NO_SHOW:     { bg: '#f1f5f9', color: '#475569', label: 'No-show' },
-  RESCHEDULED: { bg: '#ede9fe', color: '#7c3aed', label: 'Rescheduled' },
-}
+import { STATUS_CHIP } from '@/components/commons/statusColors'
 
 function Row({ label, value }) {
   return (

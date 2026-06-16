@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcrypt'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
 import { sendPatientClaimEmail } from '@/lib/email'
@@ -19,9 +19,11 @@ export async function GET(request) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
+  if (!caller || !(caller.role === ROLES.RECEPTIONIST || isAdmin(caller.role))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
   const page = parseInt(searchParams.get('page') ?? '0', 10)
@@ -33,7 +35,7 @@ export async function GET(request) {
   const safeSortField = validSortFields.includes(sortField) ? sortField : 'firstName'
   const safeSortOrder = sortOrder === 'desc' ? 'desc' : 'asc'
 
-  const where = { clinicId: caller.clinicId, isDeleted: false, role: ROLES.PATIENT }
+  const where = { clinicId, isDeleted: false, role: ROLES.PATIENT }
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
@@ -76,9 +78,11 @@ export async function POST(request) {
     select: { role: true, clinicId: true },
   })
 
-  if (!caller || caller.role !== ROLES.RECEPTIONIST) {
+  if (!caller || !(caller.role === ROLES.RECEPTIONIST || isAdmin(caller.role))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { ip, userAgent } = getRequestMeta(request)
   const parsed = await parseJsonBody(request)
@@ -120,18 +124,18 @@ export async function POST(request) {
         role: ROLES.PATIENT,
         wrappedKey,
         keySalt,
-        clinicId: caller.clinicId,
+        clinicId,
         mustChangePassword: true,
       },
     })
 
     // Generate patientCode: PAT-{CLINICCODE}-{YYYY}-{#####}
-    const patientCode = await generatePatientCode(caller.clinicId, tx)
+    const patientCode = await generatePatientCode(clinicId, tx)
 
     const patient = await tx.patient.create({
       data: {
         userId: user.id,
-        clinicId: caller.clinicId,
+        clinicId,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone.trim(),
@@ -142,9 +146,9 @@ export async function POST(request) {
     return patient
   })
 
-  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'Patient', entityId: newPatient.id, ipAddress: ip, userAgent, metadata: { patientCode: newPatient.patientCode } })
+  logAudit({ userId: session.userId, clinicId, action: 'CREATE', entity: 'Patient', entityId: newPatient.id, ipAddress: ip, userAgent, metadata: { patientCode: newPatient.patientCode } })
 
-  const clinic = await prisma.clinic.findUnique({ where: { id: caller.clinicId }, select: { name: true } })
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true } })
   sendPatientClaimEmail({
     to: email.trim().toLowerCase(),
     firstName: firstName.trim(),

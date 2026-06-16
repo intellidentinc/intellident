@@ -117,9 +117,18 @@ export async function DELETE(request, { params }) {
   const target = await getTargetUser(id, caller.clinicId)
   if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.user.update({
-    where: { id },
-    data: { isDeleted: true, deletedAt: new Date() }
+  const now = new Date()
+
+  // Soft-delete the user AND cascade to its linked profile record so counts that
+  // query the profile tables (e.g. dashboard "Total patients") stay consistent.
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id },
+      data: { isDeleted: true, deletedAt: now },
+    })
+    await tx.patient.updateMany({ where: { userId: id, isDeleted: false }, data: { isDeleted: true, deletedAt: now } })
+    await tx.dentist.updateMany({ where: { userId: id, isDeleted: false }, data: { isDeleted: true, deletedAt: now } })
+    await tx.receptionist.updateMany({ where: { userId: id, isDeleted: false }, data: { isDeleted: true, deletedAt: now } })
   })
 
   const session = await getSession()

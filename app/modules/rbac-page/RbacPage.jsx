@@ -22,7 +22,10 @@ import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
+import PageContainer from '@/components/commons/PageContainer'
+import EmptyState from '@/components/commons/EmptyState'
 import { useToast } from '@/app/providers/ToastProvider'
+import { UserCog } from 'lucide-react'
 import dynamic from 'next/dynamic'
 const EditRoleModal = dynamic(() => import('./EditRoleModal'))
 const DeleteUserModal = dynamic(() => import('./DeleteUserModal'))
@@ -154,17 +157,10 @@ export default function RbacPage({ isSuperAdmin = false, initialRows = [], initi
     <SidebarInset>
       <PageHeader title='User Management' />
 
-      <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 3 }}>
-          <Box>
-            <Typography variant='h5' fontWeight={700} color='text.primary'>
-              Users
-            </Typography>
-            <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
-              Manage user roles and accounts for this clinic
-            </Typography>
-          </Box>
+      <PageContainer
+        title='Users'
+        subtitle='Manage user roles and accounts for this clinic'
+        action={
           <Tooltip title='Add user'>
             <Box
               onClick={() => setAddOpen(true)}
@@ -188,8 +184,8 @@ export default function RbacPage({ isSuperAdmin = false, initialRows = [], initi
               </Typography>
             </Box>
           </Tooltip>
-        </Box>
-
+        }
+      >
         {/* Table */}
         <Box
           sx={{
@@ -236,11 +232,13 @@ export default function RbacPage({ isSuperAdmin = false, initialRows = [], initi
                 )}
 
                 {!loading && rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} align='center' sx={{ py: 6 }}>
-                      <Typography variant='body2' color='text.disabled'>
-                        No users found
-                      </Typography>
+                  <TableRow sx={{ '&:hover': { bgcolor: 'transparent' } }}>
+                    <TableCell colSpan={6} sx={{ border: 0 }}>
+                      <EmptyState
+                        icon={UserCog}
+                        title='No users found'
+                        description='Staff and patient accounts for this clinic will appear here.'
+                      />
                     </TableCell>
                   </TableRow>
                 )}
@@ -323,7 +321,7 @@ export default function RbacPage({ isSuperAdmin = false, initialRows = [], initi
             sx={{ borderTop: '1px solid', borderColor: 'divider' }}
           />
         </Box>
-      </Box>
+      </PageContainer>
 
       <EditRoleModal
         open={!!editTarget}

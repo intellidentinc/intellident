@@ -80,7 +80,8 @@ async function ReceptionistDashboard({ session }) {
     prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, scheduledAt: { gte: todayStart, lt: todayEnd } } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'CONFIRMED', scheduledAt: { gte: now } } }),
-    prisma.patient.count({ where: { clinicId, isDeleted: false } }),
+    // Count patient accounts (same definition as the Patients page + Users section)
+    prisma.user.count({ where: { clinicId, isDeleted: false, role: ROLES.PATIENT } }),
     prisma.appointment.findMany({
       where: { clinicId, isDeleted: false },
       include: {
@@ -119,10 +120,11 @@ async function AdminDashboard({ session }) {
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  const [totalUsers, totalServices, totalPatients, apptThisMonth, pending, recentAppts] = await Promise.all([
+  const [totalUsers, totalServices, totalPatients, apptThisMonth, pending, recentAppts, statusGroups] = await Promise.all([
     prisma.user.count({ where: { clinicId, isDeleted: false } }),
     prisma.service.count({ where: { clinicId, isDeleted: false } }),
-    prisma.patient.count({ where: { clinicId, isDeleted: false } }),
+    // Count patient accounts (same definition as the Patients page + Users section)
+    prisma.user.count({ where: { clinicId, isDeleted: false, role: ROLES.PATIENT } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, scheduledAt: { gte: monthStart } } }),
     prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
     prisma.appointment.findMany({
@@ -134,6 +136,11 @@ async function AdminDashboard({ session }) {
       orderBy: { createdAt: 'desc' },
       take: 5,
     }),
+    prisma.appointment.groupBy({
+      by: ['status'],
+      where: { clinicId, isDeleted: false, scheduledAt: { gte: monthStart } },
+      _count: { id: true },
+    }),
   ])
 
   const serialized = recentAppts.map((a) => ({
@@ -144,6 +151,8 @@ async function AdminDashboard({ session }) {
     status: a.status,
   }))
 
+  const statusBreakdown = statusGroups.map((g) => ({ status: g.status, count: g._count.id }))
+
   return (
     <AdminDashboardClient
       session={session}
@@ -153,6 +162,7 @@ async function AdminDashboard({ session }) {
       apptThisMonth={apptThisMonth}
       pending={pending}
       recentAppts={serialized}
+      statusBreakdown={statusBreakdown}
       monthName={now.toLocaleString('en-PH', { month: 'long' })}
     />
   )

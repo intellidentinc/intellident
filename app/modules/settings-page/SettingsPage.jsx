@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
+import PageContainer from '@/components/commons/PageContainer'
 import { useToast } from '@/app/providers/ToastProvider'
 import ClinicLogoUpload from './ClinicLogoUpload'
 import ClinicProfileForm from './ClinicProfileForm'
@@ -125,7 +126,7 @@ export default function SettingsPage() {
     <SidebarInset>
       <PageHeader title='Settings' />
 
-      <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
+      <PageContainer maxWidth={920}>
         <Typography variant='h5' fontWeight={700} color='text.primary' gutterBottom>
           Clinic Profile
         </Typography>
@@ -233,7 +234,7 @@ export default function SettingsPage() {
         </Typography>
 
         <ClinicDataRetentionSettings clinicId={clinicId} />
-      </Box>
+      </PageContainer>
     </SidebarInset>
   )
 }
