@@ -277,8 +277,8 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - `User` has `isActive Boolean @default(true)` — deactivated users remain visible in the users table but are blocked at sign-in (403); `isActive` is toggled via `PATCH /api/users/[id]` with `{ isActive: boolean }`
 - `User` has `username String? @unique` — auto-generated as `{CLINICCODE}-{LASTNAME}-{####}` for admin-created staff; shown in user table, profile, and welcome email; not used for sign-in
 - `User` has `mustChangePassword Boolean @default(false)` — set `true` on admin-created staff; sign-in returns flag; client redirects to `/change-password?reason=first-login`; cleared on successful change
-- `User` has `passwordExpiresAt DateTime?` — set to `now + 90 days` for ADMIN accounts on password change when clinic has `passwordExpiryEnabled`
-- `Clinic` has `passwordExpiryEnabled Boolean @default(false)` — per-clinic toggle in Settings; enables 90-day password expiry for ADMIN accounts
+- `User` has `passwordExpiresAt DateTime?` — set to `now + Clinic.passwordExpiryDays` on password change when clinic has `passwordExpiryEnabled` and the user's role is in `Clinic.passwordExpiryRoles`; cleared (null) otherwise
+- `Clinic` has `passwordExpiryEnabled Boolean @default(false)`, `passwordExpiryDays Int @default(90)` (30–365), `passwordExpiryRoles Int[] @default([1])` — per-clinic password-expiry policy configured in Settings; days adjustable and applicable roles selectable (ADMIN/DENTIST/RECEPTIONIST/PATIENT)
 - `Clinic` has `singleSessionEnabled Boolean @default(false)` — per-clinic toggle; new login terminates any prior active session
 - `Clinic` has `isEnabled Boolean @default(true)` — disabled clinics are blocked at middleware (cached 60s via `unstable_cache`)
 - `Clinic` has `auditLogRetentionDays Int?`, `patientRecordRetentionDays Int?`, `billingRetentionDays Int?` — null = keep forever; enforced by daily purge cron
@@ -331,7 +331,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
 
 **Dashboard** (`DashboardPage.jsx`, server component): role-aware stat cards + recent appointments, all queries scoped to `clinicId`
 
-**Settings** (ADMIN, `/settings`): `ClinicLogoUpload` (Supabase), `ClinicProfileForm`, `ClinicSchedule` (working days/hours), `ClinicClosures`, `ClinicPaymentSettings` (PayMongo), `ClinicPasswordSettings` (90-day admin password expiry toggle)
+**Settings** (ADMIN, `/settings`): `ClinicLogoUpload` (Supabase), `ClinicProfileForm`, `ClinicSchedule` (working days/hours), `ClinicClosures`, `ClinicPaymentSettings` (PayMongo), `ClinicPasswordSettings` (configurable password expiry: toggle + days + applicable roles)
 
 **Dentist Records** (DENTIST, `/records`): patients with ≥1 CONFIRMED/COMPLETED appt with that dentist; paginated + searchable
 
@@ -369,7 +369,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
   - [x] Operating hours (working days + open/close time)
   - [x] Operating hours presets — `SchedulePreset` model; CRUD via `GET/POST /api/clinics/[id]/schedule/presets` + `DELETE /api/clinics/[id]/schedule/presets/[presetId]`; apply preset fills fields without saving; applied indicator on card
   - [x] Clinic closure dates (holidays/maintenance)
-  - [x] Admin password expiry toggle — `Clinic.passwordExpiryEnabled`; MUI Switch in Settings → Password Policy (`ClinicPasswordSettings.jsx`); when enabled, ADMIN accounts get `passwordExpiresAt = now + 90 days` on each password change; expired accounts redirected to `/change-password?reason=expired` at sign-in
+  - [x] Configurable password expiry — `Clinic.passwordExpiryEnabled` + `passwordExpiryDays` (30–365) + `passwordExpiryRoles Int[]`; MUI Switch + day field + role multi-select in Settings → Password Policy (`ClinicPasswordSettings.jsx`) and Super → Global Policies (`SuperPoliciesPage.jsx`); when enabled, accounts whose role is in `passwordExpiryRoles` get `passwordExpiresAt = now + passwordExpiryDays` on each password change; expired accounts redirected to `/change-password?reason=expired` at sign-in. Role validation shared via `sanitizeExpiryRoles()` in `lib/roles.js`
 - [x] Service Catalog (ADMIN)
   - [x] Create / edit / delete dental services
   - [x] Duration, price, buffer time per service

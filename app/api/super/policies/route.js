@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { ROLES, sanitizeExpiryRoles } from '@/lib/roles'
 import { parseJsonBody } from '@/lib/validate'
 
 async function requireSuperAdmin() {
@@ -22,6 +22,8 @@ export async function GET() {
       id: true,
       name: true,
       passwordExpiryEnabled: true,
+      passwordExpiryDays: true,
+      passwordExpiryRoles: true,
       singleSessionEnabled: true,
       reminder1Hours: true,
       reminder2Hours: true,
@@ -37,6 +39,8 @@ export async function GET() {
 
 const ALLOWED_FIELDS = {
   passwordExpiryEnabled: 'boolean',
+  passwordExpiryDays: 'expiryDays',
+  passwordExpiryRoles: 'roles',
   singleSessionEnabled: 'boolean',
   reminder1Hours: 'hours',
   reminder2Hours: 'hours',
@@ -69,6 +73,14 @@ export async function POST(request) {
       const n = parseInt(val, 10)
       if (isNaN(n) || n < 1 || n > 72) return NextResponse.json({ error: `${key} must be between 1 and 72` }, { status: 400 })
       sanitized[key] = n
+    } else if (type === 'expiryDays') {
+      const n = parseInt(val, 10)
+      if (isNaN(n) || n < 30 || n > 365) return NextResponse.json({ error: `${key} must be between 30 and 365` }, { status: 400 })
+      sanitized[key] = n
+    } else if (type === 'roles') {
+      const rolesResult = sanitizeExpiryRoles(val)
+      if (rolesResult.error) return NextResponse.json({ error: rolesResult.error }, { status: 400 })
+      sanitized[key] = rolesResult.roles
     } else if (type === 'retention') {
       if (val === null) {
         sanitized[key] = null

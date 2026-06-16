@@ -173,7 +173,7 @@ export async function POST(request) {
       user.clinicId
         ? prisma.clinic.findUnique({
             where: { id: user.clinicId },
-            select: { isEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true },
+            select: { isEnabled: true, passwordExpiryEnabled: true, passwordExpiryRoles: true, singleSessionEnabled: true },
           })
         : Promise.resolve(null),
     ]);

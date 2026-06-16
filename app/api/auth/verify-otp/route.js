@@ -89,7 +89,7 @@ export async function POST(request) {
     const clinic = user.clinicId
       ? await prisma.clinic.findUnique({
           where: { id: user.clinicId },
-          select: { isEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true },
+          select: { isEnabled: true, passwordExpiryEnabled: true, passwordExpiryRoles: true, singleSessionEnabled: true },
         })
       : null;
 

@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma';
 import { getSession, clearSession } from '@/lib/auth';
 import { sendPasswordChangedEmail } from '@/lib/email';
 import { parseJsonBody, secret } from '@/lib/validate';
-import { ROLES } from '@/lib/roles';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -61,14 +60,18 @@ export async function POST(request) {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     const newHistory = [user.password, ...user.passwordHistory].slice(0, 3);
 
-    let clinicExpiryEnabled = false;
-    if (user.role === ROLES.ADMIN && user.clinicId) {
-      const clinic = await prisma.clinic.findUnique({
+    let clinic = null;
+    if (user.clinicId) {
+      clinic = await prisma.clinic.findUnique({
         where: { id: user.clinicId },
-        select: { passwordExpiryEnabled: true },
+        select: { passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true },
       });
-      clinicExpiryEnabled = clinic?.passwordExpiryEnabled ?? false;
     }
+    const expiryEligible =
+      clinic?.passwordExpiryEnabled === true &&
+      Array.isArray(clinic.passwordExpiryRoles) &&
+      clinic.passwordExpiryRoles.includes(user.role);
+    const expiryDays = clinic?.passwordExpiryDays ?? 90;
 
     await prisma.user.update({
       where: { id: user.id },
@@ -78,9 +81,10 @@ export async function POST(request) {
         wrappedKey,
         keySalt,
         mustChangePassword: false,
-        ...(user.role === ROLES.ADMIN && clinicExpiryEnabled
-          ? { passwordExpiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) }
-          : {}),
+        // Set a fresh expiry when the policy covers this role; clear any stale expiry otherwise.
+        passwordExpiresAt: expiryEligible
+          ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+          : null,
       },
     });
 

@@ -118,6 +118,8 @@ model Clinic {
   reservationFeeAmount       Float     @default(0)
   paymongoEnabled            Boolean   @default(false)
   passwordExpiryEnabled      Boolean   @default(false)
+  passwordExpiryDays         Int       @default(90)
+  passwordExpiryRoles        Int[]     @default([1])
   singleSessionEnabled       Boolean   @default(false)
   notifConfig                Json?
   reminder1Hours             Int       @default(24)

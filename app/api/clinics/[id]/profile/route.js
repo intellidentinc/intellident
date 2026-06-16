@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES, isAdmin } from '@/lib/roles'
+import { ROLES, isAdmin, sanitizeExpiryRoles } from '@/lib/roles'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 import { revalidateTag } from 'next/cache'
 
@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
   })
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -53,7 +53,7 @@ export async function PATCH(request, { params }) {
   const phone    = str(parsed.body.phone, 20)
   const landline = str(parsed.body.landline, 20)
 
-  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
+  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, paymongoEnabled: true, passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
 
   const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body
   const hasSingleSession = 'singleSessionEnabled' in parsed.body
@@ -68,8 +68,23 @@ export async function PATCH(request, { params }) {
   }
 
   if (hasPasswordExpiry) {
-    const passwordExpiryEnabled = parsed.body.passwordExpiryEnabled === true
-    const clinic = await prisma.clinic.update({ where: { id }, data: { passwordExpiryEnabled }, select: FULL_SELECT })
+    const data = { passwordExpiryEnabled: parsed.body.passwordExpiryEnabled === true }
+
+    if ('passwordExpiryDays' in parsed.body) {
+      const days = parseInt(parsed.body.passwordExpiryDays, 10)
+      if (isNaN(days) || days < 30 || days > 365) {
+        return NextResponse.json({ error: 'Password expiry days must be between 30 and 365' }, { status: 400 })
+      }
+      data.passwordExpiryDays = days
+    }
+
+    if ('passwordExpiryRoles' in parsed.body) {
+      const rolesResult = sanitizeExpiryRoles(parsed.body.passwordExpiryRoles)
+      if (rolesResult.error) return NextResponse.json({ error: rolesResult.error }, { status: 400 })
+      data.passwordExpiryRoles = rolesResult.roles
+    }
+
+    const clinic = await prisma.clinic.update({ where: { id }, data, select: FULL_SELECT })
     return NextResponse.json(clinic)
   }
 

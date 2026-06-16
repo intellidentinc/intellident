@@ -19,10 +19,15 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Chip from '@mui/material/Chip'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import Checkbox from '@mui/material/Checkbox'
+import ListItemText from '@mui/material/ListItemText'
 import { Shield, Clock, Archive, FileText, Receipt } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import SuperPageHeader from './SuperPageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
+import { ROLE_LABELS, PASSWORD_EXPIRY_ROLES } from '@/lib/roles'
 
 export default function SuperPoliciesPage() {
   const { showToast } = useToast()
@@ -32,6 +37,8 @@ export default function SuperPoliciesPage() {
 
   // Security policy state
   const [passwordExpiry, setPasswordExpiry] = useState(false)
+  const [expiryDays, setExpiryDays] = useState(90)
+  const [expiryRoles, setExpiryRoles] = useState([1])
   const [singleSession, setSingleSession] = useState(false)
   const [securityLoading, setSecurityLoading] = useState(false)
   const [securityConfirm, setSecurityConfirm] = useState(false)
@@ -86,9 +93,25 @@ export default function SuperPoliciesPage() {
   }
 
   async function handleApplySecurity() {
+    if (passwordExpiry) {
+      const days = Number(expiryDays)
+      if (isNaN(days) || days < 30 || days > 365) {
+        showToast('Expiry days must be between 30 and 365', 'error')
+        return
+      }
+      if (expiryRoles.length === 0) {
+        showToast('Select at least one role for password expiry', 'error')
+        return
+      }
+    }
     setSecurityLoading(true)
     try {
-      const n = await applyPolicy({ passwordExpiryEnabled: passwordExpiry, singleSessionEnabled: singleSession })
+      const n = await applyPolicy({
+        passwordExpiryEnabled: passwordExpiry,
+        passwordExpiryDays: Number(expiryDays),
+        passwordExpiryRoles: expiryRoles,
+        singleSessionEnabled: singleSession,
+      })
       showToast(`Security policies applied to ${n} clinic${n !== 1 ? 's' : ''}`, 'success')
       setSecurityConfirm(false)
       setLoadingClinics(true)
@@ -189,11 +212,50 @@ export default function SuperPoliciesPage() {
             label={
               <Box sx={{ ml: 0.5 }}>
                 <Typography variant='body2' fontWeight={600}>Password Expiry</Typography>
-                <Typography variant='caption' color='text.secondary'>Admin accounts must change their password every 90 days.</Typography>
+                <Typography variant='caption' color='text.secondary'>Selected roles must change their password on a fixed schedule.</Typography>
               </Box>
             }
             sx={{ alignItems: 'center', mt: 1, mb: 0.5 }}
           />
+          {passwordExpiry && (
+            <Box sx={{ ml: 1, mb: 1, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <Box>
+                <Typography variant='body2' fontWeight={600} mb={0.75}>Expire every (days)</Typography>
+                <TextField
+                  type='number'
+                  size='small'
+                  value={expiryDays}
+                  onChange={(e) => setExpiryDays(e.target.value)}
+                  inputProps={{ min: 30, max: 365 }}
+                  sx={{ width: 140 }}
+                />
+              </Box>
+              <Box>
+                <Typography variant='body2' fontWeight={600} mb={0.75}>Apply to roles</Typography>
+                <Select
+                  multiple
+                  size='small'
+                  value={expiryRoles}
+                  onChange={(e) => setExpiryRoles(typeof e.target.value === 'string' ? e.target.value.split(',').map(Number) : e.target.value)}
+                  sx={{ minWidth: 240, maxWidth: 340 }}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((r) => (
+                        <Chip key={r} label={ROLE_LABELS[r]} size='small' />
+                      ))}
+                    </Box>
+                  )}
+                >
+                  {PASSWORD_EXPIRY_ROLES.map((r) => (
+                    <MenuItem key={r} value={r}>
+                      <Checkbox checked={expiryRoles.includes(r)} />
+                      <ListItemText primary={ROLE_LABELS[r]} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Box>
+            </Box>
+          )}
           <FormControlLabel
             control={<Switch checked={singleSession} onChange={(e) => setSingleSession(e.target.checked)} />}
             label={
@@ -372,6 +434,11 @@ export default function SuperPoliciesPage() {
                       <TableCell sx={{ fontSize: '0.8rem', fontWeight: 600, py: 1.25 }}>{c.name}</TableCell>
                       <TableCell sx={{ py: 1.25 }}>
                         <BoolChip value={c.passwordExpiryEnabled} />
+                        {c.passwordExpiryEnabled && (
+                          <Typography variant='caption' color='text.secondary' display='block' sx={{ mt: 0.5 }}>
+                            {c.passwordExpiryDays}d · {(c.passwordExpiryRoles ?? []).map((r) => ROLE_LABELS[r]).join(', ') || '—'}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell sx={{ py: 1.25 }}>
                         <BoolChip value={c.singleSessionEnabled} />

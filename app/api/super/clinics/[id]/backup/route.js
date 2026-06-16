@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
     select: {
       id: true, name: true, code: true, email: true, phone: true,
       landline: true, address: true, logoUrl: true, isEnabled: true,
-      passwordExpiryEnabled: true, createdAt: true,
+      passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true, createdAt: true,
       schedule: {
         select: {
           workingDays: true, openTime: true, closeTime: true, updatedAt: true,
