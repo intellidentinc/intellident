@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { isAdmin } from '@/lib/roles'
+import { isAdmin, ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 
@@ -20,6 +20,9 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  if (!clinicId) return NextResponse.json({ error: 'No clinic selected' }, { status: 400 })
+
   const { id } = await params
   const { ip, userAgent } = getRequestMeta(request)
 
@@ -28,7 +31,7 @@ export async function PATCH(request, { params }) {
     select: { id: true, clinicId: true, status: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (existing.clinicId !== caller.clinicId) {
+  if (existing.clinicId !== clinicId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -60,8 +63,8 @@ export async function PATCH(request, { params }) {
   })
 
   logAudit({
-    userId: caller.id ?? session.userId,
-    clinicId: caller.clinicId,
+    userId: session.userId,
+    clinicId,
     action: 'UPDATE',
     entity: 'DataRequest',
     entityId: id,

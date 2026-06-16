@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES } from '@/lib/roles'
 
 const RISK_THRESHOLD = parseInt(process.env.NOSHOW_RISK_THRESHOLD ?? '2', 10)
 
@@ -17,7 +18,8 @@ export async function GET(request, { params }) {
   if (!caller || caller.role > 3) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { patientId } = await params
-  const clinicId = caller.clinicId
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  if (!clinicId) return NextResponse.json({ error: 'No clinic selected' }, { status: 400 })
 
   // Verify patient belongs to this clinic
   const patient = await prisma.patient.findFirst({

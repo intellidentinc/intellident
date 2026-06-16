@@ -279,7 +279,7 @@ export default function SuperPage({ clinics: initialClinics }) {
             helperText={formErrors.name}
             placeholder='e.g. Maria Laura Cruz Dental Clinic'
           />
-          <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+          <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
             <Box sx={{ px: 2, py: 1.25, bgcolor: '#F8FAFC', borderBottom: '1px solid', borderColor: 'divider' }}>
               <Typography variant='caption' fontWeight={700} color='text.secondary' sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Address

@@ -7,7 +7,7 @@ import Input from '@/components/commons/Input'
 import Button from '@/components/commons/Button'
 import AddressSelector from '@/components/commons/AddressSelector'
 
-function SectionCard({ title, subtitle, children }) {
+function SectionCard({ title, subtitle, children, onSave, saving, saveLabel = 'Save Changes' }) {
   return (
     <Box
       sx={{
@@ -29,6 +29,13 @@ function SectionCard({ title, subtitle, children }) {
       </Box>
       <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         {children}
+        {onSave && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button variant='contained' size='small' loading={saving} onClick={onSave}>
+              {saveLabel}
+            </Button>
+          </Box>
+        )}
       </Box>
     </Box>
   )
@@ -57,7 +64,7 @@ export default function ClinicProfileForm({ form, errors, saving, loading, onCha
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
 
       {/* Clinic Identity */}
-      <SectionCard title='Clinic Identity'>
+      <SectionCard title='Clinic Identity' onSave={onSave} saving={saving}>
         <Input
           id='clinic-name'
           label='Clinic Name'
@@ -74,6 +81,9 @@ export default function ClinicProfileForm({ form, errors, saving, loading, onCha
       <SectionCard
         title='Address'
         subtitle='Select location from the dropdowns, then fill in the street details.'
+        onSave={onSave}
+        saving={saving}
+        saveLabel='Save Address'
       >
         <AddressSelector
           value={form.address}
@@ -84,7 +94,7 @@ export default function ClinicProfileForm({ form, errors, saving, loading, onCha
       </SectionCard>
 
       {/* Contact Information */}
-      <SectionCard title='Contact Information'>
+      <SectionCard title='Contact Information' onSave={onSave} saving={saving}>
         <Input
           id='clinic-email'
           label='Email'
@@ -115,12 +125,6 @@ export default function ClinicProfileForm({ form, errors, saving, loading, onCha
           />
         </Box>
       </SectionCard>
-
-      <Box>
-        <Button variant='contained' loading={saving} onClick={onSave}>
-          Save Changes
-        </Button>
-      </Box>
     </Box>
   )
 }

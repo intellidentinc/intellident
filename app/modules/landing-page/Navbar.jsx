@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import ClinicSearch from './ClinicSearch';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -54,9 +55,10 @@ export default function Navbar() {
 
           {/* CTA buttons */}
           <div className="flex items-center gap-3">
+            <ClinicSearch scrolled={scrolled} />
             <Link
               href="/sign-in"
-              className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors duration-200"
+              className="hidden sm:inline text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors duration-200"
             >
               Sign In
             </Link>

@@ -26,14 +26,17 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  if (!clinicId) return NextResponse.json({ error: 'No clinic selected' }, { status: 400 })
+
   const page = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10))
   const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') ?? '20', 10)))
   const typeFilter = searchParams.get('type')
   const statusFilter = searchParams.get('status')
 
   const where = {
-    clinicId: caller.clinicId,
-    ...(own ? { userId: caller.id } : {}),
+    clinicId,
+    ...(own ? { userId: session.userId } : {}),
     ...(typeFilter && VALID_TYPES.includes(typeFilter) ? { type: typeFilter } : {}),
     ...(statusFilter ? { status: statusFilter } : {}),
   }
