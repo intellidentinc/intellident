@@ -14,6 +14,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -84,6 +85,10 @@ const TYPE_CONFIG = {
 export default function NotificationDrawer({ open, onClose, onRead }) {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Portal target is only available on the client
+  useEffect(() => { setMounted(true) }, [])
 
   const fetchNotifs = useCallback(async () => {
     setLoading(true)
@@ -116,7 +121,9 @@ export default function NotificationDrawer({ open, onClose, onRead }) {
 
   const unread = notifications.filter((n) => !n.isRead).length
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -242,6 +249,7 @@ export default function NotificationDrawer({ open, onClose, onRead }) {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
