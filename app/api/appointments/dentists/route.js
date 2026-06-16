@@ -1,21 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 
 export async function GET(request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
-  const caller = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
+  const caller = await getAuthContext()
   if (!caller || ![ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.PATIENT, ROLES.SUPERADMIN].includes(caller.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+  const clinicId = caller.clinicId
 
   const { searchParams } = new URL(request.url)
   const serviceIdsParam = searchParams.get('serviceIds') ?? searchParams.get('serviceId')
