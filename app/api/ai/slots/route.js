@@ -7,7 +7,11 @@ import dayjs from 'dayjs'
 // Slot ranking is a lightweight task — use a fast model and never let it block the
 // response for long; fall back to algorithmic tagging on timeout or error.
 const AI_SLOTS_MODEL = 'gpt-5-mini'
-const AI_SLOTS_TIMEOUT_MS = 4000
+// gpt-5-mini (a reasoning model) takes ~3s locally; on Vercel a cold start + network
+// latency regularly pushes it past 4s, which silently dropped every request to the
+// algorithmic fallback (generic tags, no reasons). 15s gives real headroom — the
+// Vercel function ceiling is far higher (300s).
+const AI_SLOTS_TIMEOUT_MS = 15000
 
 function withTimeout(promise, ms) {
   return Promise.race([
