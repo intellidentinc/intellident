@@ -163,7 +163,7 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
   return (
     <Sidebar>
       {/* Header */}
-      <SidebarHeader className='border-b border-sidebar-border px-4 py-4'>
+      <SidebarHeader className='h-14 justify-center border-b border-sidebar-border px-4 py-0'>
         <div className='flex items-center gap-2.5'>
           {clinicLogo ? (
             <Image src={clinicLogo} alt='Clinic logo' width={32} height={32} className='h-8 w-8 rounded-lg object-cover flex-shrink-0' />
