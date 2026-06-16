@@ -1,3 +1,7 @@
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === 'true' });
+
 /** @type {import('next').NextConfig} */
 
 const cspHeader = [
@@ -23,6 +27,7 @@ const nextConfig = {
       '@mui/icons-material',
       '@mui/lab',
       '@mui/x-date-pickers',
+      '@mui/x-charts',
       'lucide-react',
       'framer-motion',
       'react-big-calendar',
@@ -54,4 +59,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

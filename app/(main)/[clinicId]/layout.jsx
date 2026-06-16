@@ -40,10 +40,18 @@ export default async function ClinicLayout({ children, params }) {
     redirect(`/step-up?redirect=/${clinicId}/dashboard`);
   }
 
+  // The pending badge is staff-only and purely cosmetic. Skip the COUNT entirely
+  // for patient sessions (role comes from the signed cookie) so every patient
+  // navigation drops one DB round-trip. The fresh `user.role` below still gates
+  // the final value, so a momentarily stale cookie role is harmless.
+  const staffSession = [ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(session.role);
+
   const [user, clinic, rawPendingCount] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } }),
     getClinicProfile(clinicId),
-    prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } }),
+    staffSession
+      ? prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } })
+      : Promise.resolve(0),
   ]);
 
   if (!clinic) {

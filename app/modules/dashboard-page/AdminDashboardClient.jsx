@@ -1,9 +1,20 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import dynamic from 'next/dynamic'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { PieChart } from '@mui/x-charts/PieChart'
+
+// Lazy-load the chart engine so @mui/x-charts is split out of the dashboard's
+// initial bundle. It's a secondary card (not LCP content); placeholder reserves
+// the 150x150 footprint to avoid layout shift.
+const PieChart = dynamic(
+  () => import('@mui/x-charts/PieChart').then((m) => m.PieChart),
+  {
+    ssr: false,
+    loading: () => <Box sx={{ width: 150, height: 150, flexShrink: 0 }} />,
+  },
+)
 import {
   AlertTriangle, Users, UserCog, Stethoscope, CalendarDays, Clock,
   CalendarX2, PieChart as PieIcon, ArrowRight, ChevronRight,

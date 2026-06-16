@@ -1,8 +1,33 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { generateJSON } from '@/lib/ai'
 import dayjs from 'dayjs'
+
+// Slot ranking is a lightweight task — use a fast model and never let it block the
+// response for long; fall back to algorithmic tagging on timeout or error.
+const AI_SLOTS_MODEL = 'gpt-5-mini'
+const AI_SLOTS_TIMEOUT_MS = 4000
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('AI timeout')), ms)),
+  ])
+}
+
+// Deterministic fallback used when the model times out, errors, or returns nothing.
+function algorithmicSuggestions(slots) {
+  return slots.slice(0, 5).map((slot, i) => {
+    const [h] = slot.split(':').map(Number)
+    let tag = 'Flexible option'
+    if (i === 0) tag = 'Earliest available'
+    else if (h >= 9 && h < 11) tag = 'Best match'
+    else if (h < 12) tag = 'Morning available'
+    else tag = 'Afternoon available'
+    return { time: slot, tag, reason: '' }
+  })
+}
 
 // Generate time slots identical to /api/schedules/slots logic
 function generateSlots(openTime, closeTime, totalDuration) {
@@ -111,42 +136,38 @@ Rules:
 - Prefer mid-morning slots (9–11 AM) as "Best match" since patients generally prefer them
 - "Earliest available" for the first slot of the day
 - "Lowest conflict risk" for slots in less busy periods
-- Return exactly this JSON format (array of objects, no extra text):
-[{"time":"HH:MM","tag":"Tag text","reason":"One sentence explanation"}]`
+- Return exactly this JSON object shape (no extra text):
+{"slots":[{"time":"HH:MM","tag":"Tag text","reason":"One sentence explanation"}]}`
 
   let suggestions
   try {
-    const raw = await generateJSON(prompt)
-    // Validate returned slots are in the available set
-    suggestions = Array.isArray(raw)
-      ? raw
-          .filter((s) => slots.includes(s.time))
-          .slice(0, 5)
-          .map((s) => ({ time: s.time, tag: s.tag ?? 'Available', reason: s.reason ?? '' }))
-      : []
+    const raw = await withTimeout(generateJSON(prompt, AI_SLOTS_MODEL), AI_SLOTS_TIMEOUT_MS)
+    // generateJSON uses json_object mode, so the model returns an object — accept
+    // either a bare array or { slots | suggestions: [...] }.
+    const arr = Array.isArray(raw) ? raw : (raw?.slots ?? raw?.suggestions ?? [])
+    suggestions = (Array.isArray(arr) ? arr : [])
+      .filter((s) => slots.includes(s.time))
+      .slice(0, 5)
+      .map((s) => ({ time: s.time, tag: s.tag ?? 'Available', reason: s.reason ?? '' }))
+    if (suggestions.length === 0) suggestions = algorithmicSuggestions(slots)
   } catch {
-    // Fallback: algorithmic tagging
-    const top = slots.slice(0, 5)
-    suggestions = top.map((slot, i) => {
-      const [h] = slot.split(':').map(Number)
-      let tag = 'Flexible option'
-      if (i === 0) tag = 'Earliest available'
-      else if (h >= 9 && h < 11) tag = 'Best match'
-      else if (h < 12) tag = 'Morning available'
-      else tag = 'Afternoon available'
-      return { time: slot, tag, reason: '' }
-    })
+    suggestions = algorithmicSuggestions(slots)
   }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      clinicId,
-      action: 'AI_INTERACTION',
-      entity: 'SlotRecommendation',
-      metadata: { serviceId, dentistId, date: dateStr, suggestionsCount: suggestions.length },
-    },
-  })
+  // Audit write doesn't need to block the response.
+  after(
+    prisma.auditLog
+      .create({
+        data: {
+          userId: session.userId,
+          clinicId,
+          action: 'AI_INTERACTION',
+          entity: 'SlotRecommendation',
+          metadata: { serviceId, dentistId, date: dateStr, suggestionsCount: suggestions.length },
+        },
+      })
+      .catch((err) => console.error('AI slots audit log failed:', err))
+  )
 
   return NextResponse.json({ suggestions })
 }

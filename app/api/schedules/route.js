@@ -16,14 +16,14 @@
  *   - On success, notifies all RECEPTIONIST + ADMIN users (in-app + email)
  *     via notifyStaffBooking — the pending badge in the sidebar increments
  */
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaffBooking } from '@/lib/notifications'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
-import { generateAppointmentCode } from '@/lib/appointments'
+import { generateAppointmentCode, getPatientAppointments } from '@/lib/appointments'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -34,17 +34,29 @@ dayjs.extend(timezone)
 async function getPatientCaller() {
   const session = await getSession()
   if (!session) return null
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
-  })
-  if (!user || user.role !== ROLES.PATIENT) return null
+  // Single query (instead of user + patient lookups) — role + tenant come from the
+  // patient's user relation. getSession() already validated the session token.
   const patient = await prisma.patient.findUnique({
     where: { userId: session.userId },
+    select: {
+      id: true,
+      clinicId: true,
+      firstName: true,
+      lastName: true,
+      user: { select: { role: true, clinicId: true } },
+    },
   })
+  if (!patient || patient.user?.role !== ROLES.PATIENT) return null
   // Tenant check: patient profile must belong to the same clinic as the user account
-  if (!patient || patient.clinicId !== user.clinicId) return null
-  return { ...user, patientId: patient.id, userId: session.userId }
+  if (patient.clinicId !== patient.user.clinicId) return null
+  return {
+    role: patient.user.role,
+    clinicId: patient.user.clinicId,
+    patientId: patient.id,
+    firstName: patient.firstName,
+    lastName: patient.lastName,
+    userId: session.userId,
+  }
 }
 
 export async function GET(request) {
@@ -53,32 +65,8 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url)
   const tab = searchParams.get('tab') ?? 'upcoming'
-  const now = new Date()
 
-  const where = {
-    patientId: caller.patientId,
-    isDeleted: false,
-    ...(tab === 'upcoming'
-      ? {
-          status: { in: ['PENDING', 'CONFIRMED', 'RESCHEDULED'] },
-          scheduledAt: { gte: now },
-        }
-      : {
-          OR: [
-            { status: { in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] } },
-            { scheduledAt: { lt: now } },
-          ],
-        }),
-  }
-
-  const appointments = await prisma.appointment.findMany({
-    where,
-    include: {
-      service: { select: { name: true, duration: true } },
-      dentist: { include: { user: { select: { firstName: true, lastName: true } } } },
-    },
-    orderBy: { scheduledAt: tab === 'upcoming' ? 'asc' : 'desc' },
-  })
+  const appointments = await getPatientAppointments(caller.patientId, tab)
 
   return NextResponse.json({ appointments })
 }
@@ -213,20 +201,19 @@ export async function POST(request) {
   })
   const { appointmentCode } = appointment
 
-  // Notify all receptionists and admins of the new booking request
-  const patient = await prisma.patient.findUnique({
-    where: { id: caller.patientId },
-    select: { firstName: true, lastName: true },
-  })
-  const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'A patient'
-  await notifyStaffBooking({
-    clinicId: caller.clinicId,
-    appointmentId: appointment.id,
-    patientName,
-    serviceName: service.name,
-    scheduledAt: apptDate,
-    appointmentCode,
-  })
+  // Notify all receptionists and admins of the new booking request.
+  // Patient name comes from getPatientCaller() — no extra query needed.
+  const patientName = caller.firstName ? `${caller.firstName} ${caller.lastName}` : 'A patient'
+  after(
+    notifyStaffBooking({
+      clinicId: caller.clinicId,
+      appointmentId: appointment.id,
+      patientName,
+      serviceName: service.name,
+      scheduledAt: apptDate,
+      appointmentCode,
+    }).catch((err) => console.error('notifyStaffBooking failed:', err))
+  )
 
   logAudit({ userId: caller.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'Appointment', entityId: appointment.id, ipAddress: ip, userAgent, metadata: { appointmentCode, source: 'patient-booking' } })
 

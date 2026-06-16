@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaff } from '@/lib/notifications'
@@ -11,16 +11,21 @@ export async function PATCH(request, { params }) {
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { ip, userAgent } = getRequestMeta(request)
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { role: true, clinicId: true },
+  // Single query — role + tenant come from the patient's user relation.
+  const patient = await prisma.patient.findUnique({
+    where: { userId: session.userId },
+    select: {
+      id: true,
+      clinicId: true,
+      firstName: true,
+      lastName: true,
+      user: { select: { role: true, clinicId: true } },
+    },
   })
-  if (!user || user.role !== ROLES.PATIENT) {
+  if (!patient || patient.user?.role !== ROLES.PATIENT) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-
-  const patient = await prisma.patient.findUnique({ where: { userId: session.userId } })
-  if (!patient) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const user = { role: patient.user.role, clinicId: patient.user.clinicId }
 
   const { id } = await params
   const parsed = await parseJsonBody(request)
@@ -54,15 +59,18 @@ export async function PATCH(request, { params }) {
     include: { service: { select: { name: true } } },
   })
 
-  // Notify receptionists and admins that the patient cancelled
+  // Notify receptionists and admins that the patient cancelled.
+  // Fire-and-forget via after() so the SMTP send doesn't block the response.
   const scheduledStr = new Date(appointment.scheduledAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
-  await notifyStaff({
-    clinicId: user.clinicId,
-    type: 'APPOINTMENT_CANCELLED',
-    title: 'Appointment Cancelled by Patient',
-    body: `${patient.firstName} ${patient.lastName} cancelled their ${updated.service?.name ?? 'appointment'} on ${scheduledStr}.`,
-    appointmentId: id,
-  })
+  after(
+    notifyStaff({
+      clinicId: user.clinicId,
+      type: 'APPOINTMENT_CANCELLED',
+      title: 'Appointment Cancelled by Patient',
+      body: `${patient.firstName} ${patient.lastName} cancelled their ${updated.service?.name ?? 'appointment'} on ${scheduledStr}.`,
+      appointmentId: id,
+    }).catch((err) => console.error('notifyStaff failed:', err))
+  )
 
   logAudit({ userId: session.userId, clinicId: user.clinicId, action: 'UPDATE', entity: 'Appointment', entityId: id, ipAddress: ip, userAgent, metadata: { to: 'CANCELLED', source: 'patient-cancel' } })
 

@@ -44,15 +44,17 @@ const TABS = [
   { key: 'past',     label: 'Past' },
 ]
 
-export default function SchedulesPage() {
+export default function SchedulesPage({ initialRows = null, initialTab = 'upcoming' }) {
   const { showToast } = useToast()
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState('upcoming')
-  const [rows, setRows] = useState([])
+  const [tab, setTab] = useState(initialTab)
+  const [rows, setRows] = useState(initialRows ?? [])
   const [loading, setLoading] = useState(false)
   const [bookOpen, setBookOpen] = useState(false)
   const [cancelTarget, setCancelTarget] = useState(null)
   const didAutoOpen = useRef(false)
+  // When the server provided the initial tab's rows, skip the first client fetch.
+  const skipNextFetch = useRef(initialRows != null)
 
   useEffect(() => {
     if (!didAutoOpen.current && searchParams.get('book') === '1') {
@@ -76,6 +78,10 @@ export default function SchedulesPage() {
   }, [tab, showToast])
 
   useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false
+      return
+    }
     fetchAppointments()
   }, [fetchAppointments])
 
