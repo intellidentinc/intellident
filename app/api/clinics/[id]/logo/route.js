@@ -99,3 +99,31 @@ export async function POST(request, { params }) {
 
   return NextResponse.json({ logoUrl: publicUrl });
 }
+
+export async function DELETE(request, { params }) {
+  const { id } = await params;
+  const caller = await getAdminForClinic(id);
+  if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const clinic = await prisma.clinic.findUnique({
+    where: { id },
+    select: { logoUrl: true },
+  });
+
+  if (clinic?.logoUrl) {
+    const url = new URL(clinic.logoUrl);
+    const oldPath = url.pathname.split('/clinic-logos/')[1];
+    if (oldPath) {
+      await supabase.storage.from('clinic-logos').remove([oldPath]);
+    }
+  }
+
+  await prisma.clinic.update({
+    where: { id },
+    data: { logoUrl: null },
+  });
+
+  revalidateTag(`clinic-profile-${id}`);
+
+  return NextResponse.json({ ok: true });
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Avatar from '@mui/material/Avatar'
@@ -8,9 +8,10 @@ import Button from '@/components/commons/Button'
 import { useToast } from '@/app/providers/ToastProvider'
 import { Stethoscope } from 'lucide-react'
 
-export default function ClinicLogoUpload({ clinicId, logoUrl, logoPreview, uploading, onUploadStart, onUploadDone }) {
+export default function ClinicLogoUpload({ clinicId, logoUrl, logoPreview, uploading, onUploadStart, onUploadDone, onRemoveDone }) {
   const { showToast } = useToast()
   const fileInputRef = useRef(null)
+  const [removing, setRemoving] = useState(false)
   const displayLogo = logoPreview ?? logoUrl
 
   async function handleChange(e) {
@@ -51,6 +52,24 @@ export default function ClinicLogoUpload({ clinicId, logoUrl, logoPreview, uploa
     }
   }
 
+  async function handleRemove() {
+    setRemoving(true)
+    try {
+      const res = await fetch(`/api/clinics/${clinicId}/logo`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(data.error ?? 'Remove failed', 'error')
+        return
+      }
+      onRemoveDone()
+      showToast('Logo removed', 'success')
+    } catch {
+      showToast('Something went wrong', 'error')
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
       {displayLogo ? (
@@ -86,9 +105,16 @@ export default function ClinicLogoUpload({ clinicId, logoUrl, logoPreview, uploa
           style={{ display: 'none' }}
           onChange={handleChange}
         />
-        <Button variant='outlined' size='small' loading={uploading} onClick={() => fileInputRef.current?.click()}>
-          Upload Logo
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button variant='outlined' size='small' loading={uploading} disabled={removing} onClick={() => fileInputRef.current?.click()}>
+            Upload Logo
+          </Button>
+          {displayLogo && (
+            <Button variant='outlined' size='small' loading={removing} disabled={uploading} color='error' onClick={handleRemove}>
+              Remove
+            </Button>
+          )}
+        </Box>
       </Box>
     </Box>
   )

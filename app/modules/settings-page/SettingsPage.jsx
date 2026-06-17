@@ -122,6 +122,11 @@ export default function SettingsPage() {
     }
   }
 
+  function handleRemoveDone() {
+    setLogoUrl(null)
+    setLogoPreview(null)
+  }
+
   return (
     <SidebarInset>
       <PageHeader title='Settings' />
@@ -143,6 +148,7 @@ export default function SettingsPage() {
           uploading={uploading}
           onUploadStart={handleUploadStart}
           onUploadDone={handleUploadDone}
+          onRemoveDone={handleRemoveDone}
         />
 
         <Divider sx={{ my: 4 }} />
