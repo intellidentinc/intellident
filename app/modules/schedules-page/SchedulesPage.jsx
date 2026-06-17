@@ -13,7 +13,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
@@ -47,6 +47,8 @@ const TABS = [
 export default function SchedulesPage({ initialRows = null, initialTab = 'upcoming' }) {
   const { showToast } = useToast()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const [tab, setTab] = useState(initialTab)
   const [rows, setRows] = useState(initialRows ?? [])
   const [loading, setLoading] = useState(false)
@@ -60,8 +62,10 @@ export default function SchedulesPage({ initialRows = null, initialTab = 'upcomi
     if (!didAutoOpen.current && searchParams.get('book') === '1') {
       didAutoOpen.current = true
       setBookOpen(true)
+      // Remove ?book=1 so a full page refresh doesn't re-trigger the modal
+      router.replace(pathname, { scroll: false })
     }
-  }, [searchParams])
+  }, [searchParams, router, pathname])
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true)
