@@ -12,7 +12,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { X, Download, Eye, Banknote, Link2, CheckCircle2, Clock, User, Calendar, Stethoscope } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import { useToast } from '@/app/providers/ToastProvider'
-import { STATUS_PAYMENT_CHIP } from './BillingPage'
+import { STATUS_PAYMENT_CHIP, BILLING_TYPE_CHIP } from './BillingPage'
 import RecordPaymentModal from './RecordPaymentModal'
 import ReceiptPreviewDialog from './ReceiptPreviewDialog'
 import dayjs from 'dayjs'
@@ -144,7 +144,8 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
     }
   }
 
-  const chip    = STATUS_PAYMENT_CHIP[billing.status] ?? STATUS_PAYMENT_CHIP.UNPAID
+  const chip     = STATUS_PAYMENT_CHIP[billing.status] ?? STATUS_PAYMENT_CHIP.UNPAID
+  const typeChip = BILLING_TYPE_CHIP[billing.billingType] ?? BILLING_TYPE_CHIP.SERVICE
   const patient = billing.patient
   const appt    = billing.appointment
   const balance = Number(billing.balance ?? 0)
@@ -166,6 +167,11 @@ export default function BillingDetailDrawer({ billing: initialBilling, clinicId,
               <Typography variant='subtitle1' fontWeight={700} color='text.primary'>
                 Billing Detail
               </Typography>
+              <Chip
+                label={typeChip.label}
+                size='small'
+                sx={{ bgcolor: typeChip.bg, color: typeChip.color, fontWeight: 600, fontSize: '0.72rem', height: 20 }}
+              />
               <Chip
                 label={chip.label}
                 size='small'

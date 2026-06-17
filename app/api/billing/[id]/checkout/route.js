@@ -59,19 +59,21 @@ export async function POST(request, { params }) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
   const serviceName = billing.appointment?.service?.name ?? 'Dental Service'
+  const isReservation = billing.billingType === 'RESERVATION'
+  const lineItemName = isReservation ? `Reservation Deposit — ${serviceName}` : serviceName
 
   const { checkoutUrl } = await createCheckoutSession({
     lineItems: [
       {
-        amount:   Math.round(payableAmount * 100), // centavos
+        amount:   Math.round(payableAmount * 100),
         currency: 'PHP',
-        name:     serviceName,
+        name:     lineItemName,
         quantity: 1,
       },
     ],
     successUrl: `${appUrl}/${caller.clinicId}/my-billing?payment=success&billingId=${id}`,
     cancelUrl:  `${appUrl}/${caller.clinicId}/my-billing`,
-    metadata:   { billingId: id, clinicId: caller.clinicId, paymentType: 'FULL' },
+    metadata:   { billingId: id, clinicId: caller.clinicId, paymentType: isReservation ? 'RESERVATION' : 'FULL' },
   })
 
   return NextResponse.json({ checkoutUrl })

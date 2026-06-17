@@ -22,11 +22,14 @@ import { NextResponse } from 'next/server'
 import moment from 'moment-timezone'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { notifyPatientStatusChange } from '@/lib/notifications'
+import { notifyPatientStatusChange, createNotification } from '@/lib/notifications'
+import { sendCustomAppointmentEmail } from '@/lib/email'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { generateAppointmentCode } from '@/lib/appointments'
+import { generateReceiptNumber } from '@/lib/billing'
+import { createCheckoutSession } from '@/lib/paymongo'
 
 async function getCaller() {
   const session = await getSession()
@@ -256,6 +259,71 @@ export async function POST(request) {
   }
 
   logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'CREATE', entity: 'Appointment', entityId: appointment.id, ipAddress: ip, userAgent, metadata: { appointmentCode, status: initialStatus } })
+
+  // Create RESERVATION billing and send payment link to patient. Best-effort.
+  try {
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: caller.clinicId },
+      select: { paymongoEnabled: true, reservationFeeAmount: true },
+    })
+    const reservationFee = clinic?.reservationFeeAmount ?? 0
+    if (clinic?.paymongoEnabled && reservationFee > 0) {
+      const patientUser = appointment.patient?.user
+      const serviceName = appointment.service?.name ?? 'Dental Service'
+
+      const resBilling = await prisma.$transaction(async (tx) => {
+        const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+        return tx.billing.create({
+          data: {
+            clinicId:      caller.clinicId,
+            patientId:     appointment.patientId,
+            appointmentId: appointment.id,
+            billingType:   'RESERVATION',
+            amount:        reservationFee,
+            amountPaid:    0,
+            balance:       reservationFee,
+            status:        'UNPAID',
+            receiptNumber,
+          },
+        })
+      })
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+      const { checkoutUrl } = await createCheckoutSession({
+        lineItems: [{
+          amount:   Math.round(reservationFee * 100),
+          currency: 'PHP',
+          name:     `Reservation Deposit — ${serviceName}`,
+          quantity: 1,
+        }],
+        successUrl: `${appUrl}/${caller.clinicId}/my-billing?payment=success&billingId=${resBilling.id}`,
+        cancelUrl:  `${appUrl}/${caller.clinicId}/schedules`,
+        metadata:   { billingId: resBilling.id, clinicId: caller.clinicId, paymentType: 'RESERVATION' },
+      }).catch(() => ({ checkoutUrl: null }))
+
+      if (checkoutUrl && patientUser?.id) {
+        await createNotification({
+          userId: patientUser.id,
+          clinicId: caller.clinicId,
+          type: 'APPOINTMENT_CONFIRMED',
+          title: 'Reservation Deposit Due',
+          body: `Please pay the ₱${reservationFee} reservation deposit to secure your ${serviceName} appointment: ${checkoutUrl}`,
+          appointmentId: appointment.id,
+        }).catch(() => {})
+
+        if (patientUser.email) {
+          sendCustomAppointmentEmail({
+            to: patientUser.email,
+            subject: 'Reservation Deposit — Secure Your Appointment',
+            body: `Hi ${patientUser.firstName ?? ''},\n\nYour ${serviceName} appointment has been booked. Please pay the ₱${reservationFee} reservation deposit to secure your slot:\n\n${checkoutUrl}`,
+            typeKey: 'APPOINTMENT_CONFIRMED',
+          }).catch(() => {})
+        }
+      }
+    }
+  } catch {
+    // Non-blocking
+  }
 
   return NextResponse.json({ appointment }, { status: 201 })
 }

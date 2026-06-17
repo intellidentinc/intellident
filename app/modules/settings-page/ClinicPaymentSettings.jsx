@@ -13,11 +13,12 @@ import { useToast } from '@/app/providers/ToastProvider'
 export default function ClinicPaymentSettings({ clinicId }) {
   const { showToast } = useToast()
 
-  const [enabled, setEnabled]         = useState(false)
-  const [feeAmount, setFeeAmount]     = useState('')
-  const [loading, setLoading]         = useState(true)
-  const [saving, setSaving]           = useState(false)
-  const [feeError, setFeeError]       = useState('')
+  const [enabled, setEnabled]           = useState(false)
+  const [feeAmount, setFeeAmount]       = useState('')
+  const [deductible, setDeductible]     = useState(true)
+  const [loading, setLoading]           = useState(true)
+  const [saving, setSaving]             = useState(false)
+  const [feeError, setFeeError]         = useState('')
 
   useEffect(() => {
     if (!clinicId) return
@@ -26,6 +27,7 @@ export default function ClinicPaymentSettings({ clinicId }) {
       .then(data => {
         setEnabled(data.paymongoEnabled ?? false)
         setFeeAmount(data.reservationFeeAmount != null ? String(data.reservationFeeAmount) : '0')
+        setDeductible(data.reservationFeeDeductible ?? true)
       })
       .catch(() => showToast('Failed to load payment settings', 'error'))
       .finally(() => setLoading(false))
@@ -42,7 +44,11 @@ export default function ClinicPaymentSettings({ clinicId }) {
       const res = await fetch(`/api/clinics/${clinicId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymongoEnabled: enabled, reservationFeeAmount: isNaN(fee) ? 0 : fee }),
+        body: JSON.stringify({
+          paymongoEnabled: enabled,
+          reservationFeeAmount: isNaN(fee) ? 0 : fee,
+          reservationFeeDeductible: deductible,
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -95,9 +101,31 @@ export default function ClinicPaymentSettings({ clinicId }) {
             value={feeAmount}
             onChange={(e) => { setFeeAmount(e.target.value); setFeeError('') }}
             error={!!feeError}
-            helperText={feeError || 'Charged upfront when a patient books. Set to 0 to skip the fee.'}
+            helperText={feeError || 'Charged at booking as a separate deposit bill. Set to 0 to skip.'}
             placeholder='e.g. 500'
             sx={{ mb: 2.5 }}
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={deductible}
+                onChange={(e) => setDeductible(e.target.checked)}
+                disabled={loading}
+                color='primary'
+              />
+            }
+            label={
+              <Box sx={{ ml: 0.5 }}>
+                <Typography variant='body2' fontWeight={600} color='text.primary'>
+                  Credit deposit toward service bill
+                </Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  When enabled, the paid reservation deposit is automatically applied as partial payment on the service bill when the appointment is completed.
+                </Typography>
+              </Box>
+            }
+            sx={{ alignItems: 'flex-start', ml: 0, mb: 2.5 }}
           />
         </>
       )}

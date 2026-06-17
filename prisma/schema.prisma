@@ -39,6 +39,11 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum BillingType {
+  RESERVATION
+  SERVICE
+}
+
 enum NotificationStatus {
   PENDING
   SENT
@@ -116,6 +121,7 @@ model Clinic {
   logoUrl                    String?
   email                      String?
   reservationFeeAmount       Float     @default(0)
+  reservationFeeDeductible   Boolean   @default(true)
   paymongoEnabled            Boolean   @default(false)
   passwordExpiryEnabled      Boolean   @default(false)
   passwordExpiryDays         Int       @default(90)
@@ -418,7 +424,7 @@ model Appointment {
   dentist            Dentist?                   @relation(fields: [dentistId], references: [id])
   service            Service?                   @relation(fields: [serviceId], references: [id])
   services           AppointmentService[]
-  billing            Billing?
+  billings           Billing[]
   notifications      Notification[]
   inAppNotifications InAppNotification[]
   statusHistory      AppointmentStatusHistory[]
@@ -525,7 +531,8 @@ model Billing {
   id            String        @id @default(cuid())
   clinicId      String
   patientId     String
-  appointmentId String        @unique
+  appointmentId String
+  billingType   BillingType   @default(SERVICE)
   amount        Float
   amountPaid    Float         @default(0)
   balance       Float
@@ -540,6 +547,7 @@ model Billing {
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   payments    Payment[]
 
+  @@unique([appointmentId, billingType])
   @@index([clinicId, createdAt])
   @@index([patientId])
   @@index([status])

@@ -176,14 +176,19 @@ function formatDate(d) {
 }
 
 export default function BillingReceiptDocument({ billing, clinic }) {
+  const isReservation = billing.billingType === 'RESERVATION'
+
+  // For SERVICE billing: separate reservation credit payments from regular payments
   const reservationPayments = (billing.payments ?? []).filter(p => p.type === 'RESERVATION')
   const otherPayments       = (billing.payments ?? []).filter(p => p.type !== 'RESERVATION')
-  const reservationTotal    = reservationPayments.reduce((s, p) => s + p.amount, 0)
+  const reservationCredited = reservationPayments.reduce((s, p) => s + p.amount, 0)
   const otherTotal          = otherPayments.reduce((s, p) => s + p.amount, 0)
 
   const patient     = billing.patient
   const appointment = billing.appointment
   const serviceName = appointment?.service?.name ?? 'Dental Service'
+  const receiptTitle = isReservation ? 'RESERVATION RECEIPT' : 'OFFICIAL RECEIPT'
+  const serviceLabel = isReservation ? `Reservation Deposit — ${serviceName}` : serviceName
 
   return (
     <Document>
@@ -203,7 +208,7 @@ export default function BillingReceiptDocument({ billing, clinic }) {
         <View style={styles.divider} />
 
         {/* Receipt Title */}
-        <Text style={styles.receiptTitle}>OFFICIAL RECEIPT</Text>
+        <Text style={styles.receiptTitle}>{receiptTitle}</Text>
 
         {/* Receipt Meta */}
         <View style={{ marginTop: 8 }}>
@@ -241,8 +246,8 @@ export default function BillingReceiptDocument({ billing, clinic }) {
             <Text style={styles.metaValue}>{appointment?.appointmentCode ?? '—'}</Text>
           </View>
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Service</Text>
-            <Text style={styles.metaValue}>{serviceName}</Text>
+            <Text style={styles.metaLabel}>{isReservation ? 'Deposit For' : 'Service'}</Text>
+            <Text style={styles.metaValue}>{serviceLabel}</Text>
           </View>
           <View style={styles.metaRow}>
             <Text style={styles.metaLabel}>Date</Text>
@@ -257,20 +262,20 @@ export default function BillingReceiptDocument({ billing, clinic }) {
           <Text style={styles.sectionTitle}>Payment Breakdown</Text>
 
           <View style={styles.tableRow}>
-            <Text style={styles.tableLabel}>Service Total</Text>
+            <Text style={styles.tableLabel}>{isReservation ? 'Deposit Amount' : 'Service Total'}</Text>
             <Text style={styles.tableValue}>{php(billing.amount)}</Text>
           </View>
 
-          {reservationTotal > 0 && (
+          {!isReservation && reservationCredited > 0 && (
             <View style={styles.tableRow}>
-              <Text style={styles.tableLabel}>Reservation Fee Paid</Text>
-              <Text style={[styles.tableValue, { color: '#15803d' }]}>{php(reservationTotal)}</Text>
+              <Text style={styles.tableLabel}>Reservation Deposit (Credited)</Text>
+              <Text style={[styles.tableValue, { color: '#15803d' }]}>{php(reservationCredited)}</Text>
             </View>
           )}
 
           {otherTotal > 0 && (
             <View style={styles.tableRowLast}>
-              <Text style={styles.tableLabel}>Additional Payment(s)</Text>
+              <Text style={styles.tableLabel}>{isReservation ? 'Amount Paid' : 'Additional Payment(s)'}</Text>
               <Text style={[styles.tableValue, { color: '#15803d' }]}>{php(otherTotal)}</Text>
             </View>
           )}
@@ -295,7 +300,9 @@ export default function BillingReceiptDocument({ billing, clinic }) {
             {(billing.payments ?? []).map((p, i) => (
               <View key={i} style={styles.metaRow}>
                 <Text style={styles.metaLabel}>{formatDate(p.paidAt)}</Text>
-                <Text style={styles.metaValue}>{p.method ?? 'CASH'} — {php(p.amount)}</Text>
+                <Text style={styles.metaValue}>
+                  {p.type === 'RESERVATION' ? 'Reservation Deposit (Credited)' : (p.method ?? 'CASH')} — {php(p.amount)}
+                </Text>
               </View>
             ))}
           </View>

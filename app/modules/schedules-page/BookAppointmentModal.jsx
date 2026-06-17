@@ -1,93 +1,113 @@
-/**
- * BookAppointmentModal — 6-Step Patient Self-Booking Wizard
- *
- * Progressive disclosure — each step unlocks the next:
- *   Step 1: Service selection (multi-select visual cards from GET /api/appointments/services)
- *   Step 2: Dentist preference chips — "Any Available" or a specific dentist
- *           (fetched from GET /api/appointments/dentists?serviceIds=...)
- *   Step 3: DatePicker — disables non-working days and closure dates
- *           (schedule + closures fetched from GET /api/clinics/schedule and /api/clinics/closures)
- *   Step 4: Time slot chips grouped by Morning / Afternoon
- *           (fetched from GET /api/schedules/slots — filtered by conflict for specific dentist)
- *   Step 5: Optional notes textarea
- *   Step 6: Booking summary card before final submit
- *
- * Submit → POST /api/schedules → creates appointment as PENDING → staff notified.
- * The LocalizationProvider (AdapterDayjs) is wrapped inside this modal, not at app root.
- */
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Fragment, useState, useEffect } from 'react'
 import Dialog from '@mui/material/Dialog'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
+import MuiSelect from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import FormControl from '@mui/material/FormControl'
+import Autocomplete from '@mui/material/Autocomplete'
+import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import { CalendarDays, Users, Sparkles, Check } from 'lucide-react'
+import { CalendarDays, Sparkles, Check } from 'lucide-react'
 import dayjs from 'dayjs'
 import Button from '@/components/commons/Button'
 import Input from '@/components/commons/Input'
 import { useToast } from '@/app/providers/ToastProvider'
 
-function SectionLabel({ step, label }) {
+const STEPS = ['Choose Services', 'Select Dentist', 'Select Time']
+
+function StepIndicator({ current }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-      <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Typography sx={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700, lineHeight: 1 }}>{step}</Typography>
-      </Box>
-      <Typography variant='body2' fontWeight={600} color='text.primary'>{label}</Typography>
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', px: 3, py: 2.5 }}>
+      {STEPS.map((label, i) => {
+        const s = i + 1
+        const done = current > s
+        const active = current === s
+        return (
+          <Fragment key={s}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.75, minWidth: 90 }}>
+              <Box sx={{
+                width: 34, height: 34, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                bgcolor: done || active ? '#2563eb' : '#e2e8f0',
+                color: done || active ? '#fff' : '#94a3b8',
+                fontWeight: 700, fontSize: 14,
+                transition: 'background-color 0.2s',
+              }}>
+                {done ? <Check size={15} strokeWidth={3} /> : s}
+              </Box>
+              <Typography
+                variant='caption'
+                fontWeight={active ? 700 : 400}
+                color={active ? '#2563eb' : done ? 'text.secondary' : 'text.disabled'}
+                sx={{ textAlign: 'center', lineHeight: 1.3 }}
+              >
+                {label}
+              </Typography>
+            </Box>
+            {i < STEPS.length - 1 && (
+              <Box sx={{
+                flex: 1, height: 2, mt: 2.125, mx: 0.5,
+                bgcolor: current > s ? '#2563eb' : '#e2e8f0',
+                transition: 'background-color 0.2s',
+              }} />
+            )}
+          </Fragment>
+        )
+      })}
     </Box>
   )
 }
 
-function TimeSlotRow({ slot, date, duration, selected, onClick, formatSlot }) {
+function FieldLabel({ children, required }) {
+  return (
+    <Typography
+      component='label'
+      variant='body2'
+      fontWeight={500}
+      sx={{ color: 'text.primary', userSelect: 'none', mb: 0.75, display: 'block' }}
+    >
+      {children}
+      {required && <Typography component='span' sx={{ color: '#E05C6A', ml: 0.25 }}>*</Typography>}
+    </Typography>
+  )
+}
+
+function TimeSlotChip({ slot, date, duration, selected, onClick }) {
   const [h, m] = slot.split(':').map(Number)
   const start = date.hour(h).minute(m).second(0)
   const end = start.add(duration, 'minute')
-
-  const startStr = formatSlot(slot)
-  const endStr = end.toDate().toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
-  const dateStr = date.format('ddd M/D')
+  const fmt = (d) => d.toDate().toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
 
   return (
     <Box
       onClick={onClick}
       sx={{
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        px: 2,
-        py: 1.5,
+        px: 1.5, py: 1,
         border: '1.5px solid',
         borderColor: selected ? '#2563eb' : '#e2e8f0',
         borderRadius: 2,
         cursor: 'pointer',
         bgcolor: selected ? '#eff6ff' : '#fff',
         transition: 'all 0.15s',
-        '&:hover': {
-          borderColor: '#93c5fd',
-          bgcolor: selected ? '#eff6ff' : '#f8fafc',
-        },
+        '&:hover': { borderColor: '#93c5fd', bgcolor: selected ? '#eff6ff' : '#f8fafc' },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Typography variant='body2' fontWeight={700} color={selected ? '#1d4ed8' : 'text.primary'} sx={{ minWidth: 60 }}>
-          {dateStr}
-        </Typography>
-        <Typography variant='body2' color={selected ? '#1d4ed8' : 'text.secondary'}>
-          {startStr} – {endStr}
-          <Typography component='span' variant='body2' color='text.disabled' sx={{ ml: 0.75 }}>
-            ({duration} min)
-          </Typography>
-        </Typography>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Users size={14} color='#22c55e' />
-        <Typography variant='caption' fontWeight={700} color='#22c55e'>1</Typography>
-      </Box>
+      <Typography variant='body2' fontWeight={700} color={selected ? '#1d4ed8' : 'text.primary'}>
+        {fmt(start)}
+      </Typography>
+      <Typography variant='caption' color='text.disabled'>
+        – {fmt(end)}
+      </Typography>
     </Box>
   )
 }
@@ -95,16 +115,15 @@ function TimeSlotRow({ slot, date, duration, selected, onClick, formatSlot }) {
 export default function BookAppointmentModal({ open, onClose, onSuccess }) {
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [step, setStep] = useState(1)
+  const [errors, setErrors] = useState({})
 
-  // Form state — serviceIds is now an array
   const [serviceIds, setServiceIds] = useState([])
   const [dentistId, setDentistId]   = useState('')
   const [date, setDate]             = useState(null)
   const [timeSlot, setTimeSlot]     = useState('')
   const [notes, setNotes]           = useState('')
-  const [errors, setErrors]         = useState({})
 
-  // Data
   const [services, setServices]     = useState([])
   const [dentists, setDentists]     = useState([])
   const [slots, setSlots]           = useState([])
@@ -117,60 +136,44 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
   // Reset on open
   useEffect(() => {
     if (!open) return
+    setStep(1)
     setServiceIds([]); setDentistId(''); setDate(null)
     setTimeSlot(''); setNotes(''); setErrors({})
-    setSlots([])
+    setSlots([]); setAiSuggestions([])
 
     fetch('/api/appointments/services')
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('services')))
+      .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setServices(d.services ?? []))
       .catch(() => { setServices([]); showToast('Could not load services. Please try again.', 'error') })
     fetch('/api/clinics/schedule')
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('schedule')))
+      .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setSchedule(d))
       .catch(() => setSchedule(null))
     fetch('/api/clinics/closures')
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('closures')))
+      .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setClosures((d.closures ?? []).map(c => dayjs(c.date).format('YYYY-MM-DD'))))
       .catch(() => setClosures([]))
   }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  function toggleService(id) {
-    setServiceIds(prev => {
-      const next = prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-      return next
-    })
-    setErrors(p => ({ ...p, service: undefined }))
-    // Reset downstream selections when services change
-    setDentistId(''); setDate(null); setTimeSlot(''); setSlots([])
-  }
-
-  // Fetch dentists when serviceIds change
+  // Fetch dentists when services change
   useEffect(() => {
     if (serviceIds.length === 0) { setDentists([]); setDentistId(''); return }
     fetch(`/api/appointments/dentists?serviceIds=${serviceIds.join(',')}`)
-      .then(async r => {
-        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error ?? 'Failed to load dentists') }
-        return r.json()
-      })
+      .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setDentists(d.dentists ?? []))
       .catch(() => { setDentists([]); showToast('Could not load dentists. Please try again.', 'error') })
     setDentistId(''); setDate(null); setTimeSlot(''); setSlots([])
   }, [serviceIds.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch slots when date + dentist + serviceIds all set
+  // Fetch slots when date + dentist + services all set
   useEffect(() => {
     if (serviceIds.length === 0 || !dentistId || !date) { setSlots([]); setTimeSlot(''); setAiSuggestions([]); return }
     setSlotsLoading(true)
     setTimeSlot('')
     setAiSuggestions([])
-    const params = new URLSearchParams({
-      serviceIds: serviceIds.join(','),
-      dentistId,
-      date: date.format('YYYY-MM-DD'),
-    })
+    const params = new URLSearchParams({ serviceIds: serviceIds.join(','), dentistId, date: date.format('YYYY-MM-DD') })
     fetch(`/api/schedules/slots?${params}`)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('slots')))
+      .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setSlots(d.slots ?? []))
       .catch(() => setSlots([]))
       .finally(() => setSlotsLoading(false))
@@ -183,7 +186,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
     try {
       const params = new URLSearchParams({ serviceIds: serviceIds.join(','), dentistId, date: date.format('YYYY-MM-DD') })
       const res = await fetch(`/api/ai/slots?${params}`)
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? 'Could not get AI suggestions') }
+      if (!res.ok) throw new Error('Could not get AI suggestions')
       const data = await res.json()
       const suggestions = data.suggestions ?? []
       setAiSuggestions(suggestions)
@@ -205,18 +208,26 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
     return false
   }
 
-  function validate() {
-    const errs = {}
-    if (serviceIds.length === 0) errs.service  = 'Please select at least one service'
-    if (!dentistId)               errs.dentist  = 'Please select a dentist preference'
-    if (!date)                    errs.date     = 'Please select a date'
-    if (!timeSlot)                errs.timeSlot = 'Please select a time slot'
-    return errs
+  function handleNext() {
+    if (step === 1) {
+      if (serviceIds.length === 0) { setErrors({ serviceIds: 'Please select at least one service' }); return }
+      setErrors({})
+      setStep(2)
+    } else if (step === 2) {
+      if (!dentistId) { setErrors({ dentistId: 'Please select a dentist preference' }); return }
+      setErrors({})
+      setStep(3)
+    }
+  }
+
+  function handleBack() {
+    setErrors({})
+    setStep(s => s - 1)
   }
 
   async function handleSubmit() {
-    const errs = validate()
-    if (Object.keys(errs).length) { setErrors(errs); return }
+    if (!date) { setErrors({ date: 'Please select a date' }); return }
+    if (!timeSlot) { setErrors({ timeSlot: 'Please select a time slot' }); return }
 
     const [h, m] = timeSlot.split(':').map(Number)
     const scheduledAt = date.hour(h).minute(m).second(0).millisecond(0)
@@ -256,15 +267,10 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration + (s.bufferTime ?? 0), 0)
   const totalPrice    = selectedServices.reduce((sum, s) => sum + (s.price ?? 0), 0)
 
-  // Group slots into morning / afternoon
   const morningSlots   = slots.filter(s => parseInt(s.split(':')[0], 10) < 12)
   const afternoonSlots = slots.filter(s => parseInt(s.split(':')[0], 10) >= 12)
 
-  function formatSlot(t) {
-    const [h, m] = t.split(':').map(Number)
-    const d = new Date(); d.setHours(h, m)
-    return d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
-  }
+  const selectedDentist = dentists.find(d => d.id === dentistId)
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -292,270 +298,283 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
 
         <Divider />
 
-        <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 3, maxHeight: '65vh', overflowY: 'auto' }}>
+        {/* Step indicator */}
+        <StepIndicator current={step} />
 
-          {/* Step 1: Services (multi-select) */}
-          <Box>
-            <SectionLabel step={1} label='Choose one or more services' />
-            {errors.service && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.service}</Typography>}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-              {services.map(s => {
-                const selected = serviceIds.includes(s.id)
-                return (
-                  <Box
-                    key={s.id}
-                    onClick={() => toggleService(s.id)}
-                    sx={{
-                      position: 'relative',
-                      border: '2px solid',
-                      borderColor: selected ? '#2563eb' : 'divider',
-                      borderRadius: 2,
-                      p: 1.75,
-                      cursor: 'pointer',
-                      bgcolor: selected ? '#eff6ff' : '#fff',
-                      transition: 'all 0.15s',
-                      '&:hover': { borderColor: '#93c5fd' },
-                    }}
-                  >
-                    {selected && (
-                      <Box sx={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', bgcolor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Check size={11} color='#fff' strokeWidth={3} />
-                      </Box>
-                    )}
-                    <Typography variant='body2' fontWeight={600} color='text.primary' sx={{ lineHeight: 1.3, pr: selected ? 2.5 : 0 }}>
-                      {s.name}
-                    </Typography>
-                    <Typography variant='caption' color='text.secondary'>
-                      {s.duration} min
-                      {s.price != null ? ` · ₱${Number(s.price).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : ''}
-                    </Typography>
-                  </Box>
-                )
-              })}
+        <Divider />
+
+        {/* Body */}
+        <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2, minHeight: 260, maxHeight: '55vh', overflowY: 'auto' }}>
+
+          {/* ── Step 1: Services ── */}
+          {step === 1 && (
+            <Box>
+              <FieldLabel required>Select one or more services</FieldLabel>
+              <Autocomplete
+                multiple
+                options={services}
+                getOptionLabel={(s) => s.name}
+                value={selectedServices}
+                onChange={(_, selected) => {
+                  setServiceIds(selected.map(s => s.id))
+                  setErrors(p => ({ ...p, serviceIds: undefined }))
+                }}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    size='small'
+                    placeholder={serviceIds.length === 0 ? 'Search and select services...' : ''}
+                    error={!!errors.serviceIds}
+                    helperText={errors.serviceIds}
+                  />
+                )}
+                renderOption={(props, s) => (
+                  <li {...props} key={s.id}>
+                    <Box>
+                      <Typography variant='body2' fontWeight={500}>{s.name}</Typography>
+                      <Typography variant='caption' color='text.secondary'>
+                        {s.duration} min{s.price != null ? ` · ₱${Number(s.price).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : ''}
+                      </Typography>
+                    </Box>
+                  </li>
+                )}
+              />
+
+              {/* Running total */}
+              {selectedServices.length >= 1 && (
+                <Box sx={{ mt: 1.5, px: 1.5, py: 1, bgcolor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 1.5 }}>
+                  <Typography variant='caption' color='#1d4ed8' fontWeight={600}>
+                    {selectedServices.length} service{selectedServices.length > 1 ? 's' : ''} selected
+                    {' · '}{totalDuration} min total
+                    {totalPrice > 0 ? ` · ₱${Number(totalPrice).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : ''}
+                  </Typography>
+                </Box>
+              )}
+
               {services.length === 0 && (
-                <Typography variant='body2' color='text.disabled' sx={{ gridColumn: 'span 2', py: 1 }}>
+                <Typography variant='body2' color='text.disabled' sx={{ mt: 1 }}>
                   No services available.
                 </Typography>
               )}
             </Box>
-
-            {/* Running total when 2+ services selected */}
-            {selectedServices.length >= 2 && (
-              <Box sx={{ mt: 1.5, px: 1.5, py: 1, bgcolor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 1.5, display: 'flex', gap: 2 }}>
-                <Typography variant='caption' color='#0369a1' fontWeight={600}>
-                  {selectedServices.length} services selected
-                </Typography>
-                <Typography variant='caption' color='#0369a1'>
-                  {totalDuration} min total
-                  {totalPrice > 0 ? ` · ₱${Number(totalPrice).toLocaleString('en-PH', { minimumFractionDigits: 0 })} total` : ''}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          {/* Step 2: Dentist preference */}
-          {serviceIds.length > 0 && (
-            <Box>
-              <SectionLabel step={2} label='Dentist preference' />
-              {errors.dentist && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.dentist}</Typography>}
-              {dentists.length === 0 ? (
-                <Box sx={{ bgcolor: '#fef9c3', color: '#854d0e', borderRadius: 2, px: 2, py: 1.5 }}>
-                  <Typography variant='body2' sx={{ fontWeight: 500 }}>
-                    No dentist is currently available for the selected service(s). Please choose another service or contact the clinic to book.
-                  </Typography>
-                </Box>
-              ) : (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  <DentistChip
-                    label='Any Available'
-                    selected={dentistId === 'ANY'}
-                    onClick={() => { setDentistId('ANY'); setErrors(p => ({ ...p, dentist: undefined })) }}
-                  />
-                  {dentists.map(d => (
-                    <DentistChip
-                      key={d.id}
-                      label={`Dr. ${d.user.firstName} ${d.user.lastName}`}
-                      sub={d.specialty}
-                      selected={dentistId === d.id}
-                      onClick={() => { setDentistId(d.id); setErrors(p => ({ ...p, dentist: undefined })) }}
-                    />
-                  ))}
-                </Box>
-              )}
-            </Box>
           )}
 
-          {/* Step 3: Date */}
-          {dentistId && (
+          {/* ── Step 2: Dentist ── */}
+          {step === 2 && (
             <Box>
-              <SectionLabel step={3} label='Pick a date' />
-              {errors.date && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.date}</Typography>}
-              <DatePicker
-                value={date}
-                onChange={(val) => { setDate(val); setErrors(p => ({ ...p, date: undefined })) }}
-                shouldDisableDate={shouldDisableDate}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
-            </Box>
-          )}
-
-          {/* Step 4: Time slot */}
-          {date && (
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 22, height: 22, borderRadius: '50%', bgcolor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Typography sx={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700, lineHeight: 1 }}>4</Typography>
-                  </Box>
-                  <Typography variant='body2' fontWeight={600} color='text.primary'>Time suggestions</Typography>
-                </Box>
-                <Box
-                  component='button'
-                  onClick={fetchAiSlots}
-                  disabled={aiLoading || slotsLoading}
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.25, py: 0.5, bgcolor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 1.5, cursor: aiLoading ? 'wait' : 'pointer', '&:hover:not(:disabled)': { bgcolor: '#ede9fe' } }}
+              <FieldLabel required>Dentist preference</FieldLabel>
+              <FormControl fullWidth size='small' error={!!errors.dentistId}>
+                <MuiSelect
+                  value={dentistId}
+                  onChange={(e) => { setDentistId(e.target.value); setErrors(p => ({ ...p, dentistId: undefined })) }}
+                  displayEmpty
                 >
-                  {aiLoading ? <CircularProgress size={11} sx={{ color: '#7c3aed' }} /> : <Sparkles size={11} color='#7c3aed' />}
-                  <Typography variant='caption' color='#7c3aed' fontWeight={600}>{aiLoading ? 'Analyzing...' : 'AI Pick'}</Typography>
-                </Box>
-              </Box>
-              {errors.timeSlot && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.timeSlot}</Typography>}
-
-              {/* AI suggestions strip */}
-              {aiSuggestions.length > 0 && (
-                <Box sx={{ mb: 1.5, p: 1.25, bgcolor: '#faf5ff', border: '1px solid #ddd6fe', borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                    <Sparkles size={12} color='#7c3aed' />
-                    <Typography variant='caption' fontWeight={700} color='#6d28d9'>AI Recommendations</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                    {aiSuggestions.map((s) => (
-                      <Box
-                        key={s.time}
-                        onClick={() => { setTimeSlot(s.time); setErrors(p => ({ ...p, timeSlot: undefined })) }}
-                        sx={{ display: 'flex', flexDirection: 'column', px: 1.25, py: 0.75, border: '1.5px solid', borderColor: timeSlot === s.time ? '#7c3aed' : '#c4b5fd', borderRadius: 1.5, cursor: 'pointer', bgcolor: timeSlot === s.time ? '#ede9fe' : '#fff', '&:hover': { bgcolor: '#f5f3ff' } }}
-                      >
-                        <Typography variant='caption' fontWeight={700} color='#6d28d9'>
-                          {(() => { const [h, m] = s.time.split(':').map(Number); const d = new Date(); d.setHours(h, m); return d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true }) })()}
+                  <MenuItem value='' disabled>
+                    <Typography variant='body2' color='text.disabled'>Select a dentist</Typography>
+                  </MenuItem>
+                  <MenuItem value='ANY'>Any Available</MenuItem>
+                  {dentists.map(d => (
+                    <MenuItem key={d.id} value={d.id}>
+                      Dr. {d.user.firstName} {d.user.lastName}
+                      {d.specialty && (
+                        <Typography component='span' variant='caption' color='text.secondary' sx={{ ml: 1 }}>
+                          · {d.specialty}
                         </Typography>
-                        <Typography variant='caption' sx={{ fontSize: '0.65rem', color: '#7c3aed' }}>{s.tag}</Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                  <Typography variant='caption' color='text.disabled' sx={{ fontStyle: 'italic', display: 'block', mt: 0.75 }}>
-                    AI suggestions only — not a confirmed booking.
+                      )}
+                    </MenuItem>
+                  ))}
+                </MuiSelect>
+              </FormControl>
+              {errors.dentistId && (
+                <Typography variant='caption' color='error' sx={{ mt: 0.5, display: 'block' }}>{errors.dentistId}</Typography>
+              )}
+              {dentists.length === 0 && (
+                <Box sx={{ mt: 1.5, bgcolor: '#fef9c3', color: '#854d0e', borderRadius: 2, px: 2, py: 1.5 }}>
+                  <Typography variant='body2' fontWeight={500}>
+                    No dentist is currently available for the selected service(s). Please choose another service or contact the clinic.
                   </Typography>
                 </Box>
               )}
+            </Box>
+          )}
 
-              {slotsLoading && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
-                  <CircularProgress size={16} sx={{ color: '#2563eb' }} />
-                  <Typography variant='caption' color='text.secondary'>Loading available slots...</Typography>
+          {/* ── Step 3: Date, Time, Notes ── */}
+          {step === 3 && (
+            <>
+              {/* Date picker */}
+              <Box>
+                <FieldLabel required>Pick a date</FieldLabel>
+                {errors.date && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 0.5 }}>{errors.date}</Typography>}
+                <DatePicker
+                  value={date}
+                  onChange={(val) => { setDate(val); setErrors(p => ({ ...p, date: undefined })) }}
+                  shouldDisableDate={shouldDisableDate}
+                  slotProps={{ textField: { size: 'small', fullWidth: true, error: !!errors.date } }}
+                />
+              </Box>
+
+              {/* Time slots */}
+              {date && (
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                    <FieldLabel required>Select a time slot</FieldLabel>
+                    <Box
+                      component='button'
+                      onClick={fetchAiSlots}
+                      disabled={aiLoading || slotsLoading}
+                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.25, py: 0.5, bgcolor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 1.5, cursor: aiLoading ? 'wait' : 'pointer', '&:hover:not(:disabled)': { bgcolor: '#ede9fe' } }}
+                    >
+                      {aiLoading ? <CircularProgress size={11} sx={{ color: '#7c3aed' }} /> : <Sparkles size={11} color='#7c3aed' />}
+                      <Typography variant='caption' color='#7c3aed' fontWeight={600}>{aiLoading ? 'Analyzing...' : 'AI Pick'}</Typography>
+                    </Box>
+                  </Box>
+
+                  {errors.timeSlot && <Typography variant='caption' color='error' sx={{ display: 'block', mb: 1 }}>{errors.timeSlot}</Typography>}
+
+                  {/* AI suggestions */}
+                  {aiSuggestions.length > 0 && (
+                    <Box sx={{ mb: 1.5, p: 1.25, bgcolor: '#faf5ff', border: '1px solid #ddd6fe', borderRadius: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                        <Sparkles size={12} color='#7c3aed' />
+                        <Typography variant='caption' fontWeight={700} color='#6d28d9'>AI Recommendations</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                        {aiSuggestions.map((s) => (
+                          <Box
+                            key={s.time}
+                            onClick={() => { setTimeSlot(s.time); setErrors(p => ({ ...p, timeSlot: undefined })) }}
+                            sx={{ display: 'flex', flexDirection: 'column', px: 1.25, py: 0.75, border: '1.5px solid', borderColor: timeSlot === s.time ? '#7c3aed' : '#c4b5fd', borderRadius: 1.5, cursor: 'pointer', bgcolor: timeSlot === s.time ? '#ede9fe' : '#fff', '&:hover': { bgcolor: '#f5f3ff' } }}
+                          >
+                            <Typography variant='caption' fontWeight={700} color='#6d28d9'>
+                              {(() => { const [h, m] = s.time.split(':').map(Number); const d = new Date(); d.setHours(h, m); return d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true }) })()}
+                            </Typography>
+                            <Typography variant='caption' sx={{ fontSize: '0.65rem', color: '#7c3aed' }}>{s.tag}</Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {slotsLoading && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                      <CircularProgress size={16} sx={{ color: '#2563eb' }} />
+                      <Typography variant='caption' color='text.secondary'>Loading available slots...</Typography>
+                    </Box>
+                  )}
+
+                  {!slotsLoading && slots.length === 0 && (
+                    <Typography variant='body2' color='text.disabled' sx={{ py: 1 }}>
+                      No available slots for this date. Try a different day.
+                    </Typography>
+                  )}
+
+                  {!slotsLoading && morningSlots.length > 0 && (
+                    <Box sx={{ mb: 1.5 }}>
+                      <Typography variant='caption' fontWeight={600} color='text.secondary' sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Morning
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+                        {morningSlots.map(s => (
+                          <TimeSlotChip
+                            key={s}
+                            slot={s}
+                            date={date}
+                            duration={totalDuration || 30}
+                            selected={timeSlot === s}
+                            onClick={() => { setTimeSlot(s); setErrors(p => ({ ...p, timeSlot: undefined })) }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {!slotsLoading && afternoonSlots.length > 0 && (
+                    <Box>
+                      <Typography variant='caption' fontWeight={600} color='text.secondary' sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Afternoon
+                      </Typography>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+                        {afternoonSlots.map(s => (
+                          <TimeSlotChip
+                            key={s}
+                            slot={s}
+                            date={date}
+                            duration={totalDuration || 30}
+                            selected={timeSlot === s}
+                            onClick={() => { setTimeSlot(s); setErrors(p => ({ ...p, timeSlot: undefined })) }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
                 </Box>
               )}
 
-              {!slotsLoading && slots.length === 0 && (
-                <Typography variant='body2' color='text.disabled' sx={{ py: 1 }}>
-                  No available slots for this date. Try a different day.
-                </Typography>
+              {/* Notes */}
+              {timeSlot && (
+                <Input
+                  id='book-notes'
+                  label='Additional notes (optional)'
+                  multiline
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder='e.g. Tooth sensitivity on the upper left...'
+                />
               )}
 
-              {!slotsLoading && slots.length > 0 && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {slots.map(s => (
-                    <TimeSlotRow
-                      key={s}
-                      slot={s}
-                      date={date}
-                      duration={totalDuration || 30}
-                      selected={timeSlot === s}
-                      onClick={() => { setTimeSlot(s); setErrors(p => ({ ...p, timeSlot: undefined })) }}
-                      formatSlot={formatSlot}
-                    />
+              {/* Summary */}
+              {timeSlot && (
+                <Box sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 2, p: 2 }}>
+                  <Typography variant='body2' fontWeight={600} color='#15803d' sx={{ mb: 0.75 }}>
+                    Booking summary
+                  </Typography>
+                  {[
+                    ['Service', selectedServices.map(s => s.name).join(', ')],
+                    ['Dentist', selectedDentist ? `Dr. ${selectedDentist.user.firstName} ${selectedDentist.user.lastName}` : 'Any Available'],
+                    ['Date & Time', `${date?.format('MMM D, YYYY')} · ${(() => { const [h, m] = timeSlot.split(':').map(Number); const d = new Date(); d.setHours(h, m); return d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true }) })()}`],
+                    ...(totalDuration > 0 ? [['Duration', `${totalDuration} min${totalPrice > 0 ? ` · ₱${Number(totalPrice).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : ''}`]] : []),
+                  ].map(([label, value]) => (
+                    <Box key={label} sx={{ display: 'flex', gap: 1 }}>
+                      <Typography variant='caption' color='text.secondary' sx={{ minWidth: 80 }}>{label}</Typography>
+                      <Typography variant='caption' fontWeight={500} color='text.primary'>{value}</Typography>
+                    </Box>
                   ))}
+                  <Typography variant='caption' color='text.disabled' sx={{ mt: 0.75, display: 'block' }}>
+                    Your request will be reviewed and confirmed by our receptionist.
+                  </Typography>
                 </Box>
               )}
-            </Box>
+            </>
           )}
-
-          {/* Step 5: Notes */}
-          {timeSlot && (
-            <Box>
-              <SectionLabel step={5} label='Additional notes (optional)' />
-              <Input
-                id='book-notes'
-                multiline
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder='e.g. Tooth sensitivity on the upper left...'
-              />
-            </Box>
-          )}
-
-          {/* Summary */}
-          {timeSlot && selectedServices.length > 0 && (
-            <Box sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 2, p: 2 }}>
-              <Typography variant='body2' fontWeight={600} color='#15803d' sx={{ mb: 0.5 }}>
-                Booking summary
-              </Typography>
-              <Typography variant='body2' color='text.secondary'>
-                <strong>{selectedServices.map(s => s.name).join(', ')}</strong>
-                {' · '}
-                {date?.format('MMM D, YYYY')}
-                {' · '}
-                {formatSlot(timeSlot)}
-              </Typography>
-              {selectedServices.length > 1 && (
-                <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.25 }}>
-                  {totalDuration} min total
-                  {totalPrice > 0 ? ` · ₱${Number(totalPrice).toLocaleString('en-PH', { minimumFractionDigits: 0 })} total` : ''}
-                </Typography>
-              )}
-              <Typography variant='caption' color='text.disabled' sx={{ mt: 0.25, display: 'block' }}>
-                Your request will be reviewed and confirmed by our receptionist.
-              </Typography>
-            </Box>
-          )}
-
         </Box>
 
         <Divider />
 
-        <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button variant='outlined' onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button variant='contained' onClick={handleSubmit} loading={loading} disabled={!timeSlot}>
-            Request booking
-          </Button>
+        {/* Footer */}
+        <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            {step > 1 && (
+              <Button variant='outlined' onClick={handleBack} disabled={loading}>
+                ← Back
+              </Button>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {step === 1 && (
+              <Button variant='outlined' onClick={onClose} disabled={loading}>Cancel</Button>
+            )}
+            {step < 3 ? (
+              <Button variant='contained' onClick={handleNext}>Next →</Button>
+            ) : (
+              <Button variant='contained' onClick={handleSubmit} loading={loading} disabled={!timeSlot}>
+                Request booking
+              </Button>
+            )}
+          </Box>
         </Box>
       </Dialog>
     </LocalizationProvider>
-  )
-}
-
-function DentistChip({ label, sub, selected, onClick }) {
-  return (
-    <Box
-      onClick={onClick}
-      sx={{
-        border: '1.5px solid',
-        borderColor: selected ? '#2563eb' : 'divider',
-        borderRadius: 2,
-        px: 1.5,
-        py: 0.75,
-        cursor: 'pointer',
-        bgcolor: selected ? '#eff6ff' : '#fff',
-        transition: 'all 0.15s',
-        '&:hover': { borderColor: '#93c5fd' },
-      }}
-    >
-      <Typography variant='body2' fontWeight={selected ? 700 : 500} color={selected ? '#1d4ed8' : 'text.primary'} sx={{ lineHeight: 1.2 }}>
-        {label}
-      </Typography>
-      {sub && (
-        <Typography variant='caption' color='text.secondary'>{sub}</Typography>
-      )}
-    </Box>
   )
 }

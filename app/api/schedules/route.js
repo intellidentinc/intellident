@@ -24,6 +24,8 @@ import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { generateAppointmentCode, getPatientAppointments } from '@/lib/appointments'
+import { generateReceiptNumber } from '@/lib/billing'
+import { createCheckoutSession } from '@/lib/paymongo'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -217,8 +219,49 @@ export async function POST(request) {
 
   logAudit({ userId: caller.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'Appointment', entityId: appointment.id, ipAddress: ip, userAgent, metadata: { appointmentCode, source: 'patient-booking' } })
 
-  // Reservation fee / billing is created when staff CONFIRM the booking, not at
-  // PENDING request time — see PATCH /api/appointments/[id]. This avoids leaving an
-  // orphan bill behind when a pending request is rejected or abandoned.
-  return NextResponse.json({ appointment }, { status: 201 })
+  // Create RESERVATION billing immediately and redirect patient to pay the deposit.
+  // Best-effort: booking always succeeds even if billing or checkout fails.
+  let checkoutUrl = null
+  try {
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: caller.clinicId },
+      select: { paymongoEnabled: true, reservationFeeAmount: true },
+    })
+    const reservationFee = clinic?.reservationFeeAmount ?? 0
+    if (clinic?.paymongoEnabled && reservationFee > 0) {
+      const resBilling = await prisma.$transaction(async (tx) => {
+        const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
+        return tx.billing.create({
+          data: {
+            clinicId:     caller.clinicId,
+            patientId:    caller.patientId,
+            appointmentId: appointment.id,
+            billingType:  'RESERVATION',
+            amount:       reservationFee,
+            amountPaid:   0,
+            balance:      reservationFee,
+            status:       'UNPAID',
+            receiptNumber,
+          },
+        })
+      })
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+      const result = await createCheckoutSession({
+        lineItems: [{
+          amount:   Math.round(reservationFee * 100),
+          currency: 'PHP',
+          name:     `Reservation Deposit — ${service.name}`,
+          quantity: 1,
+        }],
+        successUrl: `${appUrl}/${caller.clinicId}/my-billing?payment=success&billingId=${resBilling.id}`,
+        cancelUrl:  `${appUrl}/${caller.clinicId}/schedules`,
+        metadata:   { billingId: resBilling.id, clinicId: caller.clinicId, paymentType: 'RESERVATION' },
+      }).catch(() => ({ checkoutUrl: null }))
+      checkoutUrl = result.checkoutUrl
+    }
+  } catch {
+    // Non-blocking — booking succeeded regardless
+  }
+
+  return NextResponse.json({ appointment, ...(checkoutUrl ? { checkoutUrl } : {}) }, { status: 201 })
 }

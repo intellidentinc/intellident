@@ -24,9 +24,7 @@ import { notifyPatientStatusChange, notifyStaff, createNotification } from '@/li
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
-import { generateReceiptNumber, computeBillingStatus } from '@/lib/billing'
-import { createCheckoutSession } from '@/lib/paymongo'
-import { sendCustomAppointmentEmail } from '@/lib/email'
+import { generateReceiptNumber, applyReservationCredit } from '@/lib/billing'
 
 async function getCaller() {
   const session = await getSession()
@@ -179,10 +177,10 @@ export async function PATCH(request, { params }) {
 
   logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'UPDATE', entity: 'Appointment', entityId: id, ipAddress: ip, userAgent, metadata: { from: appointment.status, to: status, appointmentCode: appointment.appointmentCode } })
 
-  // Auto-create or finalize billing when appointment is COMPLETED
+  // Auto-create SERVICE billing when appointment is COMPLETED, crediting any paid
+  // reservation deposit if the clinic has reservationFeeDeductible enabled.
   if (status === 'COMPLETED') {
     try {
-      // Sum prices across all services in the junction table; fall back to single service for old records
       const junctionServices = await prisma.appointmentService.findMany({
         where: { appointmentId: id },
         include: { service: { select: { price: true } } },
@@ -191,19 +189,19 @@ export async function PATCH(request, { params }) {
         ? junctionServices.reduce((sum, js) => sum + (js.service.price ?? 0), 0)
         : (updated.service?.price ?? 0)
 
-      const existingBilling = await prisma.billing.findUnique({
-        where: { appointmentId: id },
-        include: { payments: { where: { isDeleted: false } } },
+      const existingServiceBilling = await prisma.billing.findFirst({
+        where: { appointmentId: id, billingType: 'SERVICE', isDeleted: false },
       })
 
-      if (!existingBilling) {
+      if (!existingServiceBilling) {
         await prisma.$transaction(async (tx) => {
           const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
-          await tx.billing.create({
+          const newBilling = await tx.billing.create({
             data: {
               clinicId:      caller.clinicId,
               patientId:     updated.patient.id,
               appointmentId: id,
+              billingType:   'SERVICE',
               amount:        totalPrice,
               amountPaid:    0,
               balance:       totalPrice,
@@ -211,97 +209,11 @@ export async function PATCH(request, { params }) {
               receiptNumber,
             },
           })
-        })
-      } else if (!existingBilling.receiptNumber) {
-        await prisma.$transaction(async (tx) => {
-          const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
-          await tx.billing.update({
-            where: { id: existingBilling.id },
-            data: { receiptNumber },
-          })
+          await applyReservationCredit(tx, caller.clinicId, id, newBilling.id, totalPrice)
         })
       }
     } catch {
-      // Billing auto-creation is non-blocking
-    }
-  }
-
-  // Reservation deposit: when staff CONFIRM a booking, create the billing record
-  // (the deposit is credited toward the full appointment total) and hand the patient a
-  // pay link. Done here — not at PENDING request time — so a rejected/abandoned request
-  // never leaves an orphan bill behind.
-  if (appointment.status === 'PENDING' && status === 'CONFIRMED') {
-    try {
-      const clinic = await prisma.clinic.findUnique({
-        where: { id: caller.clinicId },
-        select: { reservationFeeAmount: true, paymongoEnabled: true },
-      })
-      const reservationFee = clinic?.reservationFeeAmount ?? 0
-      const existingBilling = clinic?.paymongoEnabled && reservationFee > 0
-        ? await prisma.billing.findUnique({ where: { appointmentId: id } })
-        : null
-
-      if (clinic?.paymongoEnabled && reservationFee > 0 && !existingBilling) {
-        const junctionServices = await prisma.appointmentService.findMany({
-          where: { appointmentId: id },
-          include: { service: { select: { price: true } } },
-        })
-        const totalPrice = junctionServices.length > 0
-          ? junctionServices.reduce((sum, js) => sum + (js.service.price ?? 0), 0)
-          : (updated.service?.price ?? 0)
-
-        const billing = await prisma.$transaction(async (tx) => {
-          const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
-          return tx.billing.create({
-            data: {
-              clinicId:      caller.clinicId,
-              patientId:     updated.patient.id,
-              appointmentId: id,
-              amount:        totalPrice,
-              amountPaid:    0,
-              balance:       totalPrice,
-              status:        'UNPAID',
-              receiptNumber,
-            },
-          })
-        })
-
-        // Best-effort: build a checkout link for the reservation deposit and send it to the patient.
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
-        const { checkoutUrl } = await createCheckoutSession({
-          lineItems: [{
-            amount:   Math.round(reservationFee * 100),
-            currency: 'PHP',
-            name:     `Reservation Deposit — ${serviceName}`,
-            quantity: 1,
-          }],
-          successUrl: `${appUrl}/${caller.clinicId}/my-billing?payment=success&billingId=${billing.id}`,
-          cancelUrl:  `${appUrl}/${caller.clinicId}/my-billing`,
-          metadata:   { billingId: billing.id, clinicId: caller.clinicId, paymentType: 'RESERVATION' },
-        }).catch(() => ({ checkoutUrl: null }))
-
-        if (checkoutUrl && patientUser?.id) {
-          await createNotification({
-            userId: patientUser.id,
-            clinicId: caller.clinicId,
-            type: 'APPOINTMENT_CONFIRMED',
-            title: 'Reservation Deposit Due',
-            body: `Secure your ${serviceName} appointment by paying the ₱${reservationFee} reservation deposit (credited toward your total): ${checkoutUrl}`,
-            appointmentId: id,
-          }).catch(() => {})
-
-          if (patientUser.email) {
-            sendCustomAppointmentEmail({
-              to: patientUser.email,
-              subject: 'Secure Your Appointment — Reservation Deposit',
-              body: `Hi ${patientUser.firstName ?? ''},\n\nYour ${serviceName} appointment is confirmed. Please pay the ₱${reservationFee} reservation deposit to secure your slot:\n\n${checkoutUrl}\n\nThe deposit is credited toward your total bill.`,
-              typeKey: 'APPOINTMENT_CONFIRMED',
-            }).catch(() => {})
-          }
-        }
-      }
-    } catch {
-      // Reservation billing/deposit setup is non-blocking — confirmation still succeeds.
+      // Non-blocking
     }
   }
 

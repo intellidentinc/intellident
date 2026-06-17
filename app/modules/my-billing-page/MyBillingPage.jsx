@@ -24,14 +24,24 @@ const STATUS_CHIP = {
   REFUNDED: { bg: '#f3e8ff', color: '#7c3aed', label: 'Refunded' },
 }
 
+const BILLING_TYPE_CHIP = {
+  RESERVATION: { bg: '#fef3c7', color: '#92400e', label: 'Deposit' },
+  SERVICE:     { bg: '#dbeafe', color: '#1d4ed8', label: 'Service' },
+}
+
 function php(n) {
   return '₱' + Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function BillingCard({ billing, onPay, onView, onDownload, paying, viewingId, downloadingId }) {
-  const chip    = STATUS_CHIP[billing.status] ?? STATUS_CHIP.UNPAID
-  const appt    = billing.appointment
-  const settled = billing.status === 'PAID' || billing.status === 'REFUNDED'
+  const chip     = STATUS_CHIP[billing.status] ?? STATUS_CHIP.UNPAID
+  const typeChip = BILLING_TYPE_CHIP[billing.billingType] ?? BILLING_TYPE_CHIP.SERVICE
+  const appt     = billing.appointment
+  const settled  = billing.status === 'PAID' || billing.status === 'REFUNDED'
+  const isDeposit = billing.billingType === 'RESERVATION'
+  const title = isDeposit
+    ? `Reservation Deposit — ${appt?.service?.name ?? 'Dental Service'}`
+    : (appt?.service?.name ?? 'Dental Service')
 
   return (
     <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2.5, bgcolor: '#fff', p: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -39,17 +49,24 @@ function BillingCard({ billing, onPay, onView, onDownload, paying, viewingId, do
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
         <Box sx={{ flex: 1 }}>
           <Typography variant='subtitle2' fontWeight={700} color='text.primary'>
-            {appt?.service?.name ?? 'Dental Service'}
+            {title}
           </Typography>
           <Typography variant='caption' color='text.secondary' sx={{ fontFamily: 'monospace' }}>
             {appt?.appointmentCode ?? '—'}
           </Typography>
         </Box>
-        <Chip
-          label={chip.label}
-          size='small'
-          sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.72rem', height: 22 }}
-        />
+        <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
+          <Chip
+            label={typeChip.label}
+            size='small'
+            sx={{ bgcolor: typeChip.bg, color: typeChip.color, fontWeight: 600, fontSize: '0.72rem', height: 22 }}
+          />
+          <Chip
+            label={chip.label}
+            size='small'
+            sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.72rem', height: 22 }}
+          />
+        </Box>
       </Box>
 
       {/* Date */}

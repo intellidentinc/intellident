@@ -42,12 +42,18 @@ const HEAD_CELLS = [
   { id: 'appointmentCode', label: 'Appt. Code' },
   { id: 'patient',         label: 'Patient' },
   { id: 'service',         label: 'Service' },
+  { id: 'type',            label: 'Type' },
   { id: 'amount',          label: 'Total',   align: 'right' },
   { id: 'amountPaid',      label: 'Paid',    align: 'right' },
   { id: 'balance',         label: 'Balance', align: 'right' },
   { id: 'status',          label: 'Status' },
   { id: 'actions',         label: '' },
 ]
+
+export const BILLING_TYPE_CHIP = {
+  RESERVATION: { bg: '#fef3c7', color: '#92400e', label: 'Deposit' },
+  SERVICE:     { bg: '#dbeafe', color: '#1d4ed8', label: 'Service' },
+}
 
 function php(n) {
   if (n === null || n === undefined) return '₱—'
@@ -344,6 +350,7 @@ export default function BillingPage({ initialRows = [], initialTotal = 0 }) {
                   )
                 : rows.map((row) => {
                     const chip = STATUS_PAYMENT_CHIP[row.status] ?? STATUS_PAYMENT_CHIP.UNPAID
+                    const typeChip = BILLING_TYPE_CHIP[row.billingType] ?? BILLING_TYPE_CHIP.SERVICE
                     return (
                       <TableRow
                         key={row.id}
@@ -359,6 +366,13 @@ export default function BillingPage({ initialRows = [], initialTotal = 0 }) {
                         </TableCell>
                         <TableCell sx={{ color: '#334155', fontSize: '0.85rem' }}>
                           {row.appointment?.service?.name ?? '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={typeChip.label}
+                            size='small'
+                            sx={{ bgcolor: typeChip.bg, color: typeChip.color, fontWeight: 600, fontSize: '0.72rem', height: 22 }}
+                          />
                         </TableCell>
                         <TableCell align='right' sx={{ color: '#334155', fontSize: '0.85rem', fontVariantNumeric: 'tabular-nums' }}>
                           {php(row.amount)}
