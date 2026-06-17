@@ -121,12 +121,19 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
     setTimeSlot(''); setNotes(''); setErrors({})
     setSlots([])
 
-    fetch('/api/appointments/services').then(r => r.json()).then(d => setServices(d.services ?? []))
-    fetch('/api/clinics/schedule').then(r => r.json()).then(d => setSchedule(d))
-    fetch('/api/clinics/closures').then(r => r.json()).then(d => {
-      setClosures((d.closures ?? []).map(c => dayjs(c.date).format('YYYY-MM-DD')))
-    })
-  }, [open])
+    fetch('/api/appointments/services')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('services')))
+      .then(d => setServices(d.services ?? []))
+      .catch(() => { setServices([]); showToast('Could not load services. Please try again.', 'error') })
+    fetch('/api/clinics/schedule')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('schedule')))
+      .then(d => setSchedule(d))
+      .catch(() => setSchedule(null))
+    fetch('/api/clinics/closures')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('closures')))
+      .then(d => setClosures((d.closures ?? []).map(c => dayjs(c.date).format('YYYY-MM-DD'))))
+      .catch(() => setClosures([]))
+  }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleService(id) {
     setServiceIds(prev => {
@@ -142,8 +149,12 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
   useEffect(() => {
     if (serviceIds.length === 0) { setDentists([]); setDentistId(''); return }
     fetch(`/api/appointments/dentists?serviceIds=${serviceIds.join(',')}`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error ?? 'Failed to load dentists') }
+        return r.json()
+      })
       .then(d => setDentists(d.dentists ?? []))
+      .catch(() => { setDentists([]); showToast('Could not load dentists. Please try again.', 'error') })
     setDentistId(''); setDate(null); setTimeSlot(''); setSlots([])
   }, [serviceIds.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -159,7 +170,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
       date: date.format('YYYY-MM-DD'),
     })
     fetch(`/api/schedules/slots?${params}`)
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('slots')))
       .then(d => setSlots(d.slots ?? []))
       .catch(() => setSlots([]))
       .finally(() => setSlotsLoading(false))
@@ -172,10 +183,13 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
     try {
       const params = new URLSearchParams({ serviceIds: serviceIds.join(','), dentistId, date: date.format('YYYY-MM-DD') })
       const res = await fetch(`/api/ai/slots?${params}`)
-      if (res.ok) {
-        const data = await res.json()
-        setAiSuggestions(data.suggestions ?? [])
-      }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? 'Could not get AI suggestions') }
+      const data = await res.json()
+      const suggestions = data.suggestions ?? []
+      setAiSuggestions(suggestions)
+      if (suggestions.length === 0) showToast('No AI suggestions for this date — pick a slot below.', 'info')
+    } catch (err) {
+      showToast(err.message || 'AI suggestions are unavailable right now.', 'error')
     } finally {
       setAiLoading(false)
     }

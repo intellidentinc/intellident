@@ -2,7 +2,8 @@ import { NextResponse, after } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { generateJSON } from '@/lib/ai'
-import dayjs from 'dayjs'
+import { computeAvailableSlots } from '@/lib/slots'
+import moment from 'moment-timezone'
 
 // Slot ranking is a lightweight task — use a fast model and never let it block the
 // response for long; fall back to algorithmic tagging on timeout or error.
@@ -33,107 +34,44 @@ function algorithmicSuggestions(slots) {
   })
 }
 
-// Generate time slots identical to /api/schedules/slots logic
-function generateSlots(openTime, closeTime, totalDuration) {
-  const slots = []
-  const [openH, openM] = openTime.split(':').map(Number)
-  const [closeH, closeM] = closeTime.split(':').map(Number)
-
-  let current = openH * 60 + openM
-  const limit = closeH * 60 + closeM - totalDuration
-
-  while (current <= limit) {
-    const h = Math.floor(current / 60)
-    const m = current % 60
-    slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
-    current += 30
-  }
-  return slots
-}
-
 export async function GET(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
-  const serviceId = searchParams.get('serviceId') ?? searchParams.get('serviceIds')?.split(',')[0]
+  const serviceIdsParam = searchParams.get('serviceIds') ?? searchParams.get('serviceId')
   const dentistId = searchParams.get('dentistId')
   const dateStr = searchParams.get('date')
 
-  if (!serviceId || !dentistId || !dateStr) {
-    return NextResponse.json({ error: 'serviceId, dentistId, and date are required' }, { status: 400 })
+  if (!serviceIdsParam || !dentistId || !dateStr) {
+    return NextResponse.json({ error: 'serviceIds, dentistId, and date are required' }, { status: 400 })
   }
 
   const clinicId = session.clinicId
+  const serviceIds = serviceIdsParam.split(',').filter(Boolean)
 
-  const [service, clinicSchedule, closures] = await Promise.all([
-    prisma.service.findFirst({
-      where: { id: serviceId, clinicId, isDeleted: false },
-      select: { name: true, duration: true, bufferTime: true },
+  // Fetch service(s) for the prompt context, and compute the available slots using
+  // the SAME logic as /api/schedules/slots so the AI ranks exactly what the patient sees.
+  const [services, slots] = await Promise.all([
+    prisma.service.findMany({
+      where: { id: { in: serviceIds }, clinicId, isDeleted: false },
+      select: { name: true, duration: true },
     }),
-    prisma.clinicSchedule.findUnique({ where: { clinicId } }),
-    prisma.clinicClosure.findMany({
-      where: { clinicId, date: { gte: new Date(dateStr + 'T00:00:00'), lte: new Date(dateStr + 'T23:59:59') } },
-    }),
+    computeAvailableSlots({ clinicId, serviceIds, dentistId, dateStr }),
   ])
 
-  if (!service) return NextResponse.json({ error: 'Service not found' }, { status: 404 })
-  if (!clinicSchedule) return NextResponse.json({ suggestions: [] })
-  if (closures.length > 0) return NextResponse.json({ suggestions: [] })
-
-  // Check working day
-  const date = dayjs(dateStr)
-  const dayMap = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-  if (!clinicSchedule.workingDays.includes(dayMap[date.day()])) {
-    return NextResponse.json({ suggestions: [] })
-  }
-
-  const totalDuration = service.duration + (service.bufferTime ?? 0)
-  let slots = generateSlots(clinicSchedule.openTime, clinicSchedule.closeTime, totalDuration)
-
-  // Filter past slots if today
-  if (date.isSame(dayjs(), 'day')) {
-    const nowMinutes = dayjs().hour() * 60 + dayjs().minute() + 30
-    slots = slots.filter((s) => {
-      const [h, m] = s.split(':').map(Number)
-      return h * 60 + m >= nowMinutes
-    })
-  }
-
-  // Remove conflicting slots for specific dentist
-  if (dentistId !== 'ANY') {
-    const dayStart = new Date(dateStr + 'T00:00:00')
-    const dayEnd = new Date(dateStr + 'T23:59:59')
-    const existing = await prisma.appointment.findMany({
-      where: {
-        clinicId,
-        dentistId,
-        isDeleted: false,
-        status: { notIn: ['CANCELLED'] },
-        scheduledAt: { gte: dayStart, lte: dayEnd },
-      },
-      select: { scheduledAt: true, endsAt: true },
-    })
-
-    slots = slots.filter((slot) => {
-      const [h, m] = slot.split(':').map(Number)
-      const slotStart = date.hour(h).minute(m).second(0)
-      const slotEnd = slotStart.add(totalDuration, 'minute')
-      return !existing.some((appt) => {
-        const apptStart = dayjs(appt.scheduledAt)
-        const apptEnd = dayjs(appt.endsAt)
-        return slotStart.isBefore(apptEnd) && slotEnd.isAfter(apptStart)
-      })
-    })
-  }
-
+  if (services.length === 0) return NextResponse.json({ error: 'Service not found' }, { status: 404 })
   if (slots.length === 0) return NextResponse.json({ suggestions: [] })
+
+  const date = moment.tz(dateStr, 'Asia/Manila')
+  const serviceName = services.map((s) => s.name).join(' + ')
+  const totalDuration = services.reduce((sum, s) => sum + s.duration, 0)
 
   // Use AI to rank and tag top 5 slots
   const prompt = `You are a scheduling assistant for a dental clinic. Given these available appointment slots for ${date.format('dddd, MMMM D, YYYY')}, select the best 3–5 slots and assign each a short explanation tag.
 
 Available slots: ${slots.join(', ')}
-Service: ${service.name} (${service.duration} min)
+Service: ${serviceName} (${totalDuration} min)
 
 Rules:
 - Tag options: "Earliest available", "Best match", "Lowest conflict risk", "Morning available", "Afternoon available", "Flexible option"
@@ -167,7 +105,7 @@ Rules:
           clinicId,
           action: 'AI_INTERACTION',
           entity: 'SlotRecommendation',
-          metadata: { serviceId, dentistId, date: dateStr, suggestionsCount: suggestions.length },
+          metadata: { serviceIds, dentistId, date: dateStr, suggestionsCount: suggestions.length },
         },
       })
       .catch((err) => console.error('AI slots audit log failed:', err))
