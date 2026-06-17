@@ -20,13 +20,17 @@ export async function GET(request) {
 
   const serviceIds = serviceIdsParam.split(',').filter(Boolean)
 
-  // Intersection: only dentists assigned to ALL selected services
+  // Intersection: only dentists assigned to ALL selected services.
+  // Tenancy is scoped via the service's clinic (services are clinic-owned and this is
+  // what the admin Services view trusts) rather than the dentist's own clinicId — a
+  // dentist whose stored clinicId drifted from the clinic would otherwise be filtered
+  // out of patient booking while still showing for admins. The `clinicId` inside `some`
+  // also validates that the requested serviceIds belong to the caller's clinic.
   const dentists = await prisma.dentist.findMany({
     where: {
-      clinicId,
       isDeleted: false,
       AND: serviceIds.map(id => ({
-        services: { some: { id, isDeleted: false } },
+        services: { some: { id, clinicId, isDeleted: false } },
       })),
     },
     include: {
