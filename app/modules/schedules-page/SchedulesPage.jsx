@@ -19,10 +19,10 @@ import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
-import IconButton from '@mui/material/IconButton'
 import AddIcon from '@mui/icons-material/Add'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 import { SidebarInset } from '@/components/ui/sidebar'
+import Button from '@/components/commons/Button'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
 import { CalendarDays, Clock, User2, Stethoscope } from 'lucide-react'
@@ -270,11 +270,21 @@ function AppointmentCard({ appointment, onCancel }) {
           {appointment.appointmentCode ?? '—'}
         </Typography>
         {isCancellable && (
-          <Tooltip title='Cancel appointment'>
-            <IconButton size='small' onClick={onCancel} sx={{ color: '#b91c1c', p: 0.5 }}>
-              <CancelOutlinedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
+          <Button
+            variant='outlined'
+            size='small'
+            startIcon={<CancelOutlinedIcon sx={{ fontSize: 16 }} />}
+            onClick={onCancel}
+            sx={{
+              color: '#b91c1c',
+              borderColor: '#fecaca',
+              '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
+            Cancel
+          </Button>
         )}
       </Box>
     </Box>
