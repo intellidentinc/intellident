@@ -7,6 +7,35 @@ import { parseJsonBody, secret } from '@/lib/validate';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
+/**
+ * GET /api/auth/change-password
+ *
+ * Returns the authenticated user's current wrapped key material so the client can
+ * re-derive the master key from the entered current password and re-wrap it under the
+ * new one — without depending on the in-memory session key (which is non-extractable
+ * and is lost on a page refresh). These are the same encrypted fields sign-in and
+ * verify-otp already hand to the owner; useless without the password.
+ */
+export async function GET() {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { wrappedKey: true, keySalt: true, isDeleted: true, isActive: true },
+  });
+  if (!user || user.isDeleted || !user.isActive) {
+    return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+  }
+  if (!user.wrappedKey || !user.keySalt) {
+    return NextResponse.json({ error: 'Account setup is incomplete.' }, { status: 500 });
+  }
+
+  return NextResponse.json({ wrappedKey: user.wrappedKey, keySalt: user.keySalt });
+}
+
 export async function POST(request) {
   try {
     const session = await getSession();

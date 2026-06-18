@@ -126,7 +126,7 @@ export async function middleware(request) {
     // be confined to the change-password flow on every route, not just the client-side
     // redirect at login. Runs after the Terms gate so terms are accepted first.
     // /api/auth/sign-out is already excluded (isSignOut, above).
-    if (session.mustChangePassword) {
+    if (session.mustChangePassword && !session.requiresTerms) {
       const isChangePwPage = pathname === '/change-password'
       const isChangePwApi  = pathname === '/api/auth/change-password'
       if (!isChangePwPage && !isChangePwApi) {

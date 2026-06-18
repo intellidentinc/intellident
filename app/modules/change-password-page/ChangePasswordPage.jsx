@@ -12,8 +12,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
 import { useToast } from '@/app/providers/ToastProvider';
-import { useCrypto } from '@/app/providers/CryptoProvider';
-import { generateSalt, deriveKEK, wrapMasterKey, toBase64 } from '@/lib/crypto';
+import { generateSalt, deriveKEK, wrapMasterKey, unwrapMasterKey, toBase64, fromBase64 } from '@/lib/crypto';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -40,7 +39,6 @@ export default function ChangePasswordPage() {
   const searchParams = useSearchParams();
   const reason = searchParams.get('reason');
   const { showToast } = useToast();
-  const { masterKey } = useCrypto();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -55,12 +53,6 @@ export default function ChangePasswordPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!masterKey) {
-      showToast('Session expired. Please sign in again.', 'error');
-      router.push('/sign-in');
-      return;
-    }
-
     if (!PASSWORD_REGEX.test(newPassword)) {
       showToast('New password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.', 'error');
       return;
@@ -73,10 +65,30 @@ export default function ChangePasswordPage() {
 
     setLoading(true);
     try {
-      // Re-wrap the existing master key with the new password
+      // Recover the master key from the stored wrapped blob using the CURRENT password,
+      // rather than relying on the in-memory session key (non-extractable, and lost on a
+      // page refresh). Then re-wrap the same master key under the NEW password.
+      const matRes = await fetch('/api/auth/change-password');
+      const mat = await matRes.json();
+      if (!matRes.ok) {
+        showToast(mat.error || 'Could not load your account keys. Please sign in again.', 'error');
+        return;
+      }
+
+      let masterKey;
+      try {
+        const kekOld = await deriveKEK(currentPassword, fromBase64(mat.keySalt));
+        // extractable: true so the key can be re-wrapped below.
+        masterKey = await unwrapMasterKey(mat.wrappedKey, kekOld, true);
+      } catch {
+        // Wrong current password → KEK doesn't unwrap the master key.
+        showToast('Current password is incorrect.', 'error');
+        return;
+      }
+
       const salt = generateSalt();
-      const kek = await deriveKEK(newPassword, salt);
-      const wrappedKey = await wrapMasterKey(masterKey, kek);
+      const kekNew = await deriveKEK(newPassword, salt);
+      const wrappedKey = await wrapMasterKey(masterKey, kekNew);
       const keySalt = toBase64(salt);
 
       const res = await fetch('/api/auth/change-password', {
