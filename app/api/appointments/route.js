@@ -18,7 +18,7 @@
  *   If the appointment is created directly as CONFIRMED, the patient is notified
  *   via in-app notification + email (same as the PENDING→CONFIRMED transition).
  */
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import moment from 'moment-timezone'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -312,12 +312,14 @@ export async function POST(request) {
         }).catch(() => {})
 
         if (patientUser.email) {
-          sendCustomAppointmentEmail({
-            to: patientUser.email,
-            subject: 'Reservation Deposit — Secure Your Appointment',
-            body: `Hi ${patientUser.firstName ?? ''},\n\nYour ${serviceName} appointment has been booked. Please pay the ₱${reservationFee} reservation deposit to secure your slot:\n\n${checkoutUrl}`,
-            typeKey: 'APPOINTMENT_CONFIRMED',
-          }).catch(() => {})
+          after(
+            sendCustomAppointmentEmail({
+              to: patientUser.email,
+              subject: 'Reservation Deposit — Secure Your Appointment',
+              body: `Hi ${patientUser.firstName ?? ''},\n\nYour ${serviceName} appointment has been booked. Please pay the ₱${reservationFee} reservation deposit to secure your slot:\n\n${checkoutUrl}`,
+              typeKey: 'APPOINTMENT_CONFIRMED',
+            }).catch((err) => console.error('sendCustomAppointmentEmail failed:', err))
+          )
         }
       }
     }

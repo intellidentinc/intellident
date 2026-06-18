@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import bcrypt from 'bcrypt'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -143,14 +143,16 @@ export async function POST(request) {
   logAudit({ userId: session.userId, clinicId, action: 'CREATE', entity: 'Patient', entityId: newPatient.id, ipAddress: ip, userAgent, metadata: { patientCode: newPatient.patientCode } })
 
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { name: true } })
-  sendPatientClaimEmail({
-    to: email.trim().toLowerCase(),
-    firstName: firstName.trim(),
-    patientCode: newPatient.patientCode,
-    tempPassword,
-    clinicName: clinic?.name ?? 'your clinic',
-    signInUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/sign-in`,
-  }).catch(() => {})
+  after(
+    sendPatientClaimEmail({
+      to: email.trim().toLowerCase(),
+      firstName: firstName.trim(),
+      patientCode: newPatient.patientCode,
+      tempPassword,
+      clinicName: clinic?.name ?? 'your clinic',
+      signInUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/sign-in`,
+    }).catch((err) => console.error('sendPatientClaimEmail failed:', err))
+  )
 
   return NextResponse.json({ id: newPatient.id }, { status: 201 })
 }

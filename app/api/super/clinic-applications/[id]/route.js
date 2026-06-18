@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
@@ -69,12 +69,14 @@ export async function PATCH(request, { params }) {
       })
     })
 
-    sendClinicApplicationApproved({
-      clinicName: application.clinicName,
-      applicantName: application.contactPersonName,
-      email: application.businessEmail,
-      signUpUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
-    }).catch(() => {})
+    after(
+      sendClinicApplicationApproved({
+        clinicName: application.clinicName,
+        applicantName: application.contactPersonName,
+        email: application.businessEmail,
+        signUpUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
+      }).catch((err) => console.error('sendClinicApplicationApproved failed:', err))
+    )
 
     return NextResponse.json(updated)
   }
@@ -86,12 +88,14 @@ export async function PATCH(request, { params }) {
     include: { clinic: { select: { name: true } } },
   })
 
-  sendClinicApplicationRejected({
-    clinicName: application.clinicName,
-    applicantName: application.contactPersonName,
-    email: application.businessEmail,
-    reason: notes,
-  }).catch(() => {})
+  after(
+    sendClinicApplicationRejected({
+      clinicName: application.clinicName,
+      applicantName: application.contactPersonName,
+      email: application.businessEmail,
+      reason: notes,
+    }).catch((err) => console.error('sendClinicApplicationRejected failed:', err))
+  )
 
   return NextResponse.json(updated)
 }

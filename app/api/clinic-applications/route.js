@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
 import { checkRateLimit } from '@/lib/rateLimit'
@@ -83,11 +83,13 @@ export async function POST(request) {
       data: { clinicName, businessAddress, businessPhone, businessEmail, contactPersonName, contactPersonPhone, contactPersonEmail, proposedServices, birDocuments, businessPermitDocs, dtiSecDocs, applicantIds, prcLicenseDocs, message, termsAcceptedAt },
     })
 
-    sendClinicApplicationReceived({
-      clinicName,
-      applicantName: contactPersonName,
-      email: businessEmail,
-    }).catch(() => {})
+    after(
+      sendClinicApplicationReceived({
+        clinicName,
+        applicantName: contactPersonName,
+        email: businessEmail,
+      }).catch((err) => console.error('sendClinicApplicationReceived failed:', err))
+    )
 
     return NextResponse.json({ message: 'Application submitted.' }, { status: 201 })
   } catch {

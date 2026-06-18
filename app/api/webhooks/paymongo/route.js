@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyWebhookSignature } from '@/lib/paymongo'
 import { computeBillingStatus, generateReceiptNumber } from '@/lib/billing'
@@ -89,14 +89,16 @@ export async function POST(request) {
   // Fire-and-forget: notify patient
   const patientUser = billing.patient?.user
   if (patientUser?.id) {
-    createNotification({
-      userId:        patientUser.id,
-      clinicId:      clinicId ?? billing.clinicId,
-      type:          'PAYMENT_RECEIVED',
-      title:         'Payment Confirmed',
-      body:          `Your payment of ₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} has been received.`,
-      appointmentId: billing.appointmentId,
-    }).catch(() => {})
+    after(
+      createNotification({
+        userId:        patientUser.id,
+        clinicId:      clinicId ?? billing.clinicId,
+        type:          'PAYMENT_RECEIVED',
+        title:         'Payment Confirmed',
+        body:          `Your payment of ₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} has been received.`,
+        appointmentId: billing.appointmentId,
+      }).catch((err) => console.error('createNotification (PAYMENT_RECEIVED) failed:', err))
+    )
   }
 
   logAudit({ userId: null, clinicId: clinicId ?? billing.clinicId, action: 'CREATE', entity: 'Payment', entityId: billingId, ipAddress: null, userAgent: 'paymongo-webhook', metadata: { amount, paymentType, paymongoPaymentId } })

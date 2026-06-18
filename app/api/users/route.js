@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import bcrypt from 'bcrypt'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -159,13 +159,15 @@ export async function POST(request) {
     return user
   })
 
-  sendStaffWelcomeEmail({
-    to: newUser.email,
-    firstName: newUser.firstName,
-    role: role === ROLES.ADMIN ? 'Administrator' : role === ROLES.DENTIST ? 'Dentist' : 'Receptionist',
-    tempPassword,
-    username: newUser.username,
-  }).catch(() => {})
+  after(
+    sendStaffWelcomeEmail({
+      to: newUser.email,
+      firstName: newUser.firstName,
+      role: role === ROLES.ADMIN ? 'Administrator' : role === ROLES.DENTIST ? 'Dentist' : 'Receptionist',
+      tempPassword,
+      username: newUser.username,
+    }).catch((err) => console.error('sendStaffWelcomeEmail failed:', err))
+  )
 
   logAudit({ userId: session.userId, clinicId: clinicId, action: 'CREATE', entity: 'User', entityId: newUser.id, ipAddress: ip, userAgent, metadata: { role, email: newUser.email } })
 

@@ -16,7 +16,7 @@
  * 3. Remember Me
  *    Passes `rememberMe` to setSession — extends cookie maxAge from 10 min to 3 days.
  */
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
@@ -132,7 +132,7 @@ export async function POST(request) {
           ipAddress: ip, userAgent,
           metadata: { attempts: attemptsInWindow, lockedUntil },
         });
-        sendAccountLockedAlert({ to: user.email, firstName: user.firstName, lockedUntil }).catch(() => {});
+        after(sendAccountLockedAlert({ to: user.email, firstName: user.firstName, lockedUntil }).catch((err) => console.error('sendAccountLockedAlert failed:', err)));
         const lockMinutes = LOCK_DURATION_MS / 60000;
         return NextResponse.json(
           { error: `Too many failed attempts. Account locked for ${lockMinutes} minutes.` },

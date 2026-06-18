@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import bcrypt from 'bcrypt'
 import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
@@ -55,12 +55,14 @@ export async function POST(request, { params }) {
     data: { userId: session.userId, pendingToken, codeHash, expiresAt },
   })
 
-  sendRestoreOtpEmail({
-    to: user.email,
-    firstName: user.firstName,
-    code: otp,
-    clinicName: clinic.name,
-  }).catch(() => {})
+  after(
+    sendRestoreOtpEmail({
+      to: user.email,
+      firstName: user.firstName,
+      code: otp,
+      clinicName: clinic.name,
+    }).catch((err) => console.error('sendRestoreOtpEmail failed:', err))
+  )
 
   logAudit({
     userId: session.userId,
