@@ -339,7 +339,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
         <Divider />
 
         {/* Body */}
-        <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2, minHeight: 260 }}>
+        <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 auto', minHeight: 260, overflowY: 'auto' }}>
 
           {/* ── Step 1: Patient + Services ── */}
           {step === 1 && (
@@ -596,7 +596,7 @@ export default function CreateAppointmentModal({ open, defaultScheduledAt, onClo
         <Divider />
 
         {/* Footer */}
-        <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <Box>
             {step > 1 && (
               <Button variant='outlined' onClick={handleBack} disabled={loading}>
