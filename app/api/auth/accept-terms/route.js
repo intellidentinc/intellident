@@ -11,7 +11,8 @@ export async function PATCH() {
     data: { termsAcceptedAt: new Date() },
   })
 
-  // Re-issue session with requiresTerms cleared
+  // Re-issue session with requiresTerms cleared, preserving the suspicious-session
+  // and forced password-change flags so accepting terms can't skip those gates.
   await setSession(
     session.userId,
     session.email,
@@ -23,6 +24,8 @@ export async function PATCH() {
     false,
     null, null,
     session.role ?? null,
+    session.suspiciousSession || false,
+    session.mustChangePassword || false,
   )
 
   return NextResponse.json({ success: true })

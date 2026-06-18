@@ -122,6 +122,21 @@ export async function middleware(request) {
       }
     }
 
+    // Forced password-change gate — admin-created staff carry mustChangePassword and must
+    // be confined to the change-password flow on every route, not just the client-side
+    // redirect at login. Runs after the Terms gate so terms are accepted first.
+    // /api/auth/sign-out is already excluded (isSignOut, above).
+    if (session.mustChangePassword) {
+      const isChangePwPage = pathname === '/change-password'
+      const isChangePwApi  = pathname === '/api/auth/change-password'
+      if (!isChangePwPage && !isChangePwApi) {
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json({ error: 'You must change your password before continuing.' }, { status: 403 })
+        }
+        return NextResponse.redirect(new URL('/change-password?reason=first-login', request.url))
+      }
+    }
+
     // Block requests for sessions tied to a disabled clinic
     if (session.clinicId && !session.superAdmin && !isPublicApi(pathname)) {
       try {
@@ -135,6 +150,14 @@ export async function middleware(request) {
       } catch {
         // DB error: fail open (let page-level guards handle it)
       }
+    }
+
+    // Auth route handlers (sign-in, verify-otp, accept-terms, change-password, step-up, …)
+    // own the session-cookie lifecycle. Re-issuing the incoming (stale) cookie here would
+    // clobber the fresh Set-Cookie they emit on the same response — e.g. accept-terms
+    // clearing requiresTerms — so skip TTL renewal for them.
+    if (pathname.startsWith('/api/auth/')) {
+      return NextResponse.next();
     }
 
     // Sliding window: refresh cookie TTL on every authenticated non-signout request
