@@ -12,16 +12,27 @@ import IconButton from '@mui/material/IconButton'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 import Tooltip from '@mui/material/Tooltip'
-import { X, Plus, Pencil, Trash2, FileText, Paperclip } from 'lucide-react'
+import Tabs from '@mui/material/Tabs'
+import Tab from '@mui/material/Tab'
+import { X, Plus, Pencil, Trash2, FileText, Paperclip, CalendarX } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import RecordFormModal from './RecordFormModal'
 import StepUpModal from '@/components/commons/StepUpModal'
 import { useToast } from '@/app/providers/ToastProvider'
 import dayjs from 'dayjs'
 
-const STATUS_CHIP = {
+const RECORD_STATUS_CHIP = {
   ACTIVE:   { label: 'Active',   bg: '#dcfce7', color: '#15803d' },
   ARCHIVED: { label: 'Archived', bg: '#f1f5f9', color: '#475569' },
+}
+
+const VISIT_STATUS_CHIP = {
+  PENDING:     { label: 'Pending',     bg: '#fef9c3', color: '#854d0e' },
+  CONFIRMED:   { label: 'Confirmed',   bg: '#dbeafe', color: '#1d4ed8' },
+  COMPLETED:   { label: 'Completed',   bg: '#dcfce7', color: '#15803d' },
+  CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#b91c1c' },
+  NO_SHOW:     { label: 'No Show',     bg: '#f1f5f9', color: '#475569' },
+  RESCHEDULED: { label: 'Rescheduled', bg: '#ede9fe', color: '#7c3aed' },
 }
 
 export default function PatientRecordsDrawer({ patient, onClose }) {
@@ -30,8 +41,14 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
   const [stepUpOpen, setStepUpOpen] = useState(false)
   const [stepUpGranted, setStepUpGranted] = useState(false)
 
+  const [tab, setTab] = useState(0)
+
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(false)
+
+  const [visits, setVisits] = useState([])
+  const [visitsLoading, setVisitsLoading] = useState(false)
+  const [visitsFetched, setVisitsFetched] = useState(false)
 
   // Form modal state
   const [formOpen, setFormOpen] = useState(false)
@@ -51,9 +68,27 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
       .finally(() => setLoading(false))
   }, [patient]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const loadVisits = useCallback(() => {
+    if (!patient) return
+    setVisitsLoading(true)
+    fetch(`/api/records/${patient.id}/visits`)
+      .then((r) => r.json())
+      .then((data) => { setVisits(data.visits ?? []); setVisitsFetched(true) })
+      .catch(() => showToast('Failed to load visit history', 'error'))
+      .finally(() => setVisitsLoading(false))
+  }, [patient]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleTabChange(_, newTab) {
+    setTab(newTab)
+    if (newTab === 1 && !visitsFetched && !visitsLoading) loadVisits()
+  }
+
   useEffect(() => {
     if (!patient) {
       setRecords([])
+      setVisits([])
+      setVisitsFetched(false)
+      setTab(0)
       setStepUpGranted(false)
       return
     }
@@ -135,73 +170,139 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
           </IconButton>
         </Box>
 
+        {/* Tabs */}
+        <Tabs value={tab} onChange={handleTabChange} sx={{ px: 3, borderBottom: '1px solid', borderColor: 'divider', minHeight: 42 }} TabIndicatorProps={{ style: { backgroundColor: '#2563eb' } }}>
+          <Tab label='Clinical Records' sx={{ fontSize: '0.8rem', fontWeight: 600, minHeight: 42, textTransform: 'none', color: tab === 0 ? '#2563eb' : 'text.secondary' }} />
+          <Tab label='Visit History' sx={{ fontSize: '0.8rem', fontWeight: 600, minHeight: 42, textTransform: 'none', color: tab === 1 ? '#2563eb' : 'text.secondary' }} />
+        </Tabs>
+
         {/* Body */}
         <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant='body2' fontWeight={600} color='text.primary'>
-              Clinical Records ({records.length})
-            </Typography>
-            <Button variant='contained' size='small' onClick={openCreate} sx={{ gap: 0.5 }}>
-              <Plus size={14} /> Add Record
-            </Button>
-          </Box>
 
-          {loading ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              {[1, 2, 3].map((n) => <Skeleton key={n} variant='rounded' height={80} />)}
-            </Box>
-          ) : records.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 6 }}>
-              <FileText size={36} color='#94a3b8' style={{ marginBottom: 8 }} />
-              <Typography variant='body2' color='text.secondary'>No records yet</Typography>
-              <Typography variant='caption' color='text.disabled'>Click "Add Record" to create the first one</Typography>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              {records.map((rec) => {
-                const chip = STATUS_CHIP[rec.status] ?? STATUS_CHIP.ACTIVE
-                return (
-                  <Box
-                    key={rec.id}
-                    sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                          <Typography variant='body2' fontWeight={600}>{rec.title}</Typography>
-                          <Chip label={chip.label} size='small' sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.7rem' }} />
-                          {rec._count?.attachments > 0 && (
-                            <Chip
-                              icon={<Paperclip size={10} />}
-                              label={rec._count.attachments}
-                              size='small'
-                              sx={{ bgcolor: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: '0.7rem', '& .MuiChip-icon': { color: '#2563eb' } }}
-                            />
-                          )}
+          {/* ── Tab 0: Clinical Records ── */}
+          {tab === 0 && (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant='body2' fontWeight={600} color='text.primary'>
+                  Clinical Records ({records.length})
+                </Typography>
+                <Button variant='contained' size='small' onClick={openCreate} sx={{ gap: 0.5 }}>
+                  <Plus size={14} /> Add Record
+                </Button>
+              </Box>
+
+              {loading ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {[1, 2, 3].map((n) => <Skeleton key={n} variant='rounded' height={80} />)}
+                </Box>
+              ) : records.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6 }}>
+                  <FileText size={36} color='#94a3b8' style={{ marginBottom: 8 }} />
+                  <Typography variant='body2' color='text.secondary'>No records yet</Typography>
+                  <Typography variant='caption' color='text.disabled'>Click "Add Record" to create the first one</Typography>
+                </Box>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {records.map((rec) => {
+                    const chip = RECORD_STATUS_CHIP[rec.status] ?? RECORD_STATUS_CHIP.ACTIVE
+                    return (
+                      <Box
+                        key={rec.id}
+                        sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                              <Typography variant='body2' fontWeight={600}>{rec.title}</Typography>
+                              <Chip label={chip.label} size='small' sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.7rem' }} />
+                              {rec._count?.attachments > 0 && (
+                                <Chip
+                                  icon={<Paperclip size={10} />}
+                                  label={rec._count.attachments}
+                                  size='small'
+                                  sx={{ bgcolor: '#eff6ff', color: '#2563eb', fontWeight: 600, fontSize: '0.7rem', '& .MuiChip-icon': { color: '#2563eb' } }}
+                                />
+                              )}
+                            </Box>
+                            <Typography variant='caption' color='text.disabled'>
+                              {dayjs(rec.createdAt).format('MMM D, YYYY')}
+                              {rec.updatedAt !== rec.createdAt && ` · Updated ${dayjs(rec.updatedAt).format('MMM D, YYYY')}`}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                            <Tooltip title='Edit'>
+                              <IconButton size='small' onClick={() => openEdit(rec)}>
+                                <Pencil size={14} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title='Delete'>
+                              <IconButton size='small' onClick={() => setDeleteTarget(rec)} sx={{ color: 'error.main' }}>
+                                <Trash2 size={14} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </Box>
-                        <Typography variant='caption' color='text.disabled'>
-                          {dayjs(rec.createdAt).format('MMM D, YYYY')}
-                          {rec.updatedAt !== rec.createdAt && ` · Updated ${dayjs(rec.updatedAt).format('MMM D, YYYY')}`}
-                        </Typography>
                       </Box>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-                        <Tooltip title='Edit'>
-                          <IconButton size='small' onClick={() => openEdit(rec)}>
-                            <Pencil size={14} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title='Delete'>
-                          <IconButton size='small' onClick={() => setDeleteTarget(rec)} sx={{ color: 'error.main' }}>
-                            <Trash2 size={14} />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </Box>
-                  </Box>
-                )
-              })}
-            </Box>
+                    )
+                  })}
+                </Box>
+              )}
+            </>
           )}
+
+          {/* ── Tab 1: Visit History ── */}
+          {tab === 1 && (
+            <>
+              <Typography variant='body2' fontWeight={600} color='text.primary' sx={{ mb: 2 }}>
+                Visit History ({visits.length})
+              </Typography>
+
+              {visitsLoading ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {[1, 2, 3].map((n) => <Skeleton key={n} variant='rounded' height={80} />)}
+                </Box>
+              ) : visits.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6 }}>
+                  <CalendarX size={36} color='#94a3b8' style={{ marginBottom: 8 }} />
+                  <Typography variant='body2' color='text.secondary'>No visits yet</Typography>
+                  <Typography variant='caption' color='text.disabled'>Appointments with this patient will appear here</Typography>
+                </Box>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {visits.map((visit) => {
+                    const chip = VISIT_STATUS_CHIP[visit.status] ?? VISIT_STATUS_CHIP.CONFIRMED
+                    return (
+                      <Box
+                        key={visit.id}
+                        sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
+                          <Typography variant='body2' fontWeight={600} sx={{ flex: 1, minWidth: 0 }}>
+                            {visit.service?.name ?? 'Service'}
+                          </Typography>
+                          <Chip label={chip.label} size='small' sx={{ bgcolor: chip.bg, color: chip.color, fontWeight: 600, fontSize: '0.7rem', flexShrink: 0 }} />
+                        </Box>
+                        <Typography variant='caption' color='text.secondary' display='block'>
+                          {dayjs(visit.scheduledAt).format('MMM D, YYYY · h:mm A')}
+                        </Typography>
+                        {visit.appointmentCode && (
+                          <Typography variant='caption' color='text.disabled' display='block' sx={{ fontFamily: 'monospace', mt: 0.25 }}>
+                            {visit.appointmentCode}
+                          </Typography>
+                        )}
+                        {visit.notes && (
+                          <Typography variant='caption' color='text.secondary' display='block' sx={{ mt: 0.75, fontStyle: 'italic' }}>
+                            {visit.notes}
+                          </Typography>
+                        )}
+                      </Box>
+                    )
+                  })}
+                </Box>
+              )}
+            </>
+          )}
+
         </Box>
       </Drawer>
 
