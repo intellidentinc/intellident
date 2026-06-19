@@ -3,6 +3,7 @@ import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { logAudit, getRequestMeta } from '@/lib/audit'
+import { searchTerm, safeDate } from '@/lib/validate'
 
 const VALID_ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'VERIFY', 'AI_INTERACTION', 'LOCKOUT', 'BREACH_ALERT', 'BACKUP', 'RESTORE']
 const MAX_EXPORT_ROWS = 5000
@@ -25,10 +26,10 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url)
   const action   = searchParams.get('action')   ?? ''
-  const entity   = searchParams.get('entity')   ?? ''
-  const search   = searchParams.get('search')   ?? ''
-  const dateFrom = searchParams.get('dateFrom') ?? ''
-  const dateTo   = searchParams.get('dateTo')   ?? ''
+  const entity   = searchTerm(searchParams.get('entity'))
+  const search   = searchTerm(searchParams.get('search'))
+  const dateFrom = safeDate(searchParams.get('dateFrom'))
+  const dateTo   = safeDate(searchParams.get('dateTo'))
 
   const where = {
     clinicId,
@@ -37,8 +38,8 @@ export async function GET(request) {
     ...(dateFrom || dateTo
       ? {
           createdAt: {
-            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-            ...(dateTo   ? { lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999)) } : {}),
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo   ? { lte: new Date(dateTo.setHours(23, 59, 59, 999)) } : {}),
           },
         }
       : {}),

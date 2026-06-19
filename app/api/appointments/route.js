@@ -26,8 +26,10 @@ import { notifyPatientStatusChange, createNotification } from '@/lib/notificatio
 import { sendCustomAppointmentEmail } from '@/lib/email'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
-import { parseJsonBody, str } from '@/lib/validate'
+import { parseJsonBody, str, pageParams, searchTerm } from '@/lib/validate'
 import { generateAppointmentCode } from '@/lib/appointments'
+
+const VALID_STATUS = ['PENDING', 'CONFIRMED', 'RESCHEDULED', 'CANCELLED', 'COMPLETED', 'NO_SHOW']
 import { generateReceiptNumber } from '@/lib/billing'
 import { createCheckoutSession } from '@/lib/paymongo'
 
@@ -45,14 +47,13 @@ export async function GET(request) {
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
-  const page      = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10))
-  const pageSize  = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '10', 10)))
+  const { page, pageSize } = pageParams(searchParams, { defaultSize: 10, maxSize: 100 })
   const sortField = searchParams.get('sortField') ?? 'scheduledAt'
   const sortOrder = searchParams.get('sortOrder') ?? 'desc'
-  const status    = searchParams.get('status')
-  const dentistId = searchParams.get('dentistId')
-  const serviceId = searchParams.get('serviceId')
-  const search    = searchParams.get('search')?.trim()
+  const status    = VALID_STATUS.includes(searchParams.get('status') ?? '') ? searchParams.get('status') : null
+  const dentistId = str(searchParams.get('dentistId'), 50)
+  const serviceId = str(searchParams.get('serviceId'), 50)
+  const search    = searchTerm(searchParams.get('search'))
 
   const VALID_SORT = ['scheduledAt', 'createdAt']
   const field = VALID_SORT.includes(sortField) ? sortField : 'scheduledAt'
@@ -271,10 +272,10 @@ export async function POST(request) {
   try {
     const clinic = await prisma.clinic.findUnique({
       where: { id: caller.clinicId },
-      select: { paymongoEnabled: true, reservationFeeAmount: true },
+      select: { paymongoEnabled: true, reservationFeeEnabled: true, reservationFeeAmount: true },
     })
     const reservationFee = clinic?.reservationFeeAmount ?? 0
-    if (clinic?.paymongoEnabled && reservationFee > 0) {
+    if (clinic?.paymongoEnabled && clinic?.reservationFeeEnabled && reservationFee > 0) {
       const patientUser = appointment.patient?.user
       const serviceName = appointment.service?.name ?? 'Dental Service'
 

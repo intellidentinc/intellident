@@ -3,7 +3,7 @@ import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
-import { parseJsonBody, str } from '@/lib/validate'
+import { parseJsonBody, str, pageParams, searchTerm, safeDate } from '@/lib/validate'
 import { generateReceiptNumber, computeBillingStatus, applyReservationCredit } from '@/lib/billing'
 
 async function getCaller() {
@@ -16,20 +16,20 @@ async function getCaller() {
 }
 
 const VALID_SORT = ['createdAt', 'updatedAt', 'amount', 'amountPaid', 'balance']
+const VALID_STATUS = ['UNPAID', 'PARTIAL', 'PAID', 'REFUNDED']
 
 export async function GET(request) {
   const caller = await getCaller()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
-  const page      = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10))
-  const pageSize  = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '10', 10)))
+  const { page, pageSize } = pageParams(searchParams, { defaultSize: 10, maxSize: 100 })
   const sortField = VALID_SORT.includes(searchParams.get('sortField') ?? '') ? searchParams.get('sortField') : 'createdAt'
   const sortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc'
-  const status    = searchParams.get('status') ?? ''
-  const dateFrom  = searchParams.get('dateFrom')
-  const dateTo    = searchParams.get('dateTo')
-  const search    = searchParams.get('search')?.trim() ?? ''
+  const status    = VALID_STATUS.includes(searchParams.get('status') ?? '') ? searchParams.get('status') : ''
+  const dateFrom  = safeDate(searchParams.get('dateFrom'))
+  const dateTo    = safeDate(searchParams.get('dateTo'))
+  const search    = searchTerm(searchParams.get('search'))
 
   const where = {
     clinicId: caller.clinicId,
@@ -38,8 +38,8 @@ export async function GET(request) {
     ...(dateFrom || dateTo
       ? {
           createdAt: {
-            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-            ...(dateTo   ? { lte: new Date(dateTo) }   : {}),
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo   ? { lte: dateTo }   : {}),
           },
         }
       : {}),

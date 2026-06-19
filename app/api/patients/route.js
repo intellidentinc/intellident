@@ -4,7 +4,7 @@ import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
-import { parseJsonBody, str, sanitizeEmail, secret } from '@/lib/validate'
+import { parseJsonBody, str, sanitizeEmail, secret, pageParams } from '@/lib/validate'
 import { sendPatientClaimEmail } from '@/lib/email'
 import { generatePatientCode } from '@/lib/patients'
 
@@ -23,8 +23,7 @@ export async function GET(request) {
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
-  const page = parseInt(searchParams.get('page') ?? '0', 10)
-  const pageSize = parseInt(searchParams.get('pageSize') ?? '10', 10)
+  const { page, pageSize } = pageParams(searchParams, { defaultSize: 10, maxSize: 100 })
   const sortField = searchParams.get('sortField') ?? 'firstName'
   const sortOrder = searchParams.get('sortOrder') ?? 'asc'
 

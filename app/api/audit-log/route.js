@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
+import { pageParams, searchTerm, safeDate } from '@/lib/validate'
 
 const VALID_SORT_FIELDS = ['createdAt', 'action', 'entity']
 const VALID_ACTIONS = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'VERIFY', 'AI_INTERACTION', 'LOCKOUT', 'BREACH_ALERT']
@@ -19,15 +20,14 @@ export async function GET(request) {
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
-  const page     = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10))
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '25', 10)))
+  const { page, pageSize } = pageParams(searchParams, { defaultSize: 25, maxSize: 100 })
   const rawSort  = searchParams.get('sortField') ?? 'createdAt'
   const sortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc'
   const action   = searchParams.get('action') ?? ''
-  const entity   = searchParams.get('entity') ?? ''
-  const search   = searchParams.get('search') ?? ''
-  const dateFrom = searchParams.get('dateFrom') ?? ''
-  const dateTo   = searchParams.get('dateTo') ?? ''
+  const entity   = searchTerm(searchParams.get('entity'))
+  const search   = searchTerm(searchParams.get('search'))
+  const dateFrom = safeDate(searchParams.get('dateFrom'))
+  const dateTo   = safeDate(searchParams.get('dateTo'))
 
   const sortField = VALID_SORT_FIELDS.includes(rawSort) ? rawSort : 'createdAt'
 
@@ -38,8 +38,8 @@ export async function GET(request) {
     ...(dateFrom || dateTo
       ? {
           createdAt: {
-            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-            ...(dateTo ? { lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999)) } : {}),
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo ? { lte: new Date(dateTo.setHours(23, 59, 59, 999)) } : {}),
           },
         }
       : {}),

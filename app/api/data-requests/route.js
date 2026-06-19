@@ -7,6 +7,7 @@ import { parseJsonBody, str } from '@/lib/validate'
 import { checkRateLimit } from '@/lib/rateLimit'
 
 const VALID_TYPES = ['ACCESS', 'CORRECTION', 'DELETION']
+const VALID_STATUSES = ['PENDING', 'IN_REVIEW', 'RESOLVED', 'REJECTED']
 
 export async function GET(request) {
   const session = await getSession()
@@ -35,7 +36,7 @@ export async function GET(request) {
     clinicId,
     ...(own ? { userId: session.userId } : {}),
     ...(typeFilter && VALID_TYPES.includes(typeFilter) ? { type: typeFilter } : {}),
-    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(statusFilter && VALID_STATUSES.includes(statusFilter) ? { status: statusFilter } : {}),
   }
 
   const [requests, total] = await Promise.all([

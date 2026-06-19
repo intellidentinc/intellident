@@ -3,6 +3,7 @@ import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
+import { searchTerm, safeDate } from '@/lib/validate'
 
 const VALID_STATUS = ['UNPAID', 'PARTIAL', 'PAID', 'REFUNDED']
 const MAX_EXPORT_ROWS = 5000
@@ -22,9 +23,9 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url)
   const status   = searchParams.get('status') ?? ''
-  const dateFrom = searchParams.get('dateFrom')
-  const dateTo   = searchParams.get('dateTo')
-  const search   = searchParams.get('search')?.trim() ?? ''
+  const dateFrom = safeDate(searchParams.get('dateFrom'))
+  const dateTo   = safeDate(searchParams.get('dateTo'))
+  const search   = searchTerm(searchParams.get('search'))
 
   const where = {
     clinicId: caller.clinicId,
@@ -33,8 +34,8 @@ export async function GET(request) {
     ...(dateFrom || dateTo
       ? {
           createdAt: {
-            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-            ...(dateTo   ? { lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999)) } : {}),
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo   ? { lte: new Date(dateTo.setHours(23, 59, 59, 999)) } : {}),
           },
         }
       : {}),

@@ -14,6 +14,7 @@ export default function ClinicPaymentSettings({ clinicId }) {
   const { showToast } = useToast()
 
   const [enabled, setEnabled]           = useState(false)
+  const [feeEnabled, setFeeEnabled]     = useState(true)
   const [feeAmount, setFeeAmount]       = useState('')
   const [deductible, setDeductible]     = useState(true)
   const [loading, setLoading]           = useState(true)
@@ -26,6 +27,7 @@ export default function ClinicPaymentSettings({ clinicId }) {
       .then(r => r.json())
       .then(data => {
         setEnabled(data.paymongoEnabled ?? false)
+        setFeeEnabled(data.reservationFeeEnabled ?? true)
         setFeeAmount(data.reservationFeeAmount != null ? String(data.reservationFeeAmount) : '0')
         setDeductible(data.reservationFeeDeductible ?? true)
       })
@@ -35,7 +37,7 @@ export default function ClinicPaymentSettings({ clinicId }) {
 
   async function handleSave() {
     const fee = parseFloat(feeAmount)
-    if (enabled && (isNaN(fee) || fee < 0)) {
+    if (enabled && feeEnabled && (isNaN(fee) || fee < 0)) {
       setFeeError('Enter a valid reservation fee (0 or more)')
       return
     }
@@ -46,6 +48,7 @@ export default function ClinicPaymentSettings({ clinicId }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           paymongoEnabled: enabled,
+          reservationFeeEnabled: feeEnabled,
           reservationFeeAmount: isNaN(fee) ? 0 : fee,
           reservationFeeDeductible: deductible,
         }),
@@ -93,24 +96,11 @@ export default function ClinicPaymentSettings({ clinicId }) {
             Make sure <strong>PAYMONGO_SECRET_KEY</strong>, <strong>PAYMONGO_PUBLIC_KEY</strong>, and <strong>PAYMONGO_WEBHOOK_SECRET</strong> are set in your environment variables.
           </Alert>
 
-          <Input
-            id='reservation-fee'
-            label='Reservation Fee Amount (₱)'
-            type='number'
-            inputProps={{ min: 0, step: '0.01' }}
-            value={feeAmount}
-            onChange={(e) => { setFeeAmount(e.target.value); setFeeError('') }}
-            error={!!feeError}
-            helperText={feeError || 'Charged at booking as a separate deposit bill. Set to 0 to skip.'}
-            placeholder='e.g. 500'
-            sx={{ mb: 2.5 }}
-          />
-
           <FormControlLabel
             control={
               <Switch
-                checked={deductible}
-                onChange={(e) => setDeductible(e.target.checked)}
+                checked={feeEnabled}
+                onChange={(e) => setFeeEnabled(e.target.checked)}
                 disabled={loading}
                 color='primary'
               />
@@ -118,15 +108,54 @@ export default function ClinicPaymentSettings({ clinicId }) {
             label={
               <Box sx={{ ml: 0.5 }}>
                 <Typography variant='body2' fontWeight={600} color='text.primary'>
-                  Credit deposit toward service bill
+                  Charge reservation fee at booking
                 </Typography>
                 <Typography variant='caption' color='text.secondary'>
-                  When enabled, the paid reservation deposit is automatically applied as partial payment on the service bill when the appointment is completed.
+                  When off, patients can book without paying an upfront deposit. Online payment for balances stays available.
                 </Typography>
               </Box>
             }
             sx={{ alignItems: 'flex-start', ml: 0, mb: 2.5 }}
           />
+
+          {feeEnabled && (
+            <>
+              <Input
+                id='reservation-fee'
+                label='Reservation Fee Amount (₱)'
+                type='number'
+                inputProps={{ min: 0, step: '0.01' }}
+                value={feeAmount}
+                onChange={(e) => { setFeeAmount(e.target.value); setFeeError('') }}
+                error={!!feeError}
+                helperText={feeError || 'Charged at booking as a separate deposit bill. Set to 0 to skip.'}
+                placeholder='e.g. 500'
+                sx={{ mb: 2.5 }}
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={deductible}
+                    onChange={(e) => setDeductible(e.target.checked)}
+                    disabled={loading}
+                    color='primary'
+                  />
+                }
+                label={
+                  <Box sx={{ ml: 0.5 }}>
+                    <Typography variant='body2' fontWeight={600} color='text.primary'>
+                      Credit deposit toward service bill
+                    </Typography>
+                    <Typography variant='caption' color='text.secondary'>
+                      When enabled, the paid reservation deposit is automatically applied as partial payment on the service bill when the appointment is completed.
+                    </Typography>
+                  </Box>
+                }
+                sx={{ alignItems: 'flex-start', ml: 0, mb: 2.5 }}
+              />
+            </>
+          )}
         </>
       )}
 

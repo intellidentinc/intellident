@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
+import { safeDate, str } from '@/lib/validate'
 
 function dateRange(field, dateFrom, dateTo) {
-  if (!dateFrom && !dateTo) return {}
+  const from = safeDate(dateFrom)
+  const to   = safeDate(dateTo)
+  if (!from && !to) return {}
   return {
     [field]: {
-      ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-      ...(dateTo   ? { lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999)) } : {}),
+      ...(from ? { gte: from } : {}),
+      ...(to   ? { lte: new Date(to.setHours(23, 59, 59, 999)) } : {}),
     },
   }
 }
@@ -97,8 +100,8 @@ export async function GET(request) {
 
   // ─── Revenue ──────────────────────────────────────────────────────────────
   if (type === 'revenue') {
-    const serviceId = searchParams.get('serviceId') ?? ''
-    const dentistId = searchParams.get('dentistId') ?? ''
+    const serviceId = str(searchParams.get('serviceId'), 50)
+    const dentistId = str(searchParams.get('dentistId'), 50)
 
     const baseWhere = {
       clinicId, isDeleted: false,

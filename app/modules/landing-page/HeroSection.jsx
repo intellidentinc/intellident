@@ -81,7 +81,7 @@ export default function HeroSection() {
             <div className="w-3 h-3 rounded-full bg-yellow-300" />
             <div className="w-3 h-3 rounded-full bg-green-300" />
             <div className="flex-1 mx-3 h-6 rounded-md bg-slate-200/70 flex items-center px-3">
-              <span className="text-[10px] text-slate-400 font-mono">app.intellident.ph/dashboard</span>
+              <span className="text-[10px] text-slate-400 font-mono">intellident-ai.org/dashboard</span>
             </div>
           </div>
 

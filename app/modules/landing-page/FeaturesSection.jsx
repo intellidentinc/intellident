@@ -48,7 +48,7 @@ const features = [
       </svg>
     ),
     title: 'Smart Reminders',
-    description: 'Automated email and SMS reminders reduce no-shows by up to 40%. Patients never miss an appointment.',
+    description: 'Automated email reminders reduce no-shows by up to 40%. Patients never miss an appointment.',
   },
   {
     icon: (

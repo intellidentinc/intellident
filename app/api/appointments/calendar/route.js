@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { safeDate } from '@/lib/validate'
 
 export async function GET(request) {
   const session = await getSession()
@@ -15,18 +16,18 @@ export async function GET(request) {
   const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
 
   const { searchParams } = new URL(request.url)
-  const from = searchParams.get('from')
-  const to   = searchParams.get('to')
+  const from = safeDate(searchParams.get('from'))
+  const to   = safeDate(searchParams.get('to'))
 
   if (!from || !to) {
-    return NextResponse.json({ error: 'from and to are required' }, { status: 400 })
+    return NextResponse.json({ error: 'Valid from and to dates are required' }, { status: 400 })
   }
 
   const appointments = await prisma.appointment.findMany({
     where: {
       clinicId,
       isDeleted: false,
-      scheduledAt: { gte: new Date(from), lte: new Date(to) },
+      scheduledAt: { gte: from, lte: to },
     },
     include: {
       patient: { select: { id: true, firstName: true, lastName: true, patientCode: true } },

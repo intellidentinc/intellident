@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
+import { safeDate } from '@/lib/validate'
 
 export async function GET(request) {
   const session = await getSession()
@@ -20,7 +21,8 @@ export async function GET(request) {
   const serviceIdsParam      = searchParams.get('serviceIds') ?? searchParams.get('serviceId')
   const excludeAppointmentId = searchParams.get('excludeAppointmentId')
 
-  if (!dentistId || !scheduledAtStr || !serviceIdsParam) {
+  const scheduledAt = safeDate(scheduledAtStr)
+  if (!dentistId || !scheduledAt || !serviceIdsParam) {
     return NextResponse.json({ available: true })
   }
 
@@ -32,7 +34,6 @@ export async function GET(request) {
   if (services.length === 0) return NextResponse.json({ available: true })
 
   const totalDuration = services.reduce((sum, s) => sum + s.duration + s.bufferTime, 0)
-  const scheduledAt = new Date(scheduledAtStr)
   const endsAt = new Date(scheduledAt.getTime() + totalDuration * 60 * 1000)
 
   const conflict = await prisma.appointment.findFirst({

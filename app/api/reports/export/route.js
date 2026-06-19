@@ -3,15 +3,18 @@ import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES, isAdmin } from '@/lib/roles'
 import { logAudit, getRequestMeta } from '@/lib/audit'
+import { safeDate, str } from '@/lib/validate'
 
 const MAX_ROWS = 5000
 
 function dateRange(field, dateFrom, dateTo) {
-  if (!dateFrom && !dateTo) return {}
+  const from = safeDate(dateFrom)
+  const to   = safeDate(dateTo)
+  if (!from && !to) return {}
   return {
     [field]: {
-      ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-      ...(dateTo   ? { lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999)) } : {}),
+      ...(from ? { gte: from } : {}),
+      ...(to   ? { lte: new Date(to.setHours(23, 59, 59, 999)) } : {}),
     },
   }
 }
@@ -34,8 +37,8 @@ export async function GET(request) {
   const type      = searchParams.get('type')      ?? 'appointments'
   const dateFrom  = searchParams.get('dateFrom')  ?? ''
   const dateTo    = searchParams.get('dateTo')    ?? ''
-  const serviceId = searchParams.get('serviceId') ?? ''
-  const dentistId = searchParams.get('dentistId') ?? ''
+  const serviceId = str(searchParams.get('serviceId'), 50)
+  const dentistId = str(searchParams.get('dentistId'), 50)
 
   if (type === 'appointments') {
     const rows = await prisma.appointment.findMany({

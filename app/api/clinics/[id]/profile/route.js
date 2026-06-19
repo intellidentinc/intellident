@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
 
   const clinic = await prisma.clinic.findUnique({
     where: { id },
-    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, reservationFeeDeductible: true, paymongoEnabled: true, passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
+    select: { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeEnabled: true, reservationFeeAmount: true, reservationFeeDeductible: true, paymongoEnabled: true, passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
   })
 
   if (!clinic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -50,9 +50,9 @@ export async function PATCH(request, { params }) {
   const phone    = str(parsed.body.phone, 20)
   const landline = str(parsed.body.landline, 20)
 
-  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeAmount: true, reservationFeeDeductible: true, paymongoEnabled: true, passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
+  const FULL_SELECT = { name: true, address: true, email: true, phone: true, landline: true, logoUrl: true, reservationFeeEnabled: true, reservationFeeAmount: true, reservationFeeDeductible: true, paymongoEnabled: true, passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true, singleSessionEnabled: true, notifConfig: true, reminder1Hours: true, reminder2Hours: true, auditLogRetentionDays: true, patientRecordRetentionDays: true, billingRetentionDays: true }
 
-  const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body || 'reservationFeeDeductible' in parsed.body
+  const hasPaymentFields = 'paymongoEnabled' in parsed.body || 'reservationFeeEnabled' in parsed.body || 'reservationFeeAmount' in parsed.body || 'reservationFeeDeductible' in parsed.body
   const hasSingleSession = 'singleSessionEnabled' in parsed.body
   const hasPasswordExpiry = 'passwordExpiryEnabled' in parsed.body
   const hasNotifConfig = 'notifConfig' in parsed.body || 'reminder1Hours' in parsed.body || 'reminder2Hours' in parsed.body
@@ -143,6 +143,7 @@ export async function PATCH(request, { params }) {
   // Payment settings update
   const data = {}
   if ('paymongoEnabled' in parsed.body) data.paymongoEnabled = parsed.body.paymongoEnabled === true
+  if ('reservationFeeEnabled' in parsed.body) data.reservationFeeEnabled = parsed.body.reservationFeeEnabled === true
   if ('reservationFeeAmount' in parsed.body) {
     const rawFee = parseFloat(parsed.body.reservationFeeAmount)
     data.reservationFeeAmount = isNaN(rawFee) || rawFee < 0 ? 0 : rawFee

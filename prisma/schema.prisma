@@ -120,6 +120,7 @@ model Clinic {
   landline                   String?
   logoUrl                    String?
   email                      String?
+  reservationFeeEnabled      Boolean   @default(true)
   reservationFeeAmount       Float     @default(0)
   reservationFeeDeductible   Boolean   @default(true)
   paymongoEnabled            Boolean   @default(false)

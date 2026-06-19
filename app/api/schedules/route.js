@@ -227,10 +227,10 @@ export async function POST(request) {
   try {
     const clinic = await prisma.clinic.findUnique({
       where: { id: caller.clinicId },
-      select: { paymongoEnabled: true, reservationFeeAmount: true },
+      select: { paymongoEnabled: true, reservationFeeEnabled: true, reservationFeeAmount: true },
     })
     const reservationFee = clinic?.reservationFeeAmount ?? 0
-    if (clinic?.paymongoEnabled && reservationFee > 0) {
+    if (clinic?.paymongoEnabled && clinic?.reservationFeeEnabled && reservationFee > 0) {
       const resBilling = await prisma.$transaction(async (tx) => {
         const receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
         return tx.billing.create({
