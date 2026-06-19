@@ -160,6 +160,14 @@ export async function middleware(request) {
       return NextResponse.next();
     }
 
+    // Notification polls are read-only and fire every 30s. Excluding them from cookie
+    // re-issue prevents a race where a stale poll response (sent before step-up was
+    // granted) overwrites the updated session cookie (with stepUpGrantedAt) that the
+    // step-up POST just wrote, silently killing the step-up grant.
+    if (pathname.startsWith('/api/notifications')) {
+      return NextResponse.next();
+    }
+
     // Sliding window: refresh cookie TTL on every authenticated non-signout request
     const maxAge  = session.rememberMe ? REMEMBER_ME_MAX_AGE : DEFAULT_MAX_AGE;
     const response = NextResponse.next();

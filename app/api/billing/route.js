@@ -3,7 +3,7 @@ import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
-import { parseJsonBody } from '@/lib/validate'
+import { parseJsonBody, str } from '@/lib/validate'
 import { generateReceiptNumber, computeBillingStatus, applyReservationCredit } from '@/lib/billing'
 
 async function getCaller() {
@@ -88,7 +88,7 @@ export async function POST(request) {
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
 
-  const { appointmentId } = parsed.body
+  const appointmentId = str(parsed.body.appointmentId, 50)
   if (!appointmentId) return NextResponse.json({ error: 'appointmentId is required' }, { status: 400 })
 
   const appointment = await prisma.appointment.findFirst({

@@ -21,7 +21,7 @@ const STATUS_CHIP = {
   ARCHIVED: { label: 'Archived', bg: '#f1f5f9', color: '#475569' },
 }
 
-export default function RecordViewModal({ open, record, onClose }) {
+export default function RecordViewModal({ open, record, onClose, onRequiresStepUp }) {
   const router = useRouter()
   const { showToast } = useToast()
   const { privateKey } = useCrypto()
@@ -45,7 +45,15 @@ export default function RecordViewModal({ open, record, onClose }) {
       setLoading(true)
       try {
         const res = await fetch(`/api/patient/records/${record.id}`)
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          if (errData.requiresStepUp) {
+            onClose()
+            onRequiresStepUp?.()
+            return
+          }
+          throw new Error()
+        }
         const data = await res.json()
         const { encryptedData, dataIv, contentHash, patientId, wrappedKey } = data.record
 

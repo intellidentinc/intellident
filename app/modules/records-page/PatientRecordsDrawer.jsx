@@ -17,7 +17,7 @@ import Tab from '@mui/material/Tab'
 import { X, Plus, Pencil, Trash2, FileText, Paperclip, CalendarX } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import RecordFormModal from './RecordFormModal'
-import StepUpModal from '@/components/commons/StepUpModal'
+import OtpStepUpModal from '@/components/commons/OtpStepUpModal'
 import { useToast } from '@/app/providers/ToastProvider'
 import dayjs from 'dayjs'
 
@@ -35,11 +35,10 @@ const VISIT_STATUS_CHIP = {
   RESCHEDULED: { label: 'Rescheduled', bg: '#ede9fe', color: '#7c3aed' },
 }
 
-export default function PatientRecordsDrawer({ patient, onClose }) {
+export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, setStepUpGranted }) {
   const { showToast } = useToast()
 
   const [stepUpOpen, setStepUpOpen] = useState(false)
-  const [stepUpGranted, setStepUpGranted] = useState(false)
 
   const [tab, setTab] = useState(0)
 
@@ -62,8 +61,20 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
     if (!patient) return
     setLoading(true)
     fetch(`/api/records/${patient.id}`)
-      .then((r) => r.json())
-      .then((data) => setRecords(data.records ?? []))
+      .then(async (r) => {
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}))
+          if (data.requiresStepUp) {
+            setStepUpGranted(false)
+            setStepUpOpen(true)
+          } else {
+            showToast('Failed to load records', 'error')
+          }
+          return
+        }
+        const data = await r.json()
+        setRecords(data.records ?? [])
+      })
       .catch(() => showToast('Failed to load records', 'error'))
       .finally(() => setLoading(false))
   }, [patient]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -72,8 +83,21 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
     if (!patient) return
     setVisitsLoading(true)
     fetch(`/api/records/${patient.id}/visits`)
-      .then((r) => r.json())
-      .then((data) => { setVisits(data.visits ?? []); setVisitsFetched(true) })
+      .then(async (r) => {
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}))
+          if (data.requiresStepUp) {
+            setStepUpGranted(false)
+            setStepUpOpen(true)
+          } else {
+            showToast('Failed to load visit history', 'error')
+          }
+          return
+        }
+        const data = await r.json()
+        setVisits(data.visits ?? [])
+        setVisitsFetched(true)
+      })
       .catch(() => showToast('Failed to load visit history', 'error'))
       .finally(() => setVisitsLoading(false))
   }, [patient]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -89,20 +113,11 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
       setVisits([])
       setVisitsFetched(false)
       setTab(0)
-      setStepUpGranted(false)
       return
     }
-    // Check step-up auth before opening drawer
-    fetch('/api/auth/step-up')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.valid) {
-          setStepUpGranted(true)
-        } else {
-          setStepUpOpen(true)
-        }
-      })
-      .catch(() => setStepUpOpen(true))
+    if (!stepUpGranted) {
+      setStepUpOpen(true)
+    }
   }, [patient]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -140,11 +155,11 @@ export default function PatientRecordsDrawer({ patient, onClose }) {
 
   return (
     <>
-      <StepUpModal
+      <OtpStepUpModal
         open={stepUpOpen}
         onClose={() => { setStepUpOpen(false); onClose() }}
         onSuccess={() => { setStepUpOpen(false); setStepUpGranted(true) }}
-        description='Viewing patient records requires password verification.'
+        description='Viewing patient records requires identity verification.'
       />
 
       <Drawer

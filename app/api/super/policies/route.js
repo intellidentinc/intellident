@@ -57,6 +57,12 @@ export async function POST(request) {
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   const { clinicIds, patch } = parsed.body
 
+  if (clinicIds !== undefined && clinicIds !== null) {
+    if (!Array.isArray(clinicIds) || !clinicIds.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 50)) {
+      return NextResponse.json({ error: 'clinicIds must be an array of strings' }, { status: 400 })
+    }
+  }
+
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
     return NextResponse.json({ error: 'patch is required' }, { status: 400 })
   }

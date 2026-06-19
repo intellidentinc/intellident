@@ -49,13 +49,17 @@ export async function POST(request) {
   if (bufferTime !== undefined && (bufferTime < 0 || bufferTime > 30)) {
     return NextResponse.json({ error: 'Buffer time must be between 0 and 30 minutes' }, { status: 400 })
   }
+  const parsedPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : null
+  if (parsedPrice !== null && (isNaN(parsedPrice) || parsedPrice < 0)) {
+    return NextResponse.json({ error: 'Price must be a non-negative number' }, { status: 400 })
+  }
 
   const service = await prisma.service.create({
     data: {
       clinicId: caller.clinicId,
       name,
       duration: parseInt(duration, 10),
-      price: price !== undefined && price !== null && price !== '' ? parseFloat(price) : null,
+      price: parsedPrice,
       bufferTime: bufferTime !== undefined ? parseInt(bufferTime, 10) : 0,
       dentists: dentistIds?.length
         ? { connect: dentistIds.map((id) => ({ id })) }

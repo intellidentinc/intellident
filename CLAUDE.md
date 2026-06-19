@@ -62,7 +62,7 @@ app/
 │   └── sign-up/page.jsx
 ├── api/
 │   ├── auth/                 # Auth API routes (sign-in, sign-out, sign-up, verify, verify-otp, forgot-password, reset-password, change-password, step-up, accept-terms)
-│   │                         # Note: sign-up creates EmailVerification (not User); verify creates the User + profile; step-up = re-auth for sensitive actions (15-min TTL)
+│   │                         # Note: sign-up creates EmailVerification (not User); verify creates the User + profile; step-up = re-auth for sensitive actions (15-min TTL); two modes: OTP (record access) + password (exports/backup); step-up/send-otp/ = OTP generation for record access
 │   ├── users/                # User list + PATCH role/isActive / DELETE (ADMIN only)
 │   ├── patients/             # GET (paginated) + POST (RECEPTIONIST); [id]/ PATCH + DELETE
 │   ├── services/             # GET + POST (ADMIN); [id]/ PATCH + DELETE; dentists/ GET
@@ -236,7 +236,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - Input sanitization on all auth routes via `lib/validate.js`: 16 KB payload cap, type checking, field length limits, email normalization, hex token validation — applied before any DB call
 - E2EE via Web Crypto API (AES-GCM-256 + PBKDF2 210k) — server never sees plaintext; `lib/crypto.js`. Patient records use an RSA-OAEP envelope (per-record content key wrapped to each authorized reader) with `patientId` bound as AAD — see [`docs/records.md`](./docs/records.md)
 - Password policy: 8+ chars, upper, lower, digit, special — enforced client + server
-- Session: HMAC-signed cookie (`lib/session-cookie.js`, fails closed if `SESSION_SECRET` unset) + DB-backed `UserSession` token validated on every request; 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`), absolute 8-hour cap; step-up re-auth (15-min TTL) for sensitive actions
+- Session: HMAC-signed cookie (`lib/session-cookie.js`, fails closed if `SESSION_SECRET` unset) + DB-backed `UserSession` token validated on every request; 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`), absolute 8-hour cap; step-up re-auth (15-min TTL) for sensitive actions — OTP mode (`OtpStepUpModal`) for patient-record access (resets on every page navigation); password mode (`StepUpModal`) for exports and backup
 - Account lockout: 5 failed attempts / 5 min → locked 15 min
 - Rate limiting: DB-backed IP rate limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` Prisma model; sign-in 20/15 min, sign-up 10/hour, forgot-password 5/hour, verify-otp 15/15 min; clinic-apply 5/hour, clinic-docs 50/hour
 - Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use

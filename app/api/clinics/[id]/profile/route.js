@@ -89,7 +89,13 @@ export async function PATCH(request, { params }) {
     const r1 = parseInt(parsed.body.reminder1Hours, 10)
     const r2 = parseInt(parsed.body.reminder2Hours, 10)
     const data = {}
-    if ('notifConfig' in parsed.body) data.notifConfig = parsed.body.notifConfig ?? null
+    if ('notifConfig' in parsed.body) {
+      const nc = parsed.body.notifConfig
+      if (nc !== null && (typeof nc !== 'object' || Array.isArray(nc))) {
+        return NextResponse.json({ error: 'notifConfig must be an object or null' }, { status: 400 })
+      }
+      data.notifConfig = nc ?? null
+    }
     if (!isNaN(r1) && r1 > 0) data.reminder1Hours = r1
     if (!isNaN(r2) && r2 > 0) data.reminder2Hours = r2
     const clinic = await prisma.clinic.update({ where: { id }, data, select: FULL_SELECT })

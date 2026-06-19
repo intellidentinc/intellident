@@ -81,7 +81,7 @@ This is best-effort and idempotent — access heals on the next holder view.
 
 ## API routes
 
-All record routes require an authenticated session **and** valid step-up auth (`isStepUpValid`); see [`security.md`](./security.md). Dentist routes additionally pass the `dentistTreatsPatient` gate.
+All record routes require an authenticated session **and** valid step-up auth (`isStepUpValid`); see [`security.md`](./security.md) — Step-Up Mode 1 (OTP). The client-side gate (`OtpStepUpModal`) resets on every page navigation, so users must verify via email OTP each time they load the records page, regardless of the 15-min server TTL. Dentist routes additionally pass the `dentistTreatsPatient` gate.
 
 | Method | Route | Role | Purpose |
 |---|---|---|---|

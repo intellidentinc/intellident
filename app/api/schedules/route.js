@@ -81,9 +81,11 @@ export async function POST(request) {
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   const rawServiceIds = parsed.body.serviceIds ?? (parsed.body.serviceId ? [parsed.body.serviceId] : [])
-  const serviceIds = Array.isArray(rawServiceIds) ? rawServiceIds.filter(Boolean) : [rawServiceIds].filter(Boolean)
-  const { dentistId, scheduledAt } = parsed.body
-  const notes = str(parsed.body.notes, 2000)
+  const serviceIds = (Array.isArray(rawServiceIds) ? rawServiceIds : [rawServiceIds])
+    .filter((id) => typeof id === 'string' && id.trim().length > 0)
+  const dentistId   = parsed.body.dentistId ? str(parsed.body.dentistId, 50) : undefined
+  const scheduledAt = str(parsed.body.scheduledAt, 50)
+  const notes       = str(parsed.body.notes, 2000)
 
   if (serviceIds.length === 0 || !scheduledAt) {
     return NextResponse.json({ error: 'serviceIds and scheduledAt are required' }, { status: 400 })

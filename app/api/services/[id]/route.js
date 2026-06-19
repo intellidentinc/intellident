@@ -40,13 +40,17 @@ export async function PATCH(request, { params }) {
   if (bufferTime !== undefined && (bufferTime < 0 || bufferTime > 30)) {
     return NextResponse.json({ error: 'Buffer time must be between 0 and 30 minutes' }, { status: 400 })
   }
+  const parsedPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : null
+  if (parsedPrice !== null && (isNaN(parsedPrice) || parsedPrice < 0)) {
+    return NextResponse.json({ error: 'Price must be a non-negative number' }, { status: 400 })
+  }
 
   const service = await prisma.service.update({
     where: { id },
     data: {
       name,
       duration: parseInt(duration, 10),
-      price: price !== undefined && price !== null && price !== '' ? parseFloat(price) : null,
+      price: parsedPrice,
       bufferTime: bufferTime !== undefined ? parseInt(bufferTime, 10) : 0,
       dentists: {
         set: dentistIds?.length ? dentistIds.map((did) => ({ id: did })) : []

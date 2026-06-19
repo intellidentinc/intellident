@@ -35,6 +35,7 @@ export default function RecordsPage() {
   const [pageSize, setPageSize] = useState(10)
   const [search, setSearch]     = useState('')
   const [selectedPatient, setSelectedPatient] = useState(null)
+  const [stepUpGranted, setStepUpGranted] = useState(false)
 
   const searchTimeout = useRef(null)
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -176,6 +177,8 @@ export default function RecordsPage() {
       <PatientRecordsDrawer
         patient={selectedPatient}
         onClose={() => setSelectedPatient(null)}
+        stepUpGranted={stepUpGranted}
+        setStepUpGranted={setStepUpGranted}
       />
     </SidebarInset>
   )

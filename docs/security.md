@@ -48,7 +48,7 @@ Enforced on both client and server (`app/api/auth/sign-up/route.js`):
 - **Remember Me:** extends session to 3 days (`maxAge: 60 * 60 * 24 * 3`) — checkbox on sign-in page
 - **Absolute cap:** middleware enforces an 8-hour hard limit regardless of sliding renewal
 - **Inactivity logout:** 30 minutes — tracked in `InactivityProvider`; clears master key and redirects to `/sign-in?reason=inactivity`
-- **Step-up re-auth:** sensitive actions (patient-record access, clinic data export) require a recent password re-entry (15-min TTL); see `isStepUpValid` in `lib/auth.js` and `POST /api/auth/step-up`
+- **Step-up re-auth:** sensitive actions require identity re-verification (15-min TTL); two modes — OTP (patient-record access for dentists and patients) and password (audit/report exports, clinic backup); see `isStepUpValid` in `lib/auth.js` and `POST /api/auth/step-up`
 
 ## Rate Limiting
 
@@ -219,41 +219,79 @@ On every sign-in, the user agent hash is upserted to `KnownDevice`. This provide
 
 ## Step-Up Authentication (2026-06-03)
 
-Sensitive operations (CSV/PDF export of audit logs and reports) require a step-up authentication challenge — the user must re-enter their current password.
+Sensitive operations require identity re-verification before proceeding. The system uses two modes depending on context.
 
-### Flow
+### Mode 1 — OTP (record access)
+
+Used when a dentist opens the Patient Records page or a patient opens My Dental Records. An email OTP (6-digit, 10-min TTL) must be verified before record data is fetched.
+
+**Client behaviour:** the gate is tied to the page component's lifetime — it resets whenever the user navigates away and returns, regardless of the 15-min server TTL. Within a single page visit, OTP is only prompted once (switching between patients does not re-prompt).
+
+```
+1. Page mounts → stepUpGranted = false → OtpStepUpModal opens
+
+2. User clicks "Send Code to My Email"
+   → POST /api/auth/step-up/send-otp
+   → Rate-limited 5/15 min per userId
+   → Generates OTP, creates MfaOtp record (bcrypt-hashed), fires sendStepUpOtpEmail
+   → Returns { pendingToken }
+
+3. User enters 6-digit code
+   → POST /api/auth/step-up  { pendingToken, code }
+   → Validates ownership (mfa.userId === session.userId), expiry, attempt cap (5)
+   → bcrypt.compare; on fail increments attempts and returns remaining count
+   → On success: marks usedAt, calls grantStepUp(), audit-logs VERIFY/otp
+
+4. stepUpGranted = true → records load
+   → All record API routes check isStepUpValid(); 403 + requiresStepUp re-triggers modal
+```
+
+### Mode 2 — Password (exports and backup)
+
+Used for CSV/PDF export of audit logs and reports, and for the super admin clinic backup. The user re-enters their current password.
 
 ```
 1. Client calls GET /api/auth/step-up
-   → if stepUpGrantedAt is present and < 15 min old → { valid: true }
-   → otherwise → { valid: false }
+   → { valid: true } if stepUpGrantedAt < 15 min old; otherwise { valid: false }
 
 2. UI shows StepUpModal.jsx — user enters password
 
-3. Client calls POST /api/auth/step-up  (password in body)
+3. Client calls POST /api/auth/step-up  { password }
    → bcrypt.compare(password, user.password)
-   → if valid: sets session.stepUpGrantedAt = Date.now()
-   → returns { success: true }
+   → On success: calls grantStepUp(), audit-logs VERIFY/password
 
-4. Client retries the export — middleware/route checks isStepUpValid()
+4. Client retries the export/backup — route checks isStepUpValid()
 ```
 
-### Properties
+### Shared properties
 
 | Property | Detail |
 |---|---|
-| TTL | 15 minutes from grant |
+| TTL | 15 minutes from grant (server-side) |
 | Storage | `stepUpGrantedAt` timestamp in session cookie (not DB) |
-| Scope | Re-verifies current password — not a separate credential |
-| Applied to | `GET /api/audit-log/export`, `GET /api/reports/export` |
+| Client gate | OTP mode resets on every page navigation; password mode checks server TTL |
+| Rate limiting | OTP verify: 15/15 min per IP; password verify: 10/15 min per IP; OTP send: 5/15 min per userId |
+
+### Applied to
+
+| Operation | Mode |
+|---|---|
+| Dentist — Patient Records page | OTP |
+| Patient — My Dental Records page | OTP |
+| `GET /api/audit-log/export` | Password |
+| `GET /api/reports/export` | Password |
+| `GET /api/super/clinics/[id]/backup` | Password |
 
 ### Files
 
 | File | Purpose |
 |---|---|
-| `app/api/auth/step-up/route.js` | POST (grant) + GET (check) |
-| `components/commons/StepUpModal.jsx` | Password prompt dialog |
+| `app/api/auth/step-up/route.js` | POST (OTP + password grant) + GET (check) |
+| `app/api/auth/step-up/send-otp/route.js` | POST — generate and email OTP; returns `pendingToken` |
+| `components/commons/OtpStepUpModal.jsx` | Two-step OTP dialog (send → verify) with 60s resend cooldown |
+| `components/commons/StepUpModal.jsx` | Password re-entry dialog (exports and backup) |
 | `lib/auth.js` → `grantStepUp()` / `isStepUpValid()` | Session helpers |
+| `lib/email.js` → `sendStepUpOtpEmail()` | OTP email template |
 
 ---
 
@@ -493,7 +531,7 @@ const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.cl
 ### Application-Level Backup
 
 **Endpoint:** `GET /api/super/clinics/[id]/backup`
-**Access:** SUPERADMIN only + step-up authentication (password re-entry, 15-min TTL)
+**Access:** SUPERADMIN only + step-up authentication (password mode, 15-min TTL)
 
 Produces a signed, downloadable JSON artifact (`intellident-backup-{CODE}-{DATE}.json`) containing all non-deleted clinic data:
 

@@ -11,6 +11,7 @@ import Skeleton from '@mui/material/Skeleton'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
+import OtpStepUpModal from '@/components/commons/OtpStepUpModal'
 import { FileText, CalendarCheck, Stethoscope, Eye } from 'lucide-react'
 import dayjs from 'dayjs'
 import RecordViewModal from './RecordViewModal'
@@ -30,23 +31,49 @@ export default function MyRecordsPage() {
   const [tab, setTab] = useState(0)
   const [records, setRecords] = useState([])
   const [visits, setVisits] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [viewRecord, setViewRecord] = useState(null)
 
-  useEffect(() => {
+  const [stepUpOpen, setStepUpOpen] = useState(true)
+  const [stepUpGranted, setStepUpGranted] = useState(false)
+
+  function loadRecords() {
+    setLoading(true)
     fetch('/api/patient/records')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(async (r) => {
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}))
+          if (data.requiresStepUp) {
+            setStepUpGranted(false)
+            setStepUpOpen(true)
+          } else {
+            showToast('Failed to load records', 'error')
+          }
+          return
+        }
+        const data = await r.json()
         setRecords(data.records ?? [])
         setVisits(data.visits ?? [])
       })
       .catch(() => showToast('Failed to load records', 'error'))
       .finally(() => setLoading(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }
+
+  // Load records once step-up is granted
+  useEffect(() => {
+    if (stepUpGranted) loadRecords()
+  }, [stepUpGranted]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <SidebarInset>
       <PageHeader title='My Dental Records' />
+
+      <OtpStepUpModal
+        open={stepUpOpen}
+        onClose={() => setStepUpOpen(false)}
+        onSuccess={() => { setStepUpOpen(false); setStepUpGranted(true) }}
+        description='Viewing your dental records requires identity verification.'
+      />
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
         <Typography variant='h5' fontWeight={700} color='text.primary' gutterBottom>
@@ -66,7 +93,7 @@ export default function MyRecordsPage() {
         {/* Clinical Records Tab */}
         {tab === 0 && (
           <Box>
-            {loading ? (
+            {!stepUpGranted || loading ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {[1, 2, 3].map((n) => <Skeleton key={n} variant='rounded' height={80} />)}
               </Box>
@@ -143,7 +170,7 @@ export default function MyRecordsPage() {
         {/* Visit History Tab */}
         {tab === 1 && (
           <Box>
-            {loading ? (
+            {!stepUpGranted || loading ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {[1, 2, 3].map((n) => <Skeleton key={n} variant='rounded' height={100} />)}
               </Box>
@@ -220,6 +247,7 @@ export default function MyRecordsPage() {
         open={!!viewRecord}
         record={viewRecord}
         onClose={() => setViewRecord(null)}
+        onRequiresStepUp={() => { setViewRecord(null); setStepUpGranted(false); setStepUpOpen(true) }}
       />
     </SidebarInset>
   )
