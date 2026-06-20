@@ -26,12 +26,22 @@ export async function POST() {
   const codeHash     = await bcrypt.hash(otp, 8);
   const expiresAt    = new Date(Date.now() + 10 * 60 * 1000);
 
+  // Await delivery — on serverless the function can be frozen right after the
+  // response returns, dropping any un-awaited email send. Mirror the sign-in
+  // MFA path (which awaits sendMfaOtpEmail) so the code reliably goes out.
+  try {
+    await sendStepUpOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
+  } catch (err) {
+    console.error('step-up send-otp email failed', err);
+    return NextResponse.json(
+      { error: 'Failed to send verification code. Please try again.' },
+      { status: 502 },
+    );
+  }
+
   await prisma.mfaOtp.create({
     data: { userId: session.userId, pendingToken, codeHash, rememberMe: false, expiresAt },
   });
-
-  // Fire-and-forget — don't block the response on email delivery
-  sendStepUpOtpEmail({ to: user.email, firstName: user.firstName, code: otp }).catch(() => {});
 
   return NextResponse.json({ pendingToken });
 }
