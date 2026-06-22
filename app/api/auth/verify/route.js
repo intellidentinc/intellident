@@ -19,6 +19,7 @@
  *    Sets the session immediately so the user is logged in on redirect.
  */
 import { NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { hexToken } from '@/lib/validate';
 import { generatePatientCode } from '@/lib/patients';
@@ -33,22 +34,25 @@ export async function GET(request) {
     return NextResponse.redirect(`${appUrl}/sign-in?verified=invalid`);
   }
 
+  // Tokens are stored hashed; hash the incoming raw token for all lookups/deletes.
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+
   try {
-    const pending = await prisma.emailVerification.findUnique({ where: { token } });
+    const pending = await prisma.emailVerification.findUnique({ where: { token: tokenHash } });
 
     if (!pending) {
       return NextResponse.redirect(`${appUrl}/sign-in?verified=invalid`);
     }
 
     if (new Date() > pending.expiresAt) {
-      await prisma.emailVerification.delete({ where: { token } });
+      await prisma.emailVerification.delete({ where: { token: tokenHash } });
       return NextResponse.redirect(`${appUrl}/sign-in?verified=expired`);
     }
 
     // Guard: account may have been created already (double-click protection)
     const existingUser = await prisma.user.findUnique({ where: { email: pending.email } });
     if (existingUser) {
-      await prisma.emailVerification.delete({ where: { token } });
+      await prisma.emailVerification.delete({ where: { token: tokenHash } });
       return NextResponse.redirect(`${appUrl}/sign-in?verified=already`);
     }
 
@@ -99,7 +103,7 @@ export async function GET(request) {
     });
 
     // Clean up the pending record
-    await prisma.emailVerification.delete({ where: { token } });
+    await prisma.emailVerification.delete({ where: { token: tokenHash } });
 
     return NextResponse.redirect(`${appUrl}/sign-in?verified=success`);
   } catch (error) {

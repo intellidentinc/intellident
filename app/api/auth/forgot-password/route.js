@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendPasswordResetEmail } from '@/lib/email';
 import { parseJsonBody, sanitizeEmail } from '@/lib/validate';
@@ -35,10 +35,13 @@ export async function POST(request) {
     // Invalidate any existing tokens for this email
     await prisma.passwordResetToken.deleteMany({ where: { email } });
 
+    // The raw token only ever leaves in the email link; the DB stores its SHA-256
+    // hash so a DB dump yields no usable reset token (cannot be reversed to the link).
     const token = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await prisma.passwordResetToken.create({ data: { token, email, expiresAt } });
+    await prisma.passwordResetToken.create({ data: { token: tokenHash, email, expiresAt } });
 
     const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`;
     await sendPasswordResetEmail({ to: email, firstName: user.firstName, resetUrl });

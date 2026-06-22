@@ -20,7 +20,7 @@
  */
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendVerificationEmail } from '@/lib/email';
 import { parseJsonBody, sanitizeEmail, secret, str } from '@/lib/validate';
@@ -105,14 +105,17 @@ export async function POST(request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    // The raw token only ever leaves in the email link; the DB stores its SHA-256
+    // hash so a DB dump yields no usable verification token.
     const token = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Replace any previous pending verification for this email
     await prisma.emailVerification.deleteMany({ where: { email } });
     await prisma.emailVerification.create({
       data: {
-        token,
+        token: tokenHash,
         email,
         firstName: firstName || null,
         middleInitial: middleInitial || null,

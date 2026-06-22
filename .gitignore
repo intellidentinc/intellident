@@ -49,3 +49,5 @@ next-env.d.ts
 docs/security-findings.md
 docs/security-testing-plan.md
 docs/security-test-cases.md
+scripts/gen_pentest_matrix.py
+docs/pentest-test-matrix.md

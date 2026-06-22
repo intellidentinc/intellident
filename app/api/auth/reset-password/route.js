@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
+import { createHash } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendPasswordChangedEmail } from '@/lib/email';
 import { parseJsonBody, hexToken, secret } from '@/lib/validate';
@@ -30,7 +31,9 @@ export async function POST(request) {
       );
     }
 
-    const resetToken = await prisma.passwordResetToken.findUnique({ where: { token } });
+    // Tokens are stored hashed; hash the incoming raw token to look it up.
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const resetToken = await prisma.passwordResetToken.findUnique({ where: { token: tokenHash } });
 
     if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
       return NextResponse.json({ error: 'Reset link is invalid or has expired.' }, { status: 400 });
