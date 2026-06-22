@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Dialog from '@mui/material/Dialog'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -54,8 +53,7 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export default function RecordFormModal({ open, patientId, record, onClose, onSuccess }) {
-  const router = useRouter()
+export default function RecordFormModal({ open, patientId, record, onClose, onSuccess, onRequiresUnlock }) {
   const { showToast } = useToast()
   const { privateKey } = useCrypto()
   const fileInputRef = useRef(null)
@@ -141,7 +139,7 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
     }
 
     fetchAndDecrypt()
-  }, [open, record]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, record, privateKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleChange(field) {
     return (e) => {
@@ -346,11 +344,11 @@ export default function RecordFormModal({ open, patientId, record, onClose, onSu
               </Typography>
             </Box>
             <Typography variant='caption' color='text.secondary'>
-              Notes are end-to-end encrypted and can only be accessed during an active login session. Sign in again to continue.
+              Notes are end-to-end encrypted. Unlock with your account password to continue — no need to sign in again.
             </Typography>
             <Box>
-              <Button variant='contained' size='small' onClick={() => router.push('/sign-in')}>
-                Sign in again
+              <Button variant='contained' size='small' onClick={() => onRequiresUnlock?.()}>
+                Unlock records
               </Button>
             </Box>
           </Box>

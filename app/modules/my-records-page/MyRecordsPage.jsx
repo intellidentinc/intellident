@@ -11,7 +11,9 @@ import Skeleton from '@mui/material/Skeleton'
 import { SidebarInset } from '@/components/ui/sidebar'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
+import { useCrypto } from '@/app/providers/CryptoProvider'
 import OtpStepUpModal from '@/components/commons/OtpStepUpModal'
+import UnlockRecordsModal from '@/components/commons/UnlockRecordsModal'
 import { FileText, CalendarCheck, Stethoscope, Eye } from 'lucide-react'
 import dayjs from 'dayjs'
 import RecordViewModal from './RecordViewModal'
@@ -28,6 +30,7 @@ const APPT_CHIP = {
 
 export default function MyRecordsPage() {
   const { showToast } = useToast()
+  const { privateKey } = useCrypto()
   const [tab, setTab] = useState(0)
   const [records, setRecords] = useState([])
   const [visits, setVisits] = useState([])
@@ -36,6 +39,7 @@ export default function MyRecordsPage() {
 
   const [stepUpOpen, setStepUpOpen] = useState(true)
   const [stepUpGranted, setStepUpGranted] = useState(false)
+  const [unlockOpen, setUnlockOpen] = useState(false)
 
   function loadRecords() {
     setLoading(true)
@@ -64,6 +68,14 @@ export default function MyRecordsPage() {
     if (stepUpGranted) loadRecords()
   }, [stepUpGranted]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The E2EE keys live only in memory and are lost on a page reload. Once the user
+  // is past step-up, prompt for a password re-unlock if the keys are missing so
+  // record decryption works without forcing a full (and looping) re-login.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (stepUpGranted && !privateKey) setUnlockOpen(true)
+  }, [stepUpGranted, privateKey])
+
   return (
     <SidebarInset>
       <PageHeader title='My Dental Records' />
@@ -73,6 +85,12 @@ export default function MyRecordsPage() {
         onClose={() => setStepUpOpen(false)}
         onSuccess={() => { setStepUpOpen(false); setStepUpGranted(true) }}
         description='Viewing your dental records requires identity verification.'
+      />
+
+      <UnlockRecordsModal
+        open={unlockOpen}
+        onClose={() => setUnlockOpen(false)}
+        onUnlocked={() => setUnlockOpen(false)}
       />
 
       <Box sx={{ p: { xs: 2, sm: 3, lg: 4 } }}>
@@ -248,6 +266,7 @@ export default function MyRecordsPage() {
         record={viewRecord}
         onClose={() => setViewRecord(null)}
         onRequiresStepUp={() => { setViewRecord(null); setStepUpGranted(false); setStepUpOpen(true) }}
+        onRequiresUnlock={() => setUnlockOpen(true)}
       />
     </SidebarInset>
   )

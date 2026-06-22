@@ -4,6 +4,48 @@ import { prisma } from '@/lib/prisma'
 import { parseJsonBody, secret } from '@/lib/validate'
 
 /**
+ * GET /api/profile/keys — return the caller's wrapped key material for re-unlock.
+ *
+ * The E2EE keys live only in browser memory (CryptoProvider) and are lost on any
+ * full page reload, while the session cookie stays valid. This lets an already
+ * authenticated session re-derive its keys from the entered password — the same
+ * encrypted fields sign-in/verify-otp already hand to the owner, useless without
+ * the password (the KEK is derived client-side via PBKDF2). Record access is
+ * additionally OTP-step-up gated. Mirrors GET /api/auth/change-password.
+ */
+export async function GET() {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: {
+      wrappedKey: true,
+      keySalt: true,
+      publicKey: true,
+      encryptedPrivateKey: true,
+      privateKeyIv: true,
+      isDeleted: true,
+      isActive: true,
+    },
+  })
+  if (!user || user.isDeleted || !user.isActive) {
+    return NextResponse.json({ error: 'User not found.' }, { status: 404 })
+  }
+  if (!user.wrappedKey || !user.keySalt) {
+    return NextResponse.json({ error: 'Account setup is incomplete.' }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    wrappedKey: user.wrappedKey,
+    keySalt: user.keySalt,
+    publicKey: user.publicKey,
+    encryptedPrivateKey: user.encryptedPrivateKey,
+    privateKeyIv: user.privateKeyIv,
+  })
+}
+
+/**
  * POST /api/profile/keys — provision the caller's envelope keypair (set-if-null).
  *
  * Stores the public key (plaintext) and the private key encrypted under the user's

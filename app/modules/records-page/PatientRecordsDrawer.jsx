@@ -18,7 +18,9 @@ import { X, Plus, Pencil, Trash2, FileText, Paperclip, CalendarX } from 'lucide-
 import Button from '@/components/commons/Button'
 import RecordFormModal from './RecordFormModal'
 import OtpStepUpModal from '@/components/commons/OtpStepUpModal'
+import UnlockRecordsModal from '@/components/commons/UnlockRecordsModal'
 import { useToast } from '@/app/providers/ToastProvider'
+import { useCrypto } from '@/app/providers/CryptoProvider'
 import dayjs from 'dayjs'
 
 const RECORD_STATUS_CHIP = {
@@ -37,8 +39,10 @@ const VISIT_STATUS_CHIP = {
 
 export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, setStepUpGranted }) {
   const { showToast } = useToast()
+  const { privateKey } = useCrypto()
 
   const [stepUpOpen, setStepUpOpen] = useState(false)
+  const [unlockOpen, setUnlockOpen] = useState(false)
 
   const [tab, setTab] = useState(0)
 
@@ -124,6 +128,13 @@ export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, 
     if (stepUpGranted && patient) loadRecords()
   }, [stepUpGranted, patient]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The E2EE keys live only in memory and are lost on a page reload. Once a patient
+  // is selected and step-up is granted, prompt for a password re-unlock if the keys
+  // are missing so record decryption works without a looping full re-login.
+  useEffect(() => {
+    if (patient && stepUpGranted && !privateKey) setUnlockOpen(true)
+  }, [patient, stepUpGranted, privateKey])
+
   function openCreate() {
     setEditTarget(null)
     setFormOpen(true)
@@ -160,6 +171,12 @@ export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, 
         onClose={() => { setStepUpOpen(false); onClose() }}
         onSuccess={() => { setStepUpOpen(false); setStepUpGranted(true) }}
         description='Viewing patient records requires identity verification.'
+      />
+
+      <UnlockRecordsModal
+        open={unlockOpen}
+        onClose={() => setUnlockOpen(false)}
+        onUnlocked={() => setUnlockOpen(false)}
       />
 
       <Drawer
@@ -329,6 +346,7 @@ export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, 
           record={editTarget}
           onClose={() => setFormOpen(false)}
           onSuccess={loadRecords}
+          onRequiresUnlock={() => setUnlockOpen(true)}
         />
       )}
 

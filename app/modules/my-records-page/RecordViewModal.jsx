@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Dialog from '@mui/material/Dialog'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -21,8 +20,7 @@ const STATUS_CHIP = {
   ARCHIVED: { label: 'Archived', bg: '#f1f5f9', color: '#475569' },
 }
 
-export default function RecordViewModal({ open, record, onClose, onRequiresStepUp }) {
-  const router = useRouter()
+export default function RecordViewModal({ open, record, onClose, onRequiresStepUp, onRequiresUnlock }) {
   const { showToast } = useToast()
   const { privateKey } = useCrypto()
 
@@ -100,7 +98,7 @@ export default function RecordViewModal({ open, record, onClose, onRequiresStepU
     }
 
     fetchAndDecrypt()
-  }, [open, record]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, record, privateKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!record) return null
 
@@ -162,11 +160,11 @@ export default function RecordViewModal({ open, record, onClose, onRequiresStepU
               </Typography>
             </Box>
             <Typography variant='body2' color='text.secondary'>
-              Your notes are end-to-end encrypted and can only be decrypted during an active login session. Sign in again to view them.
+              Your notes are end-to-end encrypted. Unlock your records with your account password to view them — no need to sign in again.
             </Typography>
             <Box>
-              <Button variant='contained' size='small' onClick={() => router.push('/sign-in')}>
-                Sign in again
+              <Button variant='contained' size='small' onClick={() => onRequiresUnlock?.()}>
+                Unlock records
               </Button>
             </Box>
           </Box>
