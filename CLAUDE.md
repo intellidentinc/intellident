@@ -66,12 +66,12 @@ app/
 │   ├── users/                # User list + PATCH role/isActive / DELETE (ADMIN only)
 │   ├── patients/             # GET (paginated) + POST (RECEPTIONIST); [id]/ PATCH + DELETE
 │   ├── services/             # GET + POST (ADMIN); [id]/ PATCH + DELETE; dentists/ GET
-│   ├── profile/              # GET + PATCH (any authenticated user); keys/ POST — provision E2EE envelope keypair (set-if-null)
+│   ├── profile/              # GET + PATCH (any authenticated user); keys/ GET (fetch wrapped key material — UnlockRecordsModal) + POST (provision E2EE envelope keypair, set-if-null)
 │   ├── appointments/         # See Appointments API section below
-│   ├── schedules/            # Patient-facing booking API (PATIENT role); [id]/ PATCH cancel; slots/ GET
+│   ├── schedules/            # Patient-facing booking API (PATIENT role); POST accepts serviceIds[] (multi-service) + creates RESERVATION billing/checkout; [id]/ PATCH cancel; slots/ GET
 │   ├── schedule/             # Dentist's own schedule API (DENTIST role only)
 │   ├── records/              # E2EE patient records — see docs/records.md. DENTIST: GET patient list; [patientId]/ GET+POST; [patientId]/[recordId]/ GET+PATCH+DELETE;
-│   │                         # [patientId]/recipients/ GET; [patientId]/[recordId]/{reshare,history}/; .../attachments/ POST + [attachmentId]/ DELETE
+│   │                         # [patientId]/recipients/ GET; [patientId]/visits/ GET (appointment visit history); [patientId]/[recordId]/{reshare,history}/; .../attachments/ POST + [attachmentId]/ DELETE
 │   ├── billing/              # GET + POST (ADMIN/RECEPTIONIST); [id]/ GET + PATCH; [id]/checkout/ POST (PayMongo)
 │   ├── audit-log/            # GET paginated + filtered; export/ GET (CSV/PDF, up to 5000 rows) — ADMIN only
 │   ├── reports/              # GET aggregated data (appointments/revenue/patients); export/ GET raw rows — ADMIN only
@@ -114,7 +114,7 @@ app/
 │   ├── schedules-page/       # SchedulesPage (patient), BookAppointmentModal, CancelScheduleModal
 │   ├── schedule-page/        # SchedulePage (dentist), ScheduleEventModal
 │   ├── records-page/         # RecordsPage (dentist patient list + RecordFormModal + RecordViewModal with E2EE)
-│   ├── my-records-page/      # MyDentalRecordsPage (patient) — Clinical Records + Visit History tabs
+│   ├── my-records-page/      # MyRecordsPage (patient) — Clinical Records + Visit History tabs; RecordViewModal
 │   ├── billing-page/         # BillingPage, BillingDetailDrawer, RecordPaymentModal, BillingReceiptDocument
 │   ├── my-billing-page/      # MyBillingPage (patient) — outstanding bills, Pay Now, receipt download
 │   ├── audit-log-page/       # AuditLogPage — filters, expandable rows, CSV + PDF export
@@ -139,7 +139,8 @@ components/
 │   ├── Button.jsx            # Custom button with loading state
 │   ├── Input.jsx             # Label-above input field (no floating label); supports error + helperText
 │   ├── Select.jsx            # Custom MUI select wrapper
-│   └── PageHeader.jsx        # Shared page header — SidebarTrigger + page title + NotificationBell
+│   ├── PageHeader.jsx        # Shared page header — SidebarTrigger + page title + NotificationBell
+│   └── UnlockRecordsModal.jsx # Re-derives in-memory E2EE keys after a page reload (password → GET /api/profile/keys → loadOrProvisionKeys)
 └── ui/                       # shadcn/ui primitives (used by sidebar + layout)
     ├── button.jsx, input.jsx, separator.jsx
     ├── sheet.jsx, sidebar.jsx, skeleton.jsx, tooltip.jsx
@@ -147,6 +148,10 @@ lib/
 ├── auth.js                   # Session helpers (getSession, setSession, clearSession)
 ├── prisma.js                 # Prisma client singleton
 ├── crypto.js                 # Web Crypto API helpers (E2EE)
+├── clientKeys.js             # Client-side E2EE key provisioning — loadOrProvisionKeys(authData, password) (see docs/records.md)
+├── recordCrypto.js           # Patient-record RSA-OAEP envelope encryption helpers (per-record content key + AAD)
+├── records-access.js         # Server-side authorization checks for patient-record access
+├── secureCompare.js          # Constant-time string comparison helper
 ├── supabase.js               # Supabase client (service role — server-side only)
 ├── notifications.js          # In-app + email notification helpers (see Notification System section)
 ├── email.js                  # Gmail/nodemailer email helpers (auth emails + appointment notifications + staff welcome + clinic application emails)
@@ -239,7 +244,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - Session: HMAC-signed cookie (`lib/session-cookie.js`, fails closed if `SESSION_SECRET` unset) + DB-backed `UserSession` token validated on every request; 10 min token, 3-day Remember Me, 30 min inactivity logout (`InactivityProvider`), absolute 8-hour cap; step-up re-auth (15-min TTL) for sensitive actions — OTP mode (`OtpStepUpModal`) for patient-record access (resets on every page navigation); password mode (`StepUpModal`) for exports and backup
 - Account lockout: 5 failed attempts / 5 min → locked 15 min
 - Rate limiting: DB-backed IP rate limits on all auth endpoints via `lib/rateLimit.js` + `RateLimit` Prisma model; sign-in 20/15 min, sign-up 10/hour, forgot-password 5/hour, verify-otp 15/15 min; clinic-apply 5/hour, clinic-docs 50/hour
-- Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use
+- Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use. Email-verification and password-reset tokens are stored **SHA-256 hashed at rest** — the raw token lives only in the emailed link; routes hash the incoming token before lookup
 - Password reset generates fresh E2EE keys (old data inaccessible); change-password re-wraps existing key
 - Password history: cannot reuse last 3
 - MFA (email OTP): enabled and enforced on every sign-in. `app/api/auth/sign-in/route.js` issues a 6-digit OTP (bcrypt-hashed `MfaOtp`, emailed) and defers session creation to `verify-otp`; `wrappedKey`/`keySalt` are withheld until the OTP is confirmed. Code: `MfaOtp` model, `verify-otp` route, `VerifyOtpPage`
@@ -325,7 +330,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
 **Patient Schedules** (PATIENT, `/schedules`):
 - Multi-step `BookAppointmentModal`: service → dentist → date → 30-min time slots → notes → confirm
 - Always creates as PENDING; notifies all staff; patient can cancel own PENDING or CONFIRMED appointments
-- Slots API: `GET /api/schedules/slots?date&serviceId&dentistId` — filters closed days, past times, conflicts
+- Slots API: `GET /api/schedules/slots?date&serviceIds&dentistId` (legacy `serviceId` accepted) — filters closed days, past times, conflicts
 
 **Dentist Calendar** (DENTIST, `/schedule`): read-only Day/Week view via `GET /api/schedule?from&to`
 

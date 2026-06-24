@@ -44,6 +44,8 @@ Enums define the allowed values for status and category fields across the schema
 
 ## Models
 
+> **Scope note:** the tables below cover the core models and show **representative (not exhaustive)** field sets. The live `prisma/schema.prisma` additionally defines `ClinicSchedule`, `ClinicClosure`, `SchedulePreset`, `ClinicApplication`, `AppointmentService`, `AppointmentStatusHistory`, `RecordKey`, `RecordHistory`, `InAppNotification`, `MfaOtp`, `ChatSession`, `ChatMessage`, `RateLimit`, `DataRequest`, `UserSession`, and `KnownDevice`, plus newer `Clinic` fields (`code`, `logoUrl`, `isEnabled`, reservation-fee + reminder + retention + password-expiry + single-session fields). `data-models.md` is the authoritative model reference.
+
 ### Clinic
 
 The root of the multi-tenant system. Every other model is scoped to a clinic via `clinicId`.
@@ -116,22 +118,23 @@ Extended profile for users with the `PATIENT` role. Stores personal and consent 
 
 ---
 
-### Staff
+### Dentist / Receptionist
 
-Extended profile for users with the `STAFF` role (dentists, clinic personnel).
+Staff profiles are **two separate models** — there is no unified `Staff` model and no `STAFF` role (roles are SUPERADMIN/ADMIN/DENTIST/RECEPTIONIST/PATIENT; see `lib/roles.js`). Each is a one-to-one extended profile keyed on `userId`.
+
+**`Dentist`**
 
 | Field | Type | Description |
 |---|---|---|
 | `id` | `String` (cuid) | Primary key |
-| `userId` | `String` | One-to-one link to User |
+| `userId` | `String` (unique) | One-to-one link to User |
 | `clinicId` | `String` | Tenant scope |
-| `specialty` | `String?` | Dental specialty or position |
-| `isDeleted` | `Boolean` | Soft delete flag |
-| `createdAt` | `DateTime` | Record creation timestamp |
-| `updatedAt` | `DateTime` | Last modified timestamp |
-| `deletedAt` | `DateTime?` | Soft delete timestamp |
+| `specialty` | `String?` | Dental specialty |
+| `isDeleted` / `deletedAt` | `Boolean` / `DateTime?` | Soft delete |
 
-**Relations:** has many `Appointment` (as dentist)
+**Relations:** has many `Appointment` (as dentist); many-to-many `Service` (`ServiceDentists`).
+
+**`Receptionist`** — same shape as `Dentist` minus `specialty` and the appointment/service relations.
 
 ---
 

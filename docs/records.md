@@ -42,6 +42,10 @@ The private key is stored **encrypted under the master key** (which is itself wr
 
 `POST /api/profile/keys` is **set-if-null**: once a keypair is stored it is never overwritten, so a transient client cannot clobber a working keypair.
 
+### Unlock after page reload
+
+The decrypted keypair and master key live **only** in `CryptoProvider` React state, so a full page reload wipes them while the session cookie stays valid. Rather than forcing a re-login (which the still-valid session just bounces back to the dashboard), [`components/commons/UnlockRecordsModal.jsx`](../components/commons/UnlockRecordsModal.jsx) prompts for the account password, fetches the wrapped key material from **`GET /api/profile/keys`**, and re-derives the keys locally via `loadOrProvisionKeys`. Nothing is persisted to disk; a wrong password simply fails the unwrap. It is shown when a records view needs keys that are not in memory (e.g. `MyRecordsPage`, `PatientRecordsDrawer` after reload).
+
 ---
 
 ## Authorized readers
@@ -96,8 +100,10 @@ All record routes require an authenticated session **and** valid step-up auth (`
 | `POST` | `/api/records/[patientId]/[recordId]/attachments` | DENTIST | Upload a file (see below). |
 | `DELETE` | `/api/records/[patientId]/[recordId]/attachments/[attachmentId]` | DENTIST | Soft-delete an attachment (best-effort storage removal). |
 | `GET` | `/api/records/[patientId]/[recordId]/history` | DENTIST | `RecordHistory` audit trail (field-level diffs). |
+| `GET` | `/api/records/[patientId]/visits` | DENTIST | Appointment visit history for a patient (CONFIRMED/COMPLETED appts). |
+| `GET` | `/api/profile/keys` | any | Fetch the caller's wrapped key material (used by `UnlockRecordsModal` after a page reload). |
 | `POST` | `/api/profile/keys` | any | Provision the caller's envelope keypair (set-if-null). |
-| `GET` | `/api/patient/records` + `/[recordId]` | PATIENT | Patient's own records (My Dental Records page). |
+| `GET` | `/api/patient/records` + `/[recordId]` | PATIENT | Patient's own records + visit history (My Dental Records page). |
 
 Reads/writes/deletes are written to the `AuditLog` as `VIEW` / `UPDATE` / `DELETE` on entity `PatientRecord` via `lib/audit.js`.
 

@@ -19,8 +19,10 @@ The existing `Billing` and `Payment` models in `prisma/schema.prisma` were exten
 
 **`Clinic` model additions:**
 ```prisma
-reservationFeeAmount Float   @default(0)  // upfront fee on patient booking
-paymongoEnabled      Boolean @default(false)
+paymongoEnabled          Boolean @default(false) // master switch for online payments
+reservationFeeEnabled    Boolean @default(true)  // charge an upfront fee on patient booking
+reservationFeeAmount     Float   @default(0)     // the upfront fee amount
+reservationFeeDeductible Boolean @default(true)  // deduct the paid reservation fee from the final balance
 ```
 
 **`Payment` model additions:**
@@ -108,9 +110,11 @@ Patient submits BookAppointmentModal
     ↓
 POST /api/schedules
     → create Appointment (PENDING)
-    → create Billing (amount = service.price, status = UNPAID)
-    → createCheckoutSession (amount = reservationFeeAmount, type = "RESERVATION")
-    → return { appointment, checkoutUrl }
+    → if paymongoEnabled && reservationFeeEnabled && reservationFeeAmount > 0:
+        → create Billing (billingType = "RESERVATION", amount = reservationFeeAmount, status = UNPAID) + receiptNumber
+        → createCheckoutSession (amount = reservationFeeAmount, type = "RESERVATION")
+        → return { appointment, checkoutUrl }
+      else: return { appointment } (no billing created)
     ↓
 Frontend: window.location.href = checkoutUrl
     ↓
@@ -126,7 +130,7 @@ PayMongo fires POST /api/webhooks/paymongo
 Patient redirected to /[clinicId]/my-billing?payment=success
 ```
 
-**If `paymongoEnabled = false` or `reservationFeeAmount = 0`:** checkout is skipped; booking proceeds normally with no billing created.
+**If `paymongoEnabled = false`, `reservationFeeEnabled = false`, or `reservationFeeAmount = 0`:** checkout is skipped; booking proceeds normally with no billing created. When `reservationFeeDeductible = true`, a paid reservation fee is credited against the final balance at completion.
 
 ### 2. Auto-Billing on Completion (Staff)
 
@@ -348,8 +352,10 @@ A5 page size. Downloads as `receipt-{receiptNumber}.pdf`.
 - Payment success banner: shown when redirected back with `?payment=success`
 
 ### Admin: `ClinicPaymentSettings` (in `/settings`)
-- Toggle: Enable PayMongo Online Payments
-- Number input: Reservation Fee Amount (₱) — disabled if PayMongo is off
+- Toggle: Enable PayMongo Online Payments (`paymongoEnabled`)
+- Toggle: Charge Reservation Fee (`reservationFeeEnabled`) — disabled if PayMongo is off
+- Number input: Reservation Fee Amount (₱) — disabled if PayMongo/fee is off
+- Toggle: Deduct reservation fee from final balance (`reservationFeeDeductible`)
 - Save button → `PATCH /api/clinics/[id]/profile`
 
 ---

@@ -15,7 +15,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 
 | Feature | Status | Notes |
 |---|---|---|
-| Sign up + email verification | `[x]` | Two-phase: `EmailVerification` → `User` on verify |
+| Sign up + email verification | `[x]` | Two-phase: `EmailVerification` → `User` on verify; token stored SHA-256 hashed at rest |
 | Confirm password on sign-up | `[x]` | Client validation + submit guard |
 | Middle initial field | `[x]` | `User.middleInitial`; flows through sign-up, profile, admin create |
 | Sign-up no auto-login | `[x]` | Redirects to `/sign-in?verified=success` only |
@@ -25,7 +25,7 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Account lockout | `[x]` | 5 attempts / 5 min → locked 15 min |
 | Session expiry + inactivity logout | `[x]` | 30 min inactivity via `InactivityProvider` |
 | Remember Me | `[x]` | 3-day session |
-| Forgot / reset password | `[x]` | Email link, 10 min token |
+| Forgot / reset password | `[x]` | Email link, 10 min token; token stored SHA-256 hashed at rest |
 | Change password | `[x]` | Re-wraps master key |
 | Password history | `[x]` | Cannot reuse last 3 |
 | RBAC sidebar | `[x]` | Role-aware nav per role |
@@ -127,6 +127,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | Patient: My Dental Records page | `[x]` | `/my-records`; Clinical Records + Visit History tabs |
 | E2EE for record notes | `[x]` | AES-GCM-256 wired in `RecordFormModal.jsx`; server never sees plaintext |
 | `contentHash` tamper detection | `[x]` | SHA-256 computed on write, verified on read; tamper warning shown on mismatch |
+| Unlock records after page reload | `[x]` | `UnlockRecordsModal` re-derives in-memory E2EE keys via `GET /api/profile/keys` (no re-login) |
+| Dentist: patient visit history | `[x]` | `GET /api/records/[patientId]/visits` (CONFIRMED/COMPLETED appts) |
 
 ---
 
@@ -142,7 +144,8 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | PayMongo checkout | `[x]` | `POST /api/billing/[id]/checkout`; GCash/Maya QR working |
 | PayMongo webhook | `[x]` | `/api/webhooks/paymongo`; HMAC-verified; idempotent |
 | Auto-billing on COMPLETED | `[x]` | Billing record created when appointment marked COMPLETED |
-| Reservation fee at booking | `[x]` | `POST /api/schedules` — best-effort checkout on confirm |
+| Reservation fee at booking | `[x]` | `POST /api/schedules` — best-effort checkout on confirm; gated on `paymongoEnabled` + `reservationFeeEnabled`; `reservationFeeDeductible` credits the fee to the final balance |
+| Multi-service booking | `[x]` | `POST /api/schedules` accepts `serviceIds[]`; slot durations summed |
 | Receipt number generation | `[x]` | Atomic via PostgreSQL advisory lock |
 
 ---
@@ -270,3 +273,10 @@ Track of all features built, in-progress, and pending. Update this file as featu
 | 2026-06-07 | Added missing audit log coverage to records API (`GET /api/records`, `GET /api/patient/records`, record views), audit-log export, and reports export |
 | 2026-06-07 | Added suspicious login alert email (`sendSuspiciousLoginAlert`) — fires on sign-in from new or different-IP device; returns `requiresStepUp: true` to force step-up re-auth |
 | 2026-06-07 | Added account locked alert email (`sendAccountLockedAlert`) — fires when repeated failed attempts trigger account lockout |
+| 2026-06-17 | Refactored transactions flow + appointment booking; multi-service booking — `POST /api/schedules` accepts `serviceIds[]` |
+| 2026-06-18 | Admin-created account updates + invite/welcome email patches |
+| 2026-06-19 | Added clinic visit history — `GET /api/records/[patientId]/visits`; visit history surfaced on patient + dentist record views |
+| 2026-06-19 | Expanded input sanitization across user inputs; added reservation fee toggle (`reservationFeeEnabled`) + deductible (`reservationFeeDeductible`); landing page updates |
+| 2026-06-19 | Added step-up OTP for viewing patient records (`OtpStepUpModal`, `POST /api/auth/step-up/send-otp`) — resets on every page navigation |
+| 2026-06-20 | Email-verification + password-reset tokens now stored SHA-256 hashed at rest (raw token only in emailed link) |
+| 2026-06-22 | E2EE patch — `UnlockRecordsModal` re-derives in-memory keys after page reload via `GET /api/profile/keys`; no re-login required |

@@ -429,16 +429,16 @@ The welcome email previously showed the hardcoded password `Intellident2026#`. A
 ## Email Verification on Sign-Up
 - `POST /api/auth/sign-up` → validates input, generates E2EE key material client-side, stores everything in `EmailVerification` record (24h expiry). **Does NOT create a `User` yet.**
 - A verification email with a tokenized link is sent via Gmail/nodemailer.
-- `POST /api/auth/verify` → validates token, creates `User` + profile record (`Patient` / `Dentist` / `Receptionist`). Token is single-use.
-- Model: `EmailVerification` (token, email, firstName, lastName, hashed password, wrappedKey, keySalt, clinicId, expiresAt)
+- `POST /api/auth/verify` → hashes the incoming raw token (SHA-256) and looks up the matching `EmailVerification`, creates `User` + profile record (`Patient` / `Dentist` / `Receptionist`). Token is single-use.
+- Model: `EmailVerification` (token, email, firstName, lastName, hashed password, wrappedKey, keySalt, clinicId, expiresAt). The `token` column stores the **SHA-256 hash** of the verification token — the raw token exists only in the emailed link, never at rest.
 
 ## Password Reset & Change
-- **Forgot password:** `POST /api/auth/forgot-password` → generates one-time token (10 min expiry), sends reset link via email. Always returns 200 to prevent email enumeration.
-- **Reset password:** `POST /api/auth/reset-password` → validates token, enforces policy, checks history, generates fresh E2EE key material (old encrypted data is intentionally inaccessible), sends confirmation email.
+- **Forgot password:** `POST /api/auth/forgot-password` → generates one-time token (10 min expiry), stores only its SHA-256 hash, and sends the raw token in the reset link via email. Always returns 200 to prevent email enumeration.
+- **Reset password:** `POST /api/auth/reset-password` → hashes the incoming raw token (SHA-256) to look up the `PasswordResetToken`, enforces policy, checks history, generates fresh E2EE key material (old encrypted data is intentionally inaccessible), sends confirmation email.
 - **Change password (authenticated):** `POST /api/auth/change-password` → requires current password verification, re-wraps existing master key with new KEK (encrypted data stays accessible), sends confirmation email. Always clears `mustChangePassword: false`. For ADMIN accounts when the clinic has `passwordExpiryEnabled`, sets `passwordExpiresAt = now + 90 days`.
 - **Forced change redirect:** if `mustChangePassword` is `true` or `passwordExpired` is `true` on sign-in response, `SignInPage.jsx` redirects to `/change-password?reason=first-login` or `/change-password?reason=expired` respectively. After a successful forced change, the user is redirected to `/sign-in?changed=true` and must re-authenticate.
 - **Password history:** last 3 hashed passwords stored in `User.passwordHistory String[]`; new password cannot match any of them.
-- Reset token model: `PasswordResetToken` (token, email, expiresAt, usedAt)
+- Reset token model: `PasswordResetToken` (token, email, expiresAt, usedAt). The `token` column stores the **SHA-256 hash** of the reset token — the raw token exists only in the emailed link, never at rest.
 - Email notifications sent via `sendPasswordResetEmail` and `sendPasswordChangedEmail` in `lib/email.js`
 
 ## RBAC Roles

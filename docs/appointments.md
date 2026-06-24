@@ -89,13 +89,14 @@ PATIENT role only.
 ## Workflow
 1. Patient opens My Schedules — sees Upcoming / Past tabs with appointment cards
 2. Clicks "Book Appointment" → `BookAppointmentModal` progressive disclosure:
-   - Step 1: Service cards (visual selection)
+   - Step 1: Service cards (visual selection) — supports selecting **multiple services**; `POST /api/schedules` accepts `serviceIds` (array; `serviceId` still accepted for a single service)
    - Step 2: Dentist preference chips (Any Available or specific)
    - Step 3: `DatePicker` — disables non-working days and closure dates
    - Step 4: Time slot chips grouped by Morning / Afternoon — fetched from `/api/schedules/slots`
    - Step 5: Optional notes
    - Step 6: Booking summary card before submit
 3. Submit → `POST /api/schedules` → creates appointment as `PENDING` → all staff notified (in-app + email)
+   - **Reservation fee:** if the clinic has `paymongoEnabled` + `reservationFeeEnabled` and `reservationFeeAmount > 0`, a `RESERVATION` `Billing` record + PayMongo checkout session are created and the patient is redirected to pay the deposit. Best-effort — the booking always succeeds even if billing/checkout fails (`checkoutUrl` returned when available).
 4. Patient can cancel own PENDING appointments from the card
 5. Receptionist then sees it in their Appointments page (pending badge triggers)
 
@@ -104,12 +105,12 @@ PATIENT role only.
 | Route | Method | Role | Purpose |
 |---|---|---|---|
 | `/api/schedules` | GET | PATIENT | Own appointments; param: `tab=upcoming\|past` |
-| `/api/schedules` | POST | PATIENT | Book appointment (always creates as PENDING); fires staff notifications |
+| `/api/schedules` | POST | PATIENT | Book appointment (always creates as PENDING); accepts `serviceIds` array (multi-service); creates RESERVATION billing + PayMongo checkout when reservation fee enabled; fires staff notifications |
 | `/api/schedules/[id]` | PATCH | PATIENT | Cancel own PENDING appointment only |
-| `/api/schedules/slots` | GET | PATIENT | Available 30-min time slots for a date/service/dentist |
+| `/api/schedules/slots` | GET | PATIENT | Available 30-min time slots; params: `date`, `serviceIds` (or legacy `serviceId`), `dentistId` (or `ANY`) |
 
 ## Slot Generation (`/api/schedules/slots`)
-- Params: `date`, `serviceId`, `dentistId` (or `ANY`)
+- Params: `date`, `serviceIds` (or legacy `serviceId`), `dentistId` (or `ANY`) — multi-service bookings sum the service durations
 - Validates working day + not closure
 - Generates slots every 30 min: `openTime` to `closeTime - serviceDuration`
 - Filters past slots if date = today (30-min buffer from now)
