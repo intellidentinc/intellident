@@ -85,12 +85,14 @@ export async function POST(request) {
     // password is verified (see below) so account status cannot be probed without
     // valid credentials.
 
-    // Check if account is currently locked
+    // Check if account is currently locked. Return the SAME generic response (body + 401)
+    // as a wrong password so a locked account is indistinguishable from an unknown email or
+    // a bad password — a distinct message/status (e.g. 423) would confirm the account exists
+    // and is locked, leaking enumeration info. Lockout is still enforced: the request fails.
     if (user.lockedUntil && user.lockedUntil > new Date()) {
-      const remainingMinutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
       return NextResponse.json(
-        { error: `Account locked. Try again in ${remainingMinutes} minute(s).` },
-        { status: 423 }
+        { error: INVALID_CREDENTIALS },
+        { status: 401 }
       );
     }
 

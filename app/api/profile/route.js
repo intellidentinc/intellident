@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, setSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
+import { getRequestMeta, logAudit } from '@/lib/audit'
 
 export async function GET() {
   const session = await getSession()
@@ -37,6 +38,9 @@ export async function PATCH(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Capture request meta before the body is consumed by parseJsonBody.
+  const { ip, userAgent } = getRequestMeta(request)
+
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   const firstName     = str(parsed.body.firstName, 100)
@@ -71,6 +75,18 @@ export async function PATCH(request) {
       gender: gender || null
     },
     select: { firstName: true, lastName: true, email: true }
+  })
+
+  // Audit the PII mutation (name/email/phone/address/DOB/gender) for compliance + forensics.
+  logAudit({
+    userId: session.userId,
+    clinicId: session.clinicId,
+    action: 'UPDATE',
+    entity: 'User',
+    entityId: session.userId,
+    ipAddress: ip,
+    userAgent,
+    metadata: { updatedFields: ['firstName', 'middleInitial', 'lastName', 'email', 'phone', 'address', 'dateOfBirth', 'gender'] },
   })
 
   // Refresh session with updated name/email

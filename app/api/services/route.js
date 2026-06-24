@@ -54,6 +54,18 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Price must be a non-negative number' }, { status: 400 })
   }
 
+  // Validate that every supplied dentist belongs to the caller's clinic before linking,
+  // so an admin cannot attach a dentist from another clinic (cross-tenant IDOR).
+  if (dentistIds?.length) {
+    const valid = await prisma.dentist.findMany({
+      where: { id: { in: dentistIds }, clinicId: caller.clinicId, isDeleted: false },
+      select: { id: true },
+    })
+    if (valid.length !== dentistIds.length) {
+      return NextResponse.json({ error: 'One or more dentists not found in this clinic' }, { status: 400 })
+    }
+  }
+
   const service = await prisma.service.create({
     data: {
       clinicId: caller.clinicId,

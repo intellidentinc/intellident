@@ -58,13 +58,40 @@ export async function POST(request) {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     const newHistory = [user.password, ...user.passwordHistory].slice(0, 3);
 
+    // Recompute password expiry per the clinic policy — mirrors change-password so a reset
+    // sets a fresh expiry (or clears a stale one) instead of leaving an old/expired value
+    // that would immediately bounce the user to /change-password?reason=expired.
+    let clinic = null;
+    if (user.clinicId) {
+      clinic = await prisma.clinic.findUnique({
+        where: { id: user.clinicId },
+        select: { passwordExpiryEnabled: true, passwordExpiryDays: true, passwordExpiryRoles: true },
+      });
+    }
+    const expiryEligible =
+      clinic?.passwordExpiryEnabled === true &&
+      Array.isArray(clinic.passwordExpiryRoles) &&
+      clinic.passwordExpiryRoles.includes(user.role);
+    const expiryDays = clinic?.passwordExpiryDays ?? 90;
+
     await prisma.$transaction([
       prisma.user.update({
         where: { id: user.id },
         // A reset mints a fresh master key, so the old envelope keypair (its private key
         // was encrypted under the now-lost master key) is unrecoverable. Clear it; a fresh
         // keypair is provisioned on next login and record access auto-heals via reshare.
-        data: { password: hashedPassword, passwordHistory: newHistory, wrappedKey, keySalt, publicKey: null, encryptedPrivateKey: null, privateKeyIv: null },
+        data: {
+          password: hashedPassword,
+          passwordHistory: newHistory,
+          wrappedKey,
+          keySalt,
+          publicKey: null,
+          encryptedPrivateKey: null,
+          privateKeyIv: null,
+          passwordExpiresAt: expiryEligible
+            ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+            : null,
+        },
       }),
       prisma.passwordResetToken.update({
         where: { id: resetToken.id },

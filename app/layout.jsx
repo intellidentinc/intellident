@@ -4,6 +4,12 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
+// The per-request CSP nonce (set in middleware.js) can only be stamped onto a page's
+// scripts when that page is server-rendered per request. Force dynamic rendering app-wide
+// so no page is statically prerendered without a nonce — otherwise its inline scripts would
+// be blocked by the nonce-based script-src. This app is already almost entirely dynamic.
+export const dynamic = 'force-dynamic';
+
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const inter = Inter({

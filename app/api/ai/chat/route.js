@@ -5,6 +5,7 @@ import { chatWithTools } from '@/lib/ai'
 import { buildSystemPrompt } from '@/lib/ai-prompt'
 import { getToolsForRole, buildExecutor } from '@/lib/ai-tools'
 import { parseJsonBody } from '@/lib/validate'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 async function getCaller(session) {
   const user = await getAuthContext()
@@ -36,6 +37,12 @@ export async function POST(request) {
 
   const caller = await getCaller(session)
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  // Per-user rate limit to bound OpenAI spend / DoS from a single authenticated account.
+  const { allowed } = await checkRateLimit(`ai-chat:${session.userId}`, 30, 5 * 60)
+  if (!allowed) {
+    return NextResponse.json({ error: 'Too many messages. Please wait a moment and try again.' }, { status: 429 })
+  }
 
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
