@@ -34,8 +34,8 @@ export async function GET(request, { params }) {
         },
       },
       closures: {
-        where: { date: { gte: new Date() } },
-        select: { id: true, date: true, reason: true },
+        // Export ALL closures (not just future) so the backup is round-trippable.
+        select: { id: true, clinicId: true, date: true, reason: true, createdAt: true },
         orderBy: { date: 'asc' },
       },
     },
@@ -43,29 +43,58 @@ export async function GET(request, { params }) {
 
   if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
 
-  const [patients, services, appointments, billing, auditLogs] = await Promise.all([
-    prisma.patient.findMany({
-      where: { clinicId, isDeleted: false },
+  const [users, dentists, receptionists, patients, services, appointments, billing, auditLogs] = await Promise.all([
+    // User rows carry only NON-PLAINTEXT credential material: bcrypt hashes and
+    // password-derived-encrypted key blobs. Restoring them verbatim preserves login + E2EE.
+    prisma.user.findMany({
+      where: { clinicId },
       select: {
-        id: true, patientCode: true, firstName: true, lastName: true,
+        id: true, email: true, firstName: true, middleInitial: true, lastName: true,
+        phone: true, address: true, dateOfBirth: true, gender: true,
+        password: true, passwordHistory: true, role: true,
+        wrappedKey: true, keySalt: true, publicKey: true, encryptedPrivateKey: true, privateKeyIv: true,
+        clinicId: true, isActive: true, username: true, mustChangePassword: true,
+        passwordExpiresAt: true, termsAcceptedAt: true, isDeleted: true, createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.dentist.findMany({
+      where: { clinicId },
+      select: { id: true, userId: true, clinicId: true, specialty: true, isDeleted: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.receptionist.findMany({
+      where: { clinicId },
+      select: { id: true, userId: true, clinicId: true, isDeleted: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.patient.findMany({
+      where: { clinicId },
+      select: {
+        id: true, userId: true, clinicId: true, patientCode: true, firstName: true, lastName: true,
         gender: true, dateOfBirth: true, phone: true, address: true,
-        consentStatus: true, consentGivenAt: true, createdAt: true,
+        consentStatus: true, consentGivenAt: true, isDeleted: true, createdAt: true,
       },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.service.findMany({
-      where: { clinicId, isDeleted: false },
+      where: { clinicId },
       select: {
-        id: true, name: true, description: true, duration: true,
-        bufferTime: true, price: true, createdAt: true,
+        id: true, clinicId: true, name: true, description: true, duration: true,
+        bufferTime: true, price: true, isDeleted: true, createdAt: true,
       },
       orderBy: { name: 'asc' },
     }),
     prisma.appointment.findMany({
-      where: { clinicId, isDeleted: false },
+      where: { clinicId },
       select: {
-        id: true, appointmentCode: true, scheduledAt: true, endsAt: true,
-        status: true, notes: true, createdAt: true,
+        id: true, clinicId: true, patientId: true, serviceId: true, dentistId: true,
+        appointmentCode: true, scheduledAt: true, endsAt: true,
+        status: true, notes: true, aiSuggested: true,
+        reminderSent24h: true, reminderSent2h: true, isDeleted: true,
+        createdAt: true, updatedAt: true,
+        services: { select: { serviceId: true, order: true } },
+        // Denormalized display fields — human readability only, ignored on restore.
         patient: { select: { patientCode: true, firstName: true, lastName: true } },
         dentist: { select: { user: { select: { firstName: true, lastName: true, email: true } } } },
         service: { select: { name: true } },
@@ -73,15 +102,20 @@ export async function GET(request, { params }) {
       orderBy: { scheduledAt: 'desc' },
     }),
     prisma.billing.findMany({
-      where: { clinicId, isDeleted: false },
+      where: { clinicId },
       select: {
-        id: true, receiptNumber: true, amount: true, amountPaid: true,
-        balance: true, status: true, createdAt: true,
+        id: true, clinicId: true, patientId: true, appointmentId: true, billingType: true,
+        receiptNumber: true, amount: true, amountPaid: true, balance: true, status: true,
+        isDeleted: true, createdAt: true,
+        payments: {
+          select: {
+            id: true, billingId: true, amount: true, method: true, notes: true, type: true,
+            paymongoCheckoutSessionId: true, paymongoPaymentId: true, paidAt: true, isDeleted: true, createdAt: true,
+          },
+        },
+        // Denormalized display fields — human readability only, ignored on restore.
         patient: { select: { patientCode: true, firstName: true, lastName: true } },
         appointment: { select: { appointmentCode: true } },
-        payments: {
-          select: { id: true, amount: true, method: true, paidAt: true, paymongoPaymentId: true },
-        },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -102,10 +136,14 @@ export async function GET(request, { params }) {
       generatedAt: new Date().toISOString(),
       generatedBy: session.userId,
       clinicId,
-      schemaVersion: '1.0',
-      note: 'Patient dental records (PatientRecord) are excluded — they are end-to-end encrypted and the server never holds plaintext.',
+      schemaVersion: '2.0',
+      containsCredentials: true,
+      note: 'Round-trippable snapshot for in-app restore. Contains User rows with bcrypt password hashes and password-derived-encrypted key blobs (NO plaintext). Patient dental records (PatientRecord) and their RecordKey envelopes are excluded — they are end-to-end encrypted and the server never holds plaintext. Audit logs are exported for reference but are NOT re-imported on restore.',
     },
     clinic,
+    users,
+    dentists,
+    receptionists,
     patients,
     services,
     appointments,
@@ -124,6 +162,9 @@ export async function GET(request, { params }) {
     userAgent,
     metadata: {
       counts: {
+        users: users.length,
+        dentists: dentists.length,
+        receptionists: receptionists.length,
         patients: patients.length,
         services: services.length,
         appointments: appointments.length,

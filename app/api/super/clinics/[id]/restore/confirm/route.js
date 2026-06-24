@@ -4,11 +4,13 @@ import bcrypt from 'bcrypt'
 import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
-import { parseJsonBody, str } from '@/lib/validate'
+import { str } from '@/lib/validate'
 import { logAudit, getRequestMeta } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rateLimit'
+import { importClinicBackup } from '@/lib/restore'
 
 const MAX_OTP_ATTEMPTS = 5
+const MAX_BACKUP_BYTES = 25 * 1024 * 1024 // 25 MB
 
 async function requireSuperAdmin() {
   const session = await getSession()
@@ -33,12 +35,18 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const parsed = await parseJsonBody(request)
-  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  let form
+  try {
+    form = await request.formData()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
-  const { pendingToken, code, reason, snapshotDescription } = parsed.body
-  const sanitizedReason = str(reason, 500)
-  const sanitizedSnapshot = str(snapshotDescription, 200)
+  const pendingToken = form.get('pendingToken')
+  const code = form.get('code')
+  const sanitizedReason = str(form.get('reason'), 500)
+  const sanitizedSnapshot = str(form.get('snapshotDescription'), 200)
+  const file = form.get('file')
 
   if (!pendingToken || typeof pendingToken !== 'string') {
     return NextResponse.json({ error: 'pendingToken is required' }, { status: 400 })
@@ -49,8 +57,29 @@ export async function POST(request, { params }) {
   if (!sanitizedReason) {
     return NextResponse.json({ error: 'Restore reason is required' }, { status: 400 })
   }
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    return NextResponse.json({ error: 'Backup file is required' }, { status: 400 })
+  }
+  if (file.size > MAX_BACKUP_BYTES) {
+    return NextResponse.json({ error: 'Backup file is too large (max 25 MB)' }, { status: 413 })
+  }
 
   const { id: clinicId } = await params
+
+  // Parse + validate the backup file BEFORE consuming the OTP, so a bad file
+  // doesn't waste the one-time code.
+  let backup
+  try {
+    backup = JSON.parse(await file.text())
+  } catch {
+    return NextResponse.json({ error: 'Backup file is not valid JSON' }, { status: 400 })
+  }
+  if (!backup || typeof backup !== 'object' || !backup._meta) {
+    return NextResponse.json({ error: 'Backup file is missing metadata' }, { status: 400 })
+  }
+  if (backup._meta.clinicId !== clinicId) {
+    return NextResponse.json({ error: 'This backup belongs to a different clinic' }, { status: 400 })
+  }
 
   const clinic = await prisma.clinic.findUnique({
     where: { id: clinicId, isDeleted: false },
@@ -92,6 +121,22 @@ export async function POST(request, { params }) {
 
   // Confirmation token the operator retains as proof of authorization
   const confirmationToken = crypto.randomBytes(16).toString('hex').toUpperCase()
+  const authorizedAt = new Date().toISOString()
+
+  // Perform the actual restore — idempotent upserts, all-or-nothing.
+  let summary
+  try {
+    summary = await prisma.$transaction(
+      (tx) => importClinicBackup(tx, clinicId, backup),
+      { timeout: 120_000 }
+    )
+  } catch (err) {
+    console.error('Restore import failed:', err)
+    return NextResponse.json(
+      { error: err?.message || 'Restore failed while importing the backup.' },
+      { status: 400 }
+    )
+  }
 
   logAudit({
     userId: session.userId,
@@ -105,17 +150,19 @@ export async function POST(request, { params }) {
       reason: sanitizedReason,
       snapshotDescription: sanitizedSnapshot || null,
       confirmationToken,
-      authorizedAt: new Date().toISOString(),
+      authorizedAt,
+      schemaVersion: backup._meta.schemaVersion ?? null,
+      summary,
     },
   })
 
   return NextResponse.json({
     ok: true,
     confirmationToken,
-    authorizedAt: new Date().toISOString(),
+    authorizedAt,
     clinicId,
     clinicName: clinic.name,
-    message:
-      'Restore authorization recorded. Proceed with the Neon point-in-time restore using this confirmation token as your audit reference.',
+    summary,
+    message: 'Restore completed. Data has been recovered from the backup file.',
   })
 }
