@@ -53,3 +53,8 @@ scripts/4.py
 docs/pentest-test-matrix.md
 docs/pentest-commands.md
 docs/pentest-priority-test-matrix.md
+evil.php
+.gitignore
+docs/IntelliDent_Pentest_Command_Cheatsheet.md
+docs/IntelliDent_Pentest_Tutorial_Corrected.md
+docs/pentest-priority-test-procedure.md
