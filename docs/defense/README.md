@@ -8,7 +8,8 @@ A self-contained study kit for the final defense. Each numbered file explains on
 2. Split the deep-dive files among the four of you, but **everyone must be able to recite the three killer talking points** (below) and the zero-trust chain.
 3. For each file: read it top to bottom once, then **open the cited code files** and trace one real flow yourself (e.g., set a breakpoint mindset: "the request lands here, then calls this, then writes that"). You retain what you traced, not what you read.
 4. Drill the Q&A sections out loud, in pairs — one asks, one answers without looking.
-5. Night before: re-read only the "story in plain English" blocks, the objectives map, and the cheat sheet below.
+5. Keep [10-definition-of-terms.md](./10-definition-of-terms.md) open while studying — any term you can't define in one sentence, look it up there and re-say it in your own words. Panels probe definitions first; a fumbled "what is E2EE?" undermines everything after it.
+6. Night before: re-read only the "story in plain English" blocks, the objectives map, the definitions of your assigned modules' terms, and the cheat sheet below.
 
 ## Study files
 
@@ -23,8 +24,12 @@ A self-contained study kit for the final defense. Each numbered file explains on
 | 07 | [07-billing-payments.md](./07-billing-payments.md) | Billing, PayMongo, webhook, receipts | "How does payment work?" |
 | 08 | [08-security-compliance.md](./08-security-compliance.md) | Audit, breach scan, retention, DSAR, backup, RA 10173 / ISO / NIST | "How are you compliant?" |
 | 09 | [09-supporting-modules.md](./09-supporting-modules.md) | Users, services, patients, settings, onboarding, reports | "How does an admin manage the clinic?" |
+| 10 | [10-definition-of-terms.md](./10-definition-of-terms.md) | Plain-English definitions of every technical term | "What does E2EE/IDOR/DSAR actually mean?" |
+| 11 | [11-objectives-accomplishment.md](./11-objectives-accomplishment.md) | Objective-by-objective proof of accomplishment | "Did you meet Objective N? Show me." |
 
 ## The six specific objectives → where each is proven
+
+> Full objective-by-objective write-up with evidence: [11-objectives-accomplishment.md](./11-objectives-accomplishment.md). The table below is the quick version.
 
 | Objective | What to say (one sentence) | Study file(s) |
 |---|---|---|
