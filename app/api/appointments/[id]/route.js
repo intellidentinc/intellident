@@ -25,6 +25,7 @@ import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { generateReceiptNumber, applyReservationCredit } from '@/lib/billing'
+import { assertNoConflict, BookingConflictError } from '@/lib/appointment-conflicts'
 
 async function getCaller() {
   const session = await getSession()
@@ -103,44 +104,53 @@ export async function PATCH(request, { params }) {
     if (!dentist) {
       return NextResponse.json({ error: 'Selected dentist not found in this clinic' }, { status: 400 })
     }
-    const overlap = await prisma.appointment.findFirst({
-      where: {
-        clinicId: caller.clinicId,
-        dentistId,
-        isDeleted: false,
-        id: { not: id },
-        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        OR: [{ scheduledAt: { lt: appointment.endsAt }, endsAt: { gt: appointment.scheduledAt } }],
-      },
-    })
-    if (overlap) {
-      return NextResponse.json({ error: 'This dentist has a conflicting appointment at that time' }, { status: 409 })
-    }
     assignDentistId = dentist.id
   }
 
-  const updated = await prisma.appointment.update({
-    where: { id },
-    data: {
-      status,
-      ...(assignDentistId ? { dentistId: assignDentistId } : {}),
-      statusHistory: {
-        create: {
+  // When assigning a dentist, the conflict check and the update run in one
+  // transaction under an advisory lock so a concurrent confirm can't assign
+  // the same dentist to an overlapping appointment (see lib/appointment-conflicts.js).
+  let updated
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      if (assignDentistId) {
+        await assertNoConflict(tx, {
+          clinicId: caller.clinicId,
+          dentistId: assignDentistId,
+          scheduledAt: appointment.scheduledAt,
+          endsAt: appointment.endsAt,
+          excludeId: id,
+        })
+      }
+      return tx.appointment.update({
+        where: { id },
+        data: {
           status,
-          changedById: caller.id,
-          note: note || null,
+          ...(assignDentistId ? { dentistId: assignDentistId } : {}),
+          statusHistory: {
+            create: {
+              status,
+              changedById: caller.id,
+              note: note || null,
+            },
+          },
         },
-      },
-    },
-    include: {
-      patient: {
         include: {
-          user: { select: { id: true, email: true, firstName: true } },
+          patient: {
+            include: {
+              user: { select: { id: true, email: true, firstName: true } },
+            },
+          },
+          service: { select: { name: true } },
         },
-      },
-      service: { select: { name: true } },
-    },
-  })
+      })
+    })
+  } catch (err) {
+    if (err instanceof BookingConflictError) {
+      return NextResponse.json({ error: err.message }, { status: 409 })
+    }
+    throw err
+  }
 
   const patientUser   = updated.patient?.user
   const serviceName   = updated.service?.name ?? 'your appointment'

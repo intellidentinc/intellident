@@ -24,6 +24,7 @@ import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { generateAppointmentCode, getPatientAppointments } from '@/lib/appointments'
+import { assertNoConflict, BookingConflictError } from '@/lib/appointment-conflicts'
 import { generateReceiptNumber } from '@/lib/billing'
 import { createCheckoutSession } from '@/lib/paymongo'
 import dayjs from 'dayjs'
@@ -159,50 +160,49 @@ export async function POST(request) {
     }
   }
 
-  // Conflict check for specific dentist
-  if (dentistId) {
-    const overlap = await prisma.appointment.findFirst({
-      where: {
-        dentistId,
-        isDeleted: false,
-        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        scheduledAt: { lt: endsAt },
-        endsAt: { gt: apptDate },
-      },
-    })
-    if (overlap) {
-      return NextResponse.json({ error: 'That dentist has a conflicting appointment at this time' }, { status: 409 })
-    }
-  }
-
   // Generate appointmentCode
   const clinicCode = clinic?.code ?? 'CLN'
   const datePart = `${apptDate.getFullYear()}/${String(apptDate.getMonth() + 1).padStart(2, '0')}/${String(apptDate.getDate()).padStart(2, '0')}`
 
-  // Code generation + create run in one transaction so the advisory lock in
-  // generateAppointmentCode holds until the row is written (no duplicate codes).
-  const appointment = await prisma.$transaction(async (tx) => {
-    const appointmentCode = await generateAppointmentCode(caller.clinicId, clinicCode, datePart, tx)
-    return tx.appointment.create({
-      data: {
-        clinicId:   caller.clinicId,
-        patientId:  caller.patientId,
-        serviceId:  service.id,
-        dentistId:  dentistId || null,
+  // Conflict check + code generation + create run in one transaction so the
+  // advisory locks hold until the row is written (no double-booking, no
+  // duplicate codes). assertNoConflict must run first — consistent lock order.
+  let appointment
+  try {
+    appointment = await prisma.$transaction(async (tx) => {
+      await assertNoConflict(tx, {
+        clinicId: caller.clinicId,
+        dentistId: dentistId || null,
         scheduledAt: apptDate,
         endsAt,
-        status: 'PENDING',
-        notes: notes || null,
-        appointmentCode,
-        services: {
-          create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+      })
+      const appointmentCode = await generateAppointmentCode(caller.clinicId, clinicCode, datePart, tx)
+      return tx.appointment.create({
+        data: {
+          clinicId:   caller.clinicId,
+          patientId:  caller.patientId,
+          serviceId:  service.id,
+          dentistId:  dentistId || null,
+          scheduledAt: apptDate,
+          endsAt,
+          status: 'PENDING',
+          notes: notes || null,
+          appointmentCode,
+          services: {
+            create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+          },
+          statusHistory: {
+            create: { status: 'PENDING', changedById: caller.userId },
+          },
         },
-        statusHistory: {
-          create: { status: 'PENDING', changedById: caller.userId },
-        },
-      },
+      })
     })
-  })
+  } catch (err) {
+    if (err instanceof BookingConflictError) {
+      return NextResponse.json({ error: err.message }, { status: 409 })
+    }
+    throw err
+  }
   const { appointmentCode } = appointment
 
   // Notify all receptionists and admins of the new booking request.

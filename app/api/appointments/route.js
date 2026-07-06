@@ -28,6 +28,7 @@ import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str, pageParams, searchTerm } from '@/lib/validate'
 import { generateAppointmentCode } from '@/lib/appointments'
+import { assertNoConflict, BookingConflictError } from '@/lib/appointment-conflicts'
 
 const VALID_STATUS = ['PENDING', 'CONFIRMED', 'RESCHEDULED', 'CANCELLED', 'COMPLETED', 'NO_SHOW']
 import { generateReceiptNumber } from '@/lib/billing'
@@ -189,63 +190,60 @@ export async function POST(request) {
   const totalDuration = orderedServices.reduce((sum, s) => sum + s.duration + s.bufferTime, 0)
   const endsAt = new Date(apptDate.getTime() + totalDuration * 60 * 1000)
 
-  // Dentist conflict check (only if specific dentist chosen)
-  if (dentistId) {
-    const overlap = await prisma.appointment.findFirst({
-      where: {
-        clinicId: caller.clinicId,
-        dentistId,
-        isDeleted: false,
-        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        OR: [
-          { scheduledAt: { lt: endsAt }, endsAt: { gt: apptDate } },
-        ],
-      },
-    })
-    if (overlap) {
-      return NextResponse.json({ error: 'This dentist has a conflicting appointment at that time' }, { status: 409 })
-    }
-  }
-
   // Generate appointmentCode: APT-{CLINICCODE}-{YYYY/MM/DD}-{####} (date in Manila timezone)
   const clinicCode = clinic?.code ?? 'CLN'
   const datePart = apptManila.format('YYYY/MM/DD')
 
   const initialStatus = ['PENDING', 'CONFIRMED'].includes(status) ? status : 'PENDING'
 
-  // Code generation + create run in one transaction so the advisory lock in
-  // generateAppointmentCode holds until the row is written (no duplicate codes).
-  const appointment = await prisma.$transaction(async (tx) => {
-    const appointmentCode = await generateAppointmentCode(caller.clinicId, clinicCode, datePart, tx)
-    return tx.appointment.create({
-      data: {
+  // Conflict check + code generation + create run in one transaction so the
+  // advisory locks hold until the row is written (no double-booking, no
+  // duplicate codes). assertNoConflict must run first — consistent lock order.
+  let appointment
+  try {
+    appointment = await prisma.$transaction(async (tx) => {
+      await assertNoConflict(tx, {
         clinicId: caller.clinicId,
-        patientId,
-        serviceId: service.id,
         dentistId: dentistId || null,
         scheduledAt: apptDate,
         endsAt,
-        status: initialStatus,
-        notes: notes || null,
-        appointmentCode,
-        services: {
-          create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
-        },
-        statusHistory: {
-          create: {
-            status: initialStatus,
-            changedById: caller.id,
+      })
+      const appointmentCode = await generateAppointmentCode(caller.clinicId, clinicCode, datePart, tx)
+      return tx.appointment.create({
+        data: {
+          clinicId: caller.clinicId,
+          patientId,
+          serviceId: service.id,
+          dentistId: dentistId || null,
+          scheduledAt: apptDate,
+          endsAt,
+          status: initialStatus,
+          notes: notes || null,
+          appointmentCode,
+          services: {
+            create: orderedServices.map((s, i) => ({ serviceId: s.id, order: i })),
+          },
+          statusHistory: {
+            create: {
+              status: initialStatus,
+              changedById: caller.id,
+            },
           },
         },
-      },
-      include: {
-        patient: {
-          include: { user: { select: { id: true, email: true, firstName: true } } },
+        include: {
+          patient: {
+            include: { user: { select: { id: true, email: true, firstName: true } } },
+          },
+          service: { select: { name: true } },
         },
-        service: { select: { name: true } },
-      },
+      })
     })
-  })
+  } catch (err) {
+    if (err instanceof BookingConflictError) {
+      return NextResponse.json({ error: err.message }, { status: 409 })
+    }
+    throw err
+  }
   const { appointmentCode } = appointment
 
   // If created directly as CONFIRMED, notify the patient
