@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -44,7 +45,45 @@ function BulletList({ items }) {
   );
 }
 
-export default function TermsDialog({ open, onClose, initialTab = 'terms' }) {
+export default function TermsDialog({ open, onClose, initialTab = 'terms', onViewedToEnd, onUnderstand }) {
+  const contentRef = useRef(null);
+  const [viewedToEnd, setViewedToEnd] = useState(false);
+  const requiresScroll = typeof onViewedToEnd === 'function';
+
+  const markViewedToEnd = useCallback(() => {
+    if (viewedToEnd) return;
+    setViewedToEnd(true);
+    onViewedToEnd?.();
+  }, [onViewedToEnd, viewedToEnd]);
+
+  const handleScroll = useCallback(() => {
+    if (!requiresScroll || viewedToEnd) return;
+    const el = contentRef.current;
+    if (!el) return;
+
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 8) {
+      markViewedToEnd();
+    }
+  }, [markViewedToEnd, requiresScroll, viewedToEnd]);
+
+  useEffect(() => {
+    if (!open || !requiresScroll || viewedToEnd) return undefined;
+
+    const frame = requestAnimationFrame(() => {
+      const el = contentRef.current;
+      if (el && el.scrollHeight <= el.clientHeight + 8) {
+        markViewedToEnd();
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [markViewedToEnd, open, requiresScroll, viewedToEnd]);
+
+  const handleUnderstand = useCallback(() => {
+    onUnderstand?.();
+    onClose();
+  }, [onClose, onUnderstand]);
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper"
       PaperProps={{ sx: { borderRadius: 2 } }}>
@@ -62,7 +101,7 @@ export default function TermsDialog({ open, onClose, initialTab = 'terms' }) {
 
       <Divider />
 
-      <DialogContent sx={{ py: 3, px: { xs: 3, sm: 4 } }}>
+      <DialogContent ref={contentRef} onScroll={handleScroll} sx={{ py: 3, px: { xs: 3, sm: 4 } }}>
 
         {/* Intro */}
         <Para>
@@ -105,7 +144,7 @@ export default function TermsDialog({ open, onClose, initialTab = 'terms' }) {
           ]} />
           <Para>
             You must not use the system to misrepresent your identity, tamper with records, interfere with
-            other users' data, or conduct any unauthorized security testing against the platform.
+            data belonging to other users, or conduct any unauthorized security testing against the platform.
           </Para>
         </Section>
 
@@ -122,7 +161,7 @@ export default function TermsDialog({ open, onClose, initialTab = 'terms' }) {
           <Para>
             IntelliDent reserves the right to suspend or deactivate your account if you violate these Terms,
             provide false information during registration, or engage in conduct that is harmful to other users
-            or the system. You may request account deletion at any time by contacting your clinic's
+            or the system. You may request account deletion at any time by contacting your clinic&apos;s
             administrator.
           </Para>
         </Section>
@@ -303,8 +342,14 @@ export default function TermsDialog({ open, onClose, initialTab = 'terms' }) {
 
       <Divider />
 
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose} variant="contained" disableElevation
+      <DialogActions sx={{ px: 3, py: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+        {requiresScroll && !viewedToEnd && (
+          <Typography variant="caption" color="text.secondary">
+            Scroll to the bottom to continue.
+          </Typography>
+        )}
+        <Button onClick={handleUnderstand} variant="contained" disableElevation
+          disabled={requiresScroll && !viewedToEnd}
           sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}>
           I Understand
         </Button>

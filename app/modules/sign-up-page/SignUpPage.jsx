@@ -77,6 +77,8 @@ export default function SignUpPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
+  const [termsViewedToEnd, setTermsViewedToEnd] = useState(false);
+  const [termsAcknowledged, setTermsAcknowledged] = useState(false);
   const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const { showToast } = useToast();
   const passwordStrength = getPasswordStrength(password);
@@ -482,6 +484,7 @@ export default function SignUpPage() {
                 control={
                   <Checkbox
                     checked={termsAccepted}
+                    disabled={!termsAcknowledged}
                     onChange={(e) => { setTermsAccepted(e.target.checked); setTermsAcceptedAt(e.target.checked ? new Date().toISOString() : null); }}
                     size="small"
                     sx={{ color: 'text.secondary', '&.Mui-checked': { color: 'primary.main' }, mt: '-2px', alignSelf: 'flex-start' }}
@@ -506,9 +509,26 @@ export default function SignUpPage() {
                 }
                 sx={{ alignItems: 'flex-start', mx: 0 }}
               />
+              {!termsAcknowledged && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, ml: 4 }}>
+                  {termsViewedToEnd
+                    ? 'Click I Understand to accept the Terms of Service & Data Privacy Policy.'
+                    : 'Please open and scroll through the Terms of Service & Data Privacy Policy before accepting.'}
+                </Typography>
+              )}
             </Box>
 
-            <TermsDialog open={termsDialogOpen} onClose={() => setTermsDialogOpen(false)} />
+            <TermsDialog
+              open={termsDialogOpen}
+              onClose={() => setTermsDialogOpen(false)}
+              onViewedToEnd={() => setTermsViewedToEnd(true)}
+              onUnderstand={() => {
+                setTermsViewedToEnd(true);
+                setTermsAcknowledged(true);
+                setTermsAccepted(true);
+                setTermsAcceptedAt(new Date().toISOString());
+              }}
+            />
 
             <Button type="submit" variant="contained" size="large" loading={loading} fullWidth disabled={!termsAccepted}>
               Create Account

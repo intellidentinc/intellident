@@ -146,6 +146,8 @@ export default function ClinicApplicationForm() {
   const [errors,          setErrors]          = useState({})
   const [termsAccepted,   setTermsAccepted]   = useState(false)
   const [termsAcceptedAt, setTermsAcceptedAt] = useState(null)
+  const [termsViewedToEnd, setTermsViewedToEnd] = useState(false)
+  const [termsAcknowledged, setTermsAcknowledged] = useState(false)
   const [termsDialogOpen, setTermsDialogOpen] = useState(false)
 
   function validateStep1() {
@@ -625,6 +627,7 @@ export default function ClinicApplicationForm() {
               control={
                 <Checkbox
                   checked={termsAccepted}
+                  disabled={!termsAcknowledged}
                   onChange={(e) => { setTermsAccepted(e.target.checked); setTermsAcceptedAt(e.target.checked ? new Date().toISOString() : null); if (e.target.checked) setErrors(prev => ({ ...prev, terms: undefined })) }}
                   size="small"
                   sx={{ color: errors.terms ? 'error.main' : 'text.secondary', '&.Mui-checked': { color: 'primary.main' }, mt: '-2px', alignSelf: 'flex-start' }}
@@ -649,6 +652,13 @@ export default function ClinicApplicationForm() {
               }
               sx={{ alignItems: 'flex-start', mx: 0 }}
             />
+            {!termsAcknowledged && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, ml: 4 }}>
+                {termsViewedToEnd
+                  ? 'Click I Understand to accept the Terms of Service & Data Privacy Policy.'
+                  : 'Please open and scroll through the Terms of Service & Data Privacy Policy before accepting.'}
+              </Typography>
+            )}
             {errors.terms && (
               <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, ml: 4 }}>
                 {errors.terms}
@@ -656,7 +666,18 @@ export default function ClinicApplicationForm() {
             )}
           </Box>
 
-          <TermsDialog open={termsDialogOpen} onClose={() => setTermsDialogOpen(false)} />
+          <TermsDialog
+            open={termsDialogOpen}
+            onClose={() => setTermsDialogOpen(false)}
+            onViewedToEnd={() => setTermsViewedToEnd(true)}
+            onUnderstand={() => {
+              setTermsViewedToEnd(true)
+              setTermsAcknowledged(true)
+              setTermsAccepted(true)
+              setTermsAcceptedAt(new Date().toISOString())
+              setErrors(prev => ({ ...prev, terms: undefined }))
+            }}
+          />
 
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 2 }}>
             <Button
