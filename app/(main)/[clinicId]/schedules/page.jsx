@@ -13,15 +13,23 @@ export default async function Page() {
   const session = await getSession()
 
   let initialRows = []
+  let clinicContact = null
   if (session) {
-    const patient = await prisma.patient.findUnique({
-      where: { userId: session.userId },
-      select: { id: true, user: { select: { role: true } } },
-    })
+    const [patient, clinic] = await Promise.all([
+      prisma.patient.findUnique({
+        where: { userId: session.userId },
+        select: { id: true, user: { select: { role: true } } },
+      }),
+      prisma.clinic.findUnique({
+        where: { id: session.clinicId },
+        select: { phone: true, landline: true, email: true },
+      }),
+    ])
+    clinicContact = clinic
     if (patient && patient.user?.role === ROLES.PATIENT) {
       initialRows = await getPatientAppointments(patient.id, 'upcoming')
     }
   }
 
-  return <SchedulesPage initialRows={initialRows} initialTab='upcoming' />
+  return <SchedulesPage initialRows={initialRows} initialTab='upcoming' clinicContact={clinicContact} />
 }

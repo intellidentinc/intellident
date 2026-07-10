@@ -19,13 +19,15 @@ import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
+import Dialog from '@mui/material/Dialog'
+import Divider from '@mui/material/Divider'
 import AddIcon from '@mui/icons-material/Add'
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 import { SidebarInset } from '@/components/ui/sidebar'
 import Button from '@/components/commons/Button'
 import PageHeader from '@/components/commons/PageHeader'
 import { useToast } from '@/app/providers/ToastProvider'
-import { CalendarDays, Clock, User2, Stethoscope } from 'lucide-react'
+import { CalendarDays, Clock, Mail, PhoneCall, User2, Stethoscope } from 'lucide-react'
 import dynamic from 'next/dynamic'
 const BookAppointmentModal = dynamic(() => import('./BookAppointmentModal'))
 const CancelScheduleModal = dynamic(() => import('./CancelScheduleModal'))
@@ -44,7 +46,93 @@ const TABS = [
   { key: 'past',     label: 'Past' },
 ]
 
-export default function SchedulesPage({ initialRows = null, initialTab = 'upcoming' }) {
+function getContactValue(value) {
+  return value?.trim() || null
+}
+
+function hasRebookContact(clinicContact) {
+  return Boolean(
+    getContactValue(clinicContact?.phone) ||
+    getContactValue(clinicContact?.landline) ||
+    getContactValue(clinicContact?.email)
+  )
+}
+
+function formatAppointmentDateTime(appointment) {
+  return new Date(appointment.scheduledAt).toLocaleString('en-PH', {
+    month: 'long', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  })
+}
+
+
+function ContactRow({ icon, label, value }) {
+  if (!value) return null
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2, px: 2, py: 1.25 }}>
+      <Box sx={{ width: 30, height: 30, borderRadius: 1.5, bgcolor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant='caption' color='text.secondary' fontWeight={600}>
+          {label}
+        </Typography>
+        <Typography variant='body2' color='text.primary' fontWeight={600} sx={{ overflowWrap: 'anywhere' }}>
+          {value}
+        </Typography>
+      </Box>
+    </Box>
+  )
+}
+
+function RebookContactModal({ open, appointment, clinicContact, onClose }) {
+  if (!appointment) return null
+
+  const phone = getContactValue(clinicContact?.phone)
+  const landline = getContactValue(clinicContact?.landline)
+  const email = getContactValue(clinicContact?.email)
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth='xs'
+      fullWidth
+      slotProps={{ paper: { sx: { borderRadius: 3, boxShadow: '0 8px 32px rgba(0,0,0,0.10)' } } }}
+    >
+      <Box sx={{ px: 3, pt: 3, pb: 2, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+        <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, mt: 0.25 }}>
+          <PhoneCall size={20} color='#2563eb' />
+        </Box>
+        <Box>
+          <Typography variant='subtitle1' fontWeight={600} color='text.primary'>
+            Rebook Contact Details
+          </Typography>
+          <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
+            {appointment.service?.name ?? 'Appointment'} on {formatAppointmentDateTime(appointment)}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Divider />
+
+      <Box sx={{ px: 3, py: 2.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+        <ContactRow icon={<PhoneCall size={15} />} label='Phone' value={phone} />
+        <ContactRow icon={<PhoneCall size={15} />} label='Landline' value={landline} />
+        <ContactRow icon={<Mail size={15} />} label='Email' value={email} />
+      </Box>
+
+      <Divider />
+
+      <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button variant='outlined' onClick={onClose}>Close</Button>
+      </Box>
+    </Dialog>
+  )
+}
+
+export default function SchedulesPage({ initialRows = null, initialTab = 'upcoming', clinicContact = null }) {
   const { showToast } = useToast()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -54,6 +142,7 @@ export default function SchedulesPage({ initialRows = null, initialTab = 'upcomi
   const [loading, setLoading] = useState(false)
   const [bookOpen, setBookOpen] = useState(false)
   const [cancelTarget, setCancelTarget] = useState(null)
+  const [rebookTarget, setRebookTarget] = useState(null)
   const didAutoOpen = useRef(false)
   // When the server provided the initial tab's rows, skip the first client fetch.
   const skipNextFetch = useRef(initialRows != null)
@@ -177,6 +266,8 @@ export default function SchedulesPage({ initialRows = null, initialTab = 'upcomi
               <AppointmentCard
                 key={appt.id}
                 appointment={appt}
+                clinicContact={clinicContact}
+                onRebook={() => setRebookTarget(appt)}
                 onCancel={() => setCancelTarget(appt)}
               />
             ))}
@@ -196,13 +287,21 @@ export default function SchedulesPage({ initialRows = null, initialTab = 'upcomi
         onClose={() => setCancelTarget(null)}
         onSuccess={() => { setCancelTarget(null); fetchAppointments() }}
       />
+
+      <RebookContactModal
+        open={!!rebookTarget}
+        appointment={rebookTarget}
+        clinicContact={clinicContact}
+        onClose={() => setRebookTarget(null)}
+      />
     </SidebarInset>
   )
 }
 
-function AppointmentCard({ appointment, onCancel }) {
+function AppointmentCard({ appointment, clinicContact, onRebook, onCancel }) {
   const chip = STATUS_CHIP[appointment.status] ?? { bg: '#f1f5f9', color: '#475569', label: appointment.status }
   const isCancellable = appointment.status === 'PENDING' || appointment.status === 'CONFIRMED'
+  const canRebook = isCancellable && hasRebookContact(clinicContact)
 
   return (
     <Box
@@ -264,27 +363,46 @@ function AppointmentCard({ appointment, onCancel }) {
         </Typography>
       </Box>
 
-      {/* Footer: code + cancel */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+      {/* Footer: code + actions */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
         <Typography variant='caption' color='text.disabled' sx={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>
           {appointment.appointmentCode ?? '—'}
         </Typography>
         {isCancellable && (
-          <Button
-            variant='outlined'
-            size='small'
-            startIcon={<CancelOutlinedIcon sx={{ fontSize: 16 }} />}
-            onClick={onCancel}
-            sx={{
-              color: '#b91c1c',
-              borderColor: '#fecaca',
-              '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
-              textTransform: 'none',
-              fontWeight: 600,
-            }}
-          >
-            Cancel
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap', ml: 'auto' }}>
+            {canRebook && (
+              <Button
+                variant='outlined'
+                size='small'
+                onClick={onRebook}
+                startIcon={<PhoneCall size={16} />}
+                sx={{
+                  color: '#2563eb',
+                  borderColor: '#bfdbfe',
+                  '&:hover': { borderColor: '#2563eb', bgcolor: '#eff6ff' },
+                  textTransform: 'none',
+                  fontWeight: 600,
+                }}
+              >
+                Call to rebook
+              </Button>
+            )}
+            <Button
+              variant='outlined'
+              size='small'
+              startIcon={<CancelOutlinedIcon sx={{ fontSize: 16 }} />}
+              onClick={onCancel}
+              sx={{
+                color: '#b91c1c',
+                borderColor: '#fecaca',
+                '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Cancel
+            </Button>
+          </Box>
         )}
       </Box>
     </Box>
