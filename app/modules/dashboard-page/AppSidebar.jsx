@@ -32,6 +32,7 @@ import {
   BarChart2,
   LifeBuoy,
   FileSearch,
+  Send,
 } from 'lucide-react'
 import SignOutButton from './SignOutButton'
 import ExitSuperAdminButton from './ExitSuperAdminButton'
@@ -83,6 +84,7 @@ function buildNavGroups(role, clinicId) {
           label: 'Clinical',
           items: [
             { label: 'Patient Records', icon: FileText, href: p('/records') },
+            { label: 'Approved Transfers', icon: Send, href: p('/record-transfers') },
           ],
         },
         {

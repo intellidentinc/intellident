@@ -20,7 +20,7 @@ async function getPatientCaller() {
   if (!session) return null
   const user = await getAuthContext()
   if (!user || user.role !== ROLES.PATIENT) return null
-  const patient = await prisma.patient.findUnique({ where: { userId: session.userId } })
+  const patient = await prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: user.clinicId } } })
   if (!patient || patient.clinicId !== user.clinicId) return null
   return { role: user.role, clinicId: user.clinicId, patientId: patient.id, userId: session.userId, isStaff: false }
 }

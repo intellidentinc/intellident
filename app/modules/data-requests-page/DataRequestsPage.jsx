@@ -25,6 +25,7 @@ const TYPE_OPTIONS = [
   { value: 'ACCESS', label: 'Access' },
   { value: 'CORRECTION', label: 'Correction' },
   { value: 'DELETION', label: 'Deletion' },
+  { value: 'TRANSFER', label: 'Transfer' },
 ]
 
 const STATUS_OPTIONS = [
@@ -39,6 +40,7 @@ const TYPE_CHIP = {
   ACCESS:     { label: 'Access',     sx: { bgcolor: '#ede9fe', color: '#6d28d9' } },
   CORRECTION: { label: 'Correction', sx: { bgcolor: '#fef3c7', color: '#92400e' } },
   DELETION:   { label: 'Deletion',   sx: { bgcolor: '#fee2e2', color: '#b91c1c' } },
+  TRANSFER:   { label: 'Transfer',   sx: { bgcolor: '#dbeafe', color: '#1d4ed8' } },
 }
 
 const STATUS_CHIP = {
@@ -67,10 +69,26 @@ export default function DataRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [view, setView] = useState('source')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
+      if (view === 'incoming') {
+        const res = await fetch('/api/record-transfers?view=incoming')
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        const rows = (data.transfers ?? []).map((transfer) => ({
+          ...transfer.dataRequest,
+          id: transfer.dataRequest.id,
+          type: 'TRANSFER',
+          transfer,
+          user: { firstName: transfer.sourcePatient.firstName, lastName: transfer.sourcePatient.lastName, email: '' },
+        }))
+        setRequests(rows)
+        setTotal(rows.length)
+        return
+      }
       const params = new URLSearchParams({ page, pageSize })
       if (typeFilter) params.set('type', typeFilter)
       if (statusFilter) params.set('status', statusFilter)
@@ -84,7 +102,7 @@ export default function DataRequestsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, typeFilter, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, pageSize, typeFilter, statusFilter, view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -109,11 +127,14 @@ export default function DataRequestsPage() {
           Data Rights Requests
         </Typography>
         <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-          Review and respond to patient data access, correction, and deletion requests.
+          Review patient data-rights requests and controlled record transfers.
         </Typography>
 
         {/* Filters */}
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+          <Button variant={view === 'source' ? 'contained' : 'outlined'} onClick={() => { setView('source'); setPage(0) }}>Source requests</Button>
+          <Button variant={view === 'incoming' ? 'contained' : 'outlined'} onClick={() => { setView('incoming'); setPage(0) }}>Incoming transfers</Button>
+          {view === 'source' && <>
           <TextField
             select
             size='small'
@@ -124,6 +145,7 @@ export default function DataRequestsPage() {
           >
             {TYPE_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
           </TextField>
+          </>}
           <TextField
             select
             size='small'
@@ -220,6 +242,7 @@ export default function DataRequestsPage() {
         dataRequest={selected}
         onClose={() => setModalOpen(false)}
         onSuccess={load}
+        transferMode={view}
       />
     </SidebarInset>
   )

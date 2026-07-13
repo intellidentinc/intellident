@@ -32,6 +32,9 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const transfer = await prisma.recordTransfer.findUnique({ where: { dataRequestId: id }, select: { id: true } })
+  if (transfer) return NextResponse.json({ error: 'Use the transfer approval actions for record transfer requests' }, { status: 400 })
+
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
 

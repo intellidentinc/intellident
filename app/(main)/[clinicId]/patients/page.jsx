@@ -12,7 +12,7 @@ export default async function Page({ params }) {
   const session = await getSession()
   const clinicId = session?.clinicId ?? routeClinicId
 
-  const where = { clinicId, isDeleted: false, role: ROLES.PATIENT }
+  const where = { isDeleted: false, role: ROLES.PATIENT, patients: { some: { clinicId, isDeleted: false } } }
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
@@ -23,7 +23,7 @@ export default async function Page({ params }) {
         phone: true,
         email: true,
         createdAt: true,
-        patient: { select: { patientCode: true } },
+        patients: { where: { clinicId, isDeleted: false }, select: { patientCode: true } },
       },
       orderBy: { firstName: 'asc' },
       skip: 0,
@@ -39,7 +39,7 @@ export default async function Page({ params }) {
     phone: u.phone,
     email: u.email,
     createdAt: u.createdAt,
-    patientCode: u.patient?.patientCode ?? null,
+    patientCode: u.patients[0]?.patientCode ?? null,
   }))
 
   return <PatientsPage initialRows={JSON.parse(JSON.stringify(rows))} initialTotal={total} />

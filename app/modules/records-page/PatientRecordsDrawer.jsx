@@ -14,10 +14,9 @@ import Skeleton from '@mui/material/Skeleton'
 import Tooltip from '@mui/material/Tooltip'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
-import { X, Plus, Pencil, Trash2, FileText, Paperclip, CalendarX, CopyPlus } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, FileText, Paperclip, CalendarX } from 'lucide-react'
 import Button from '@/components/commons/Button'
 import RecordFormModal from './RecordFormModal'
-import TransferRecordModal from './TransferRecordModal'
 import OtpStepUpModal from '@/components/commons/OtpStepUpModal'
 import UnlockRecordsModal from '@/components/commons/UnlockRecordsModal'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -60,7 +59,6 @@ export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, 
 
   // Delete confirm state
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [transferTarget, setTransferTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
   const loadRecords = useCallback(() => {
@@ -264,11 +262,6 @@ export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, 
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-                            <Tooltip title='Copy to another clinic'>
-                              <IconButton size='small' onClick={() => setTransferTarget(rec)}>
-                                <CopyPlus size={14} />
-                              </IconButton>
-                            </Tooltip>
                             <Tooltip title='Edit'>
                               <IconButton size='small' onClick={() => openEdit(rec)}>
                                 <Pencil size={14} />
@@ -353,17 +346,6 @@ export default function PatientRecordsDrawer({ patient, onClose, stepUpGranted, 
           record={editTarget}
           onClose={() => setFormOpen(false)}
           onSuccess={loadRecords}
-          onRequiresUnlock={() => setUnlockOpen(true)}
-        />
-      )}
-
-      {/* Transfer Copy Modal */}
-      {patient && (
-        <TransferRecordModal
-          open={!!transferTarget}
-          patient={patient}
-          record={transferTarget}
-          onClose={() => setTransferTarget(null)}
           onRequiresUnlock={() => setUnlockOpen(true)}
         />
       )}

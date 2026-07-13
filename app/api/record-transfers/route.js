@@ -1,116 +1,74 @@
-﻿import { NextResponse } from 'next/server'
-import { getSession, isStepUpValid } from '@/lib/auth'
+import { NextResponse } from 'next/server'
+import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ROLES, isAdmin } from '@/lib/roles'
+import { parseJsonBody, str } from '@/lib/validate'
+import { checkRateLimit } from '@/lib/rateLimit'
 import { getRequestMeta, logAudit } from '@/lib/audit'
-import { parseJsonBody, secret, str } from '@/lib/validate'
-import { validateWraps } from '@/lib/records-access'
-import { getSourceRecord, getTransferDentist, resolveTransferTarget } from './helpers'
+import { notifyStaff } from '@/lib/notifications'
+import { getTransferDentist, transferInclude } from './helpers'
+
+export async function GET(request) {
+  const session = await getSession()
+  const caller = await getAuthContext()
+  if (!session || !caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { searchParams } = new URL(request.url)
+  const view = searchParams.get('view') || 'source'
+  let where
+
+  if (caller.role === ROLES.PATIENT) {
+    where = { dataRequest: { userId: session.userId } }
+  } else if (isAdmin(caller.role)) {
+    const clinicId = caller.role === ROLES.SUPERADMIN ? session.clinicId : caller.clinicId
+    where = view === 'incoming' ? { destinationClinicId: clinicId } : { sourceClinicId: clinicId }
+  } else if (caller.role === ROLES.DENTIST) {
+    const dentist = await getTransferDentist(session)
+    if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    where = { sourceClinicId: dentist.clinicId, sourceDentistId: dentist.dentistId }
+  } else {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const transfers = await prisma.recordTransfer.findMany({ where, include: transferInclude, orderBy: { createdAt: 'desc' }, take: 100 })
+  return NextResponse.json({ transfers })
+}
 
 export async function POST(request) {
   const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isStepUpValid(session)) return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
-
-  const dentist = await getTransferDentist(session)
-  if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
+  const caller = await getAuthContext()
+  if (!session || !caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (caller.role !== ROLES.PATIENT) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { ip, userAgent } = getRequestMeta(request)
+  const rl = await checkRateLimit(`${ip ?? 'unknown'}:record-transfer`, 5, 3600)
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   const parsed = await parseJsonBody(request)
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
+  const destinationClinicId = str(parsed.body.destinationClinicId, 80)
+  const description = str(parsed.body.description, 2000)
+  const recordIds = [...new Set(Array.isArray(parsed.body.recordIds) ? parsed.body.recordIds.map((id) => str(id, 80)).filter(Boolean) : [])]
+  if (!destinationClinicId || recordIds.length === 0 || recordIds.length > 50) return NextResponse.json({ error: 'Choose a destination clinic and at least one record' }, { status: 400 })
+  if (destinationClinicId === caller.clinicId) return NextResponse.json({ error: 'Choose a different destination clinic' }, { status: 400 })
 
-  const sourcePatientId = str(parsed.body.sourcePatientId, 80)
-  const sourceRecordId = str(parsed.body.sourceRecordId, 80)
-  const targetClinicId = str(parsed.body.targetClinicId, 80)
-  const targetPatientIdentifier = str(parsed.body.targetPatientIdentifier, 254)
-  const title = str(parsed.body.title, 200)
-  const encryptedData = secret(parsed.body.encryptedData, 65536)
-  const dataIv = secret(parsed.body.dataIv, 256)
-  const contentHash = secret(parsed.body.contentHash, 256)
-  const patientConsentConfirmed = parsed.body.patientConsentConfirmed === true
-  const sourceClinicApprovalConfirmed = parsed.body.sourceClinicApprovalConfirmed === true
+  const [sourcePatient, destinationClinic] = await Promise.all([
+    prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: caller.clinicId } }, select: { id: true } }),
+    prisma.clinic.findFirst({ where: { id: destinationClinicId, isDeleted: false, isEnabled: true }, select: { id: true, name: true } }),
+  ])
+  if (!sourcePatient) return NextResponse.json({ error: 'Source patient enrollment not found' }, { status: 404 })
+  if (!destinationClinic) return NextResponse.json({ error: 'Destination clinic not found' }, { status: 404 })
+  const records = await prisma.patientRecord.findMany({ where: { id: { in: recordIds }, patientId: sourcePatient.id, clinicId: caller.clinicId, isDeleted: false, status: 'ACTIVE' }, select: { id: true } })
+  if (records.length !== recordIds.length) return NextResponse.json({ error: 'One or more selected records are unavailable' }, { status: 400 })
 
-  if (!sourcePatientId || !sourceRecordId || !targetClinicId || !targetPatientIdentifier || !title) {
-    return NextResponse.json({ error: 'Missing transfer details' }, { status: 400 })
-  }
-  if (!patientConsentConfirmed || !sourceClinicApprovalConfirmed) {
-    return NextResponse.json({ error: 'Patient consent and source clinic approval are required' }, { status: 400 })
-  }
-  if (!encryptedData || !dataIv || !contentHash) {
-    return NextResponse.json({ error: 'Encrypted transferred record payload is required' }, { status: 400 })
-  }
-
-  const sourceRecord = await getSourceRecord({ dentist, sourcePatientId, sourceRecordId })
-  if (!sourceRecord) return NextResponse.json({ error: 'Source record not found' }, { status: 404 })
-
-  const target = await resolveTransferTarget({
-    sourceClinicId: dentist.clinicId,
-    targetClinicId,
-    targetPatientIdentifier,
-  })
-  if (target.error) return NextResponse.json({ error: target.error }, { status: target.status })
-
-  const recipientIds = new Set(target.recipients.map((r) => r.userId))
-  const validation = validateWraps({ keys: parsed.body.keys, recipientIds })
-  if (!validation.ok) return NextResponse.json({ error: `Record key wrapping failed: ${validation.error}` }, { status: 400 })
-
-  const copied = await prisma.$transaction(async (tx) => {
-    const created = await tx.patientRecord.create({
+  const created = await prisma.$transaction(async (tx) => {
+    const dataRequest = await tx.dataRequest.create({ data: { userId: session.userId, clinicId: caller.clinicId, type: 'TRANSFER', description: description || null } })
+    return tx.recordTransfer.create({
       data: {
-        patientId: target.targetPatient.id,
-        clinicId: target.targetClinic.id,
-        title,
-        encryptedData,
-        dataIv,
-        contentHash,
-        status: 'ACTIVE',
+        dataRequestId: dataRequest.id, sourceClinicId: caller.clinicId, destinationClinicId,
+        sourcePatientId: sourcePatient.id, items: { create: recordIds.map((sourceRecordId) => ({ sourceRecordId })) },
       },
-      select: { id: true, title: true, status: true, createdAt: true, updatedAt: true },
+      include: transferInclude,
     })
-
-    await tx.recordKey.createMany({
-      data: validation.rows.map((w) => ({ recordId: created.id, userId: w.userId, wrappedKey: w.wrappedKey })),
-    })
-
-    return created
   })
-
-  logAudit({
-    userId: session.userId,
-    clinicId: dentist.clinicId,
-    action: 'EXPORT',
-    entity: 'PatientRecord',
-    entityId: sourceRecord.id,
-    ipAddress: ip,
-    userAgent,
-    metadata: {
-      transferCopy: true,
-      targetClinicId: target.targetClinic.id,
-      targetPatientId: target.targetPatient.id,
-      copiedRecordId: copied.id,
-      patientConsentConfirmed,
-      sourceClinicApprovalConfirmed,
-    },
-  })
-
-  logAudit({
-    userId: session.userId,
-    clinicId: target.targetClinic.id,
-    action: 'CREATE',
-    entity: 'PatientRecord',
-    entityId: copied.id,
-    ipAddress: ip,
-    userAgent,
-    metadata: {
-      transferCopy: true,
-      sourceClinicId: dentist.clinicId,
-      sourcePatientId,
-      sourceRecordId,
-      targetPatientId: target.targetPatient.id,
-      copiedByUserId: session.userId,
-      patientConsentConfirmed,
-      sourceClinicApprovalConfirmed,
-    },
-  })
-
-  return NextResponse.json({ record: copied, targetClinic: target.targetClinic, targetPatient: target.targetPatient }, { status: 201 })
+  await notifyStaff({ clinicId: caller.clinicId, type: 'TRANSFER_REQUESTED', title: 'Record transfer requested', body: `A patient requested ${recordIds.length} record${recordIds.length === 1 ? '' : 's'} be transferred to ${destinationClinic.name}.` }).catch(() => {})
+  logAudit({ userId: session.userId, clinicId: caller.clinicId, action: 'CREATE', entity: 'RecordTransfer', entityId: created.id, ipAddress: ip, userAgent, metadata: { destinationClinicId, recordIds } })
+  return NextResponse.json({ transfer: created }, { status: 201 })
 }

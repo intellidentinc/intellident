@@ -31,7 +31,7 @@ export async function GET(request) {
   const safeSortField = validSortFields.includes(sortField) ? sortField : 'firstName'
   const safeSortOrder = sortOrder === 'desc' ? 'desc' : 'asc'
 
-  const where = { clinicId, isDeleted: false, role: ROLES.PATIENT }
+  const where = { isDeleted: false, role: ROLES.PATIENT, patients: { some: { clinicId, isDeleted: false } } }
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
@@ -43,7 +43,7 @@ export async function GET(request) {
         phone: true,
         email: true,
         createdAt: true,
-        patient: { select: { patientCode: true } },
+        patients: { where: { clinicId, isDeleted: false }, select: { patientCode: true } },
       },
       orderBy: { [safeSortField]: safeSortOrder },
       skip: page * pageSize,
@@ -59,7 +59,7 @@ export async function GET(request) {
     phone: u.phone,
     email: u.email,
     createdAt: u.createdAt,
-    patientCode: u.patient?.patientCode ?? null,
+    patientCode: u.patients[0]?.patientCode ?? null,
   }))
 
   return NextResponse.json({ patients: result, total })

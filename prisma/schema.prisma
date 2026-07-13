@@ -60,6 +60,11 @@ enum NotificationType {
   REMINDER_24H
   REMINDER_2H
   PAYMENT_RECEIVED
+  TRANSFER_REQUESTED
+  TRANSFER_APPROVED
+  TRANSFER_ACCEPTED
+  TRANSFER_REJECTED
+  TRANSFER_COMPLETED
 }
 
 enum AuditAction {
@@ -100,6 +105,7 @@ enum DataRequestType {
   ACCESS
   CORRECTION
   DELETION
+  TRANSFER
 }
 
 enum DataRequestStatus {
@@ -107,6 +113,18 @@ enum DataRequestStatus {
   IN_REVIEW
   RESOLVED
   REJECTED
+}
+
+enum RecordTransferStatus {
+  PENDING_SOURCE_REVIEW
+  PENDING_DESTINATION_ACCEPTANCE
+  READY
+  PROCESSING
+  COMPLETED
+  SOURCE_REJECTED
+  DESTINATION_REJECTED
+  FAILED
+  EXPIRED
 }
 
 // ─── Models ───────────────────────────────────────────────────────────────────
@@ -140,19 +158,22 @@ model Clinic {
   updatedAt                  DateTime  @updatedAt
   deletedAt                  DateTime?
 
-  users           User[]
-  receptionists   Receptionist[]
-  dentists        Dentist[]
-  patients        Patient[]
-  services        Service[]
-  appointments    Appointment[]
-  auditLogs       AuditLog[]
-  schedule        ClinicSchedule?
-  closures        ClinicClosure[]
-  schedulePresets SchedulePreset[]
-  chatSessions    ChatSession[]
-  applications    ClinicApplication[]
-  dataRequests    DataRequest[]
+  users                  User[]
+  receptionists          Receptionist[]
+  dentists               Dentist[]
+  patients               Patient[]
+  services               Service[]
+  appointments           Appointment[]
+  auditLogs              AuditLog[]
+  schedule               ClinicSchedule?
+  closures               ClinicClosure[]
+  schedulePresets        SchedulePreset[]
+  chatSessions           ChatSession[]
+  applications           ClinicApplication[]
+  dataRequests           DataRequest[]
+  sourceTransfers        RecordTransfer[]        @relation("SourceTransfers")
+  destinationTransfers   RecordTransfer[]        @relation("DestinationTransfers")
+  patientCareAssignments PatientCareAssignment[]
 
   @@map("clinics")
 }
@@ -297,7 +318,7 @@ model User {
   deletedAt           DateTime?
 
   clinic                   Clinic?                    @relation(fields: [clinicId], references: [id])
-  patient                  Patient?
+  patients                 Patient[]
   receptionist             Receptionist?
   dentist                  Dentist?
   auditLogs                AuditLog[]
@@ -317,7 +338,7 @@ model User {
 
 model Patient {
   id             String        @id @default(cuid())
-  userId         String        @unique
+  userId         String
   clinicId       String
   patientCode    String?       @unique
   firstName      String
@@ -333,13 +354,17 @@ model Patient {
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
 
-  user          User            @relation(fields: [userId], references: [id])
-  clinic        Clinic          @relation(fields: [clinicId], references: [id])
-  appointments  Appointment[]
-  records       PatientRecord[]
-  billings      Billing[]
-  notifications Notification[]
+  user                 User                    @relation(fields: [userId], references: [id])
+  clinic               Clinic                  @relation(fields: [clinicId], references: [id])
+  appointments         Appointment[]
+  records              PatientRecord[]
+  billings             Billing[]
+  notifications        Notification[]
+  sourceTransfers      RecordTransfer[]        @relation("SourceTransferPatient")
+  destinationTransfers RecordTransfer[]        @relation("DestinationTransferPatient")
+  careAssignments      PatientCareAssignment[]
 
+  @@unique([userId, clinicId])
   @@index([clinicId])
   @@map("patients")
 }
@@ -370,10 +395,11 @@ model Dentist {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  user         User          @relation(fields: [userId], references: [id])
-  clinic       Clinic        @relation(fields: [clinicId], references: [id])
-  appointments Appointment[]
-  services     Service[]     @relation("ServiceDentists")
+  user            User                    @relation(fields: [userId], references: [id])
+  clinic          Clinic                  @relation(fields: [clinicId], references: [id])
+  appointments    Appointment[]
+  careAssignments PatientCareAssignment[]
+  services        Service[]               @relation("ServiceDentists")
 
   @@index([clinicId])
   @@map("dentists")
@@ -482,10 +508,12 @@ model PatientRecord {
   updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?
 
-  patient     Patient         @relation(fields: [patientId], references: [id])
-  attachments Attachment[]
-  history     RecordHistory[]
-  recordKeys  RecordKey[]
+  patient                 Patient              @relation(fields: [patientId], references: [id])
+  attachments             Attachment[]
+  history                 RecordHistory[]
+  recordKeys              RecordKey[]
+  sourceTransferItems     RecordTransferItem[] @relation("SourceTransferRecord")
+  destinationTransferItem RecordTransferItem?  @relation("DestinationTransferRecord")
 
   @@index([patientId])
   @@index([clinicId])
@@ -714,12 +742,84 @@ model DataRequest {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  user   User   @relation(fields: [userId], references: [id])
-  clinic Clinic @relation(fields: [clinicId], references: [id])
+  user     User            @relation(fields: [userId], references: [id])
+  clinic   Clinic          @relation(fields: [clinicId], references: [id])
+  transfer RecordTransfer?
 
   @@index([clinicId, status])
   @@index([userId])
   @@map("data_requests")
+}
+
+model RecordTransfer {
+  id                       String               @id @default(cuid())
+  dataRequestId            String               @unique
+  sourceClinicId           String
+  destinationClinicId      String
+  sourcePatientId          String
+  destinationPatientId     String?
+  sourceDentistId          String?
+  destinationDentistId     String?
+  status                   RecordTransferStatus @default(PENDING_SOURCE_REVIEW)
+  sourceDecisionById       String?
+  sourceDecisionAt         DateTime?
+  sourceDecisionNotes      String?
+  destinationDecisionById  String?
+  destinationDecisionAt    DateTime?
+  destinationDecisionNotes String?
+  expiresAt                DateTime?
+  processingStartedAt      DateTime?
+  completedAt              DateTime?
+  failureReason            String?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  dataRequest        DataRequest          @relation(fields: [dataRequestId], references: [id], onDelete: Cascade)
+  sourceClinic       Clinic               @relation("SourceTransfers", fields: [sourceClinicId], references: [id])
+  destinationClinic  Clinic               @relation("DestinationTransfers", fields: [destinationClinicId], references: [id])
+  sourcePatient      Patient              @relation("SourceTransferPatient", fields: [sourcePatientId], references: [id])
+  destinationPatient Patient?             @relation("DestinationTransferPatient", fields: [destinationPatientId], references: [id])
+  items              RecordTransferItem[]
+
+  @@index([sourceClinicId, status])
+  @@index([destinationClinicId, status])
+  @@index([sourceDentistId, status])
+  @@map("record_transfers")
+}
+
+model RecordTransferItem {
+  id                  String   @id @default(cuid())
+  transferId          String
+  sourceRecordId      String
+  destinationRecordId String?  @unique
+  createdAt           DateTime @default(now())
+
+  transfer          RecordTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  sourceRecord      PatientRecord  @relation("SourceTransferRecord", fields: [sourceRecordId], references: [id])
+  destinationRecord PatientRecord? @relation("DestinationTransferRecord", fields: [destinationRecordId], references: [id])
+
+  @@unique([transferId, sourceRecordId])
+  @@index([sourceRecordId])
+  @@map("record_transfer_items")
+}
+
+model PatientCareAssignment {
+  id         String   @id @default(cuid())
+  clinicId   String
+  patientId  String
+  dentistId  String
+  transferId String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+  dentist Dentist @relation(fields: [dentistId], references: [id])
+
+  @@unique([patientId, dentistId])
+  @@index([clinicId, patientId])
+  @@map("patient_care_assignments")
 }
 
 model RecordHistory {

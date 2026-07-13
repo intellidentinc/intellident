@@ -11,6 +11,7 @@ import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
+import Checkbox from '@mui/material/Checkbox'
 import Button from '@/components/commons/Button'
 import { useToast } from '@/app/providers/ToastProvider'
 
@@ -18,6 +19,7 @@ const TYPE_OPTIONS = [
   { value: 'ACCESS',     label: 'Access — Request a copy of your personal data' },
   { value: 'CORRECTION', label: 'Correction — Request correction of inaccurate data' },
   { value: 'DELETION',   label: 'Deletion — Request deletion of your personal data' },
+  { value: 'TRANSFER',   label: 'Transfer — Send selected dental records to another clinic' },
 ]
 
 const STATUS_CHIP = {
@@ -27,7 +29,13 @@ const STATUS_CHIP = {
   REJECTED:  { label: 'Rejected',  sx: { bgcolor: '#fee2e2', color: '#b91c1c' } },
 }
 
-const TYPE_LABELS = { ACCESS: 'Access', CORRECTION: 'Correction', DELETION: 'Deletion' }
+const TYPE_LABELS = { ACCESS: 'Access', CORRECTION: 'Correction', DELETION: 'Deletion', TRANSFER: 'Transfer' }
+
+const TRANSFER_STATUS = {
+  PENDING_SOURCE_REVIEW: 'Awaiting source approval', PENDING_DESTINATION_ACCEPTANCE: 'Awaiting destination acceptance',
+  READY: 'Ready for dentist', PROCESSING: 'Transferring', COMPLETED: 'Completed', SOURCE_REJECTED: 'Denied by source clinic',
+  DESTINATION_REJECTED: 'Declined by destination', FAILED: 'Needs retry', EXPIRED: 'Expired',
+}
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -41,17 +49,27 @@ export default function DataRightsDialog({ open, onClose }) {
   const [submitting, setSubmitting] = useState(false)
   const [pastRequests, setPastRequests] = useState([])
   const [loadingPast, setLoadingPast] = useState(false)
+  const [clinics, setClinics] = useState([])
+  const [records, setRecords] = useState([])
+  const [destinationClinicId, setDestinationClinicId] = useState('')
+  const [recordIds, setRecordIds] = useState([])
 
   useEffect(() => {
     if (!open) return
     setType('')
     setDescription('')
+    setDestinationClinicId('')
+    setRecordIds([])
     setLoadingPast(true)
     fetch('/api/data-requests?own=true&pageSize=10')
       .then((r) => r.json())
       .then((data) => setPastRequests(data.requests ?? []))
       .catch(() => {})
       .finally(() => setLoadingPast(false))
+    fetch('/api/record-transfers/options')
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => { setClinics(data.clinics ?? []); setRecords(data.records ?? []) })
+      .catch(() => { setClinics([]); setRecords([]) })
   }, [open])
 
   async function handleSubmit() {
@@ -59,12 +77,16 @@ export default function DataRightsDialog({ open, onClose }) {
       showToast('Please select a request type', 'warning')
       return
     }
+    if (type === 'TRANSFER' && (!destinationClinicId || recordIds.length === 0)) {
+      showToast('Choose a destination clinic and at least one record', 'warning')
+      return
+    }
     setSubmitting(true)
     try {
-      const res = await fetch('/api/data-requests', {
+      const res = await fetch(type === 'TRANSFER' ? '/api/record-transfers' : '/api/data-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, description }),
+        body: JSON.stringify(type === 'TRANSFER' ? { destinationClinicId, recordIds, description } : { type, description }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -74,6 +96,8 @@ export default function DataRightsDialog({ open, onClose }) {
       showToast('Request submitted successfully', 'success')
       setType('')
       setDescription('')
+      setDestinationClinicId('')
+      setRecordIds([])
       // Refresh past requests
       const refreshed = await fetch('/api/data-requests?own=true&pageSize=10').then((r) => r.json())
       setPastRequests(refreshed.requests ?? [])
@@ -115,6 +139,36 @@ export default function DataRightsDialog({ open, onClose }) {
               ))}
             </TextField>
           </Box>
+
+          {type === 'TRANSFER' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 1.5, border: '1px solid #dbeafe', bgcolor: '#f8fbff', borderRadius: 2 }}>
+              <Box>
+                <Typography variant='caption' fontWeight={500} color='text.secondary' display='block' sx={{ mb: 0.5 }}>
+                  Destination clinic <span style={{ color: '#E05C6A' }}>*</span>
+                </Typography>
+                <TextField select fullWidth size='small' value={destinationClinicId} onChange={(e) => setDestinationClinicId(e.target.value)}>
+                  <MenuItem value=''><em style={{ color: '#94a3b8' }}>Select clinic</em></MenuItem>
+                  {clinics.map((clinic) => <MenuItem key={clinic.id} value={clinic.id}>{clinic.name}{clinic.code ? ` (${clinic.code})` : ''}</MenuItem>)}
+                </TextField>
+              </Box>
+              <Box>
+                <Typography variant='caption' fontWeight={500} color='text.secondary' display='block' sx={{ mb: 0.5 }}>
+                  Records to transfer <span style={{ color: '#E05C6A' }}>*</span>
+                </Typography>
+                {records.length === 0 ? (
+                  <Typography variant='body2' color='text.secondary'>No active records are available.</Typography>
+                ) : records.map((record) => (
+                  <Box key={record.id} component='label' sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', py: 0.5 }}>
+                    <Checkbox size='small' checked={recordIds.includes(record.id)} onChange={(e) => setRecordIds((current) => e.target.checked ? [...current, record.id] : current.filter((id) => id !== record.id))} />
+                    <Box>
+                      <Typography variant='body2'>{record.title}</Typography>
+                      <Typography variant='caption' color='text.secondary'>{formatDate(record.createdAt)}{record._count?.attachments ? ` · ${record._count.attachments} attachment(s)` : ''}</Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
 
           <Box>
             <Typography variant='caption' fontWeight={500} color='text.secondary' display='block' sx={{ mb: 0.5 }}>
@@ -166,6 +220,11 @@ export default function DataRightsDialog({ open, onClose }) {
                       {req.adminNotes && (
                         <Typography variant='caption' color='text.secondary' display='block' sx={{ mt: 0.5, fontStyle: 'italic' }}>
                           Admin: {req.adminNotes}
+                        </Typography>
+                      )}
+                      {req.transfer && (
+                        <Typography variant='caption' color='text.secondary' display='block' sx={{ mt: 0.5 }}>
+                          {TRANSFER_STATUS[req.transfer.status] ?? req.transfer.status} · {req.transfer.destinationClinic?.name} · {req.transfer.items?.length ?? 0} record(s)
                         </Typography>
                       )}
                     </Box>

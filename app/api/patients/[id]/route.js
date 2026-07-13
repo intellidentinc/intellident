@@ -32,10 +32,10 @@ export async function PATCH(request, { params }) {
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, clinicId: true, isDeleted: true, role: true },
+    select: { id: true, isDeleted: true, role: true, patients: { where: { clinicId, isDeleted: false }, select: { id: true } } },
   })
 
-  if (!target || target.isDeleted || target.clinicId !== clinicId || target.role !== ROLES.PATIENT) {
+  if (!target || target.isDeleted || target.role !== ROLES.PATIENT || target.patients.length !== 1) {
     return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
   }
 
@@ -59,8 +59,8 @@ export async function PATCH(request, { params }) {
       },
     })
 
-    await tx.patient.updateMany({
-      where: { userId: id },
+    await tx.patient.update({
+      where: { id: target.patients[0].id },
       data: {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -91,25 +91,24 @@ export async function DELETE(request, { params }) {
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, clinicId: true, isDeleted: true, role: true },
+    select: { id: true, isDeleted: true, role: true, patients: { where: { isDeleted: false }, select: { id: true, clinicId: true } } },
   })
 
-  if (!target || target.isDeleted || target.clinicId !== clinicId || target.role !== ROLES.PATIENT) {
+  const enrollment = target?.patients.find((patient) => patient.clinicId === clinicId)
+  if (!target || target.isDeleted || target.role !== ROLES.PATIENT || !enrollment) {
     return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
   }
 
   const now = new Date()
 
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id },
+    await tx.patient.update({
+      where: { id: enrollment.id },
       data: { isDeleted: true, deletedAt: now },
     })
-
-    await tx.patient.updateMany({
-      where: { userId: id },
-      data: { isDeleted: true, deletedAt: now },
-    })
+    if (target.patients.length === 1) {
+      await tx.user.update({ where: { id }, data: { isDeleted: true, deletedAt: now } })
+    }
   })
 
   logAudit({ userId: session.userId, clinicId, action: 'DELETE', entity: 'Patient', entityId: id, ipAddress: deleteIp, userAgent: deleteUa })

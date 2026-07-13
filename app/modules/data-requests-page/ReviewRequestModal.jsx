@@ -19,7 +19,7 @@ const STATUS_OPTIONS = [
   { value: 'REJECTED',  label: 'Rejected' },
 ]
 
-const TYPE_LABELS = { ACCESS: 'Access', CORRECTION: 'Correction', DELETION: 'Deletion' }
+const TYPE_LABELS = { ACCESS: 'Access', CORRECTION: 'Correction', DELETION: 'Deletion', TRANSFER: 'Record transfer' }
 
 const STATUS_CHIP = {
   PENDING:   { label: 'Pending',    sx: { bgcolor: '#fef9c3', color: '#854d0e' } },
@@ -28,17 +28,27 @@ const STATUS_CHIP = {
   REJECTED:  { label: 'Rejected',   sx: { bgcolor: '#fee2e2', color: '#b91c1c' } },
 }
 
-export default function ReviewRequestModal({ open, dataRequest, onClose, onSuccess }) {
+export default function ReviewRequestModal({ open, dataRequest, onClose, onSuccess, transferMode = 'source' }) {
   const { showToast } = useToast()
   const [status, setStatus] = useState('')
   const [adminNotes, setAdminNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [dentists, setDentists] = useState([])
+  const [dentistId, setDentistId] = useState('')
 
   useEffect(() => {
     if (!open || !dataRequest) return
     setStatus(dataRequest.status ?? 'PENDING')
     setAdminNotes(dataRequest.adminNotes ?? '')
-  }, [open, dataRequest])
+    setDentistId('')
+    if (dataRequest.type === 'TRANSFER' && dataRequest.transfer?.id) {
+      const actionPath = transferMode === 'incoming' ? 'destination-decision' : 'source-decision'
+      fetch(`/api/record-transfers/${dataRequest.transfer.id}/${actionPath}`)
+        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((data) => setDentists(data.dentists ?? []))
+        .catch(() => setDentists([]))
+    }
+  }, [open, dataRequest, transferMode])
 
   async function handleSave() {
     setSaving(true)
@@ -54,6 +64,27 @@ export default function ReviewRequestModal({ open, dataRequest, onClose, onSucce
         return
       }
       showToast('Request updated', 'success')
+      onSuccess()
+      onClose()
+    } catch {
+      showToast('Something went wrong', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleTransferAction(action) {
+    setSaving(true)
+    try {
+      const actionPath = transferMode === 'incoming' ? 'destination-decision' : 'source-decision'
+      const res = await fetch(`/api/record-transfers/${dataRequest.transfer.id}/${actionPath}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, notes: adminNotes, dentistId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(data.error ?? 'Failed to review transfer', 'error'); return }
+      showToast('Transfer request updated', 'success')
       onSuccess()
       onClose()
     } catch {
@@ -110,7 +141,18 @@ export default function ReviewRequestModal({ open, dataRequest, onClose, onSucce
           <Typography variant='body2' color='text.secondary' fontStyle='italic'>No description provided.</Typography>
         )}
 
-        <Box>
+        {dataRequest.type === 'TRANSFER' && (
+          <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#eff6ff', border: '1px solid #dbeafe' }}>
+            <Typography variant='body2' fontWeight={600} sx={{ mb: 0.5 }}>
+              Destination: {dataRequest.transfer?.destinationClinic?.name ?? 'Selected clinic'}
+            </Typography>
+            {(dataRequest.transfer?.items ?? []).map((item) => (
+              <Typography key={item.id ?? item.sourceRecordId} variant='caption' color='text.secondary' display='block'>• {item.sourceRecord?.title}</Typography>
+            ))}
+          </Box>
+        )}
+
+        {dataRequest.type !== 'TRANSFER' && <Box>
           <Typography variant='caption' fontWeight={500} color='text.secondary' display='block' sx={{ mb: 0.5 }}>
             Status
           </Typography>
@@ -126,11 +168,23 @@ export default function ReviewRequestModal({ open, dataRequest, onClose, onSucce
               <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
             ))}
           </TextField>
-        </Box>
+        </Box>}
+
+        {dataRequest.type === 'TRANSFER' && (
+          <Box>
+            <Typography variant='caption' fontWeight={500} color='text.secondary' display='block' sx={{ mb: 0.5 }}>
+              {transferMode === 'incoming' ? 'Receiving dentist' : 'Dentist who will transfer the records'}
+            </Typography>
+            <TextField select fullWidth size='small' value={dentistId} onChange={(e) => setDentistId(e.target.value)} disabled={saving}>
+              <MenuItem value=''><em>Select dentist</em></MenuItem>
+              {dentists.map((dentist) => <MenuItem key={dentist.id} value={dentist.id}>{dentist.user?.firstName} {dentist.user?.lastName}</MenuItem>)}
+            </TextField>
+          </Box>
+        )}
 
         <Box>
           <Typography variant='caption' fontWeight={500} color='text.secondary' display='block' sx={{ mb: 0.5 }}>
-            Admin notes (optional)
+            {dataRequest.type === 'TRANSFER' ? 'Decision notes (required when denying)' : 'Admin notes (optional)'}
           </Typography>
           <TextField
             multiline
@@ -150,7 +204,14 @@ export default function ReviewRequestModal({ open, dataRequest, onClose, onSucce
 
       <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
         <Button variant='outlined' onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button variant='contained' onClick={handleSave} loading={saving}>Save</Button>
+        {dataRequest.type === 'TRANSFER' ? <>
+          <Button variant='outlined' onClick={() => handleTransferAction(transferMode === 'incoming' ? 'REJECT' : 'DENY')} disabled={saving} sx={{ color: 'error.main', borderColor: 'error.main' }}>
+            {transferMode === 'incoming' ? 'Reject' : 'Deny'}
+          </Button>
+          <Button variant='contained' onClick={() => handleTransferAction(transferMode === 'incoming' ? 'ACCEPT' : 'APPROVE')} loading={saving} disabled={!dentistId}>
+            {transferMode === 'incoming' ? 'Accept transfer' : 'Approve transfer'}
+          </Button>
+        </> : <Button variant='contained' onClick={handleSave} loading={saving}>Save</Button>}
       </Box>
     </Dialog>
   )

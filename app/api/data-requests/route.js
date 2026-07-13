@@ -6,7 +6,7 @@ import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { checkRateLimit } from '@/lib/rateLimit'
 
-const VALID_TYPES = ['ACCESS', 'CORRECTION', 'DELETION']
+const VALID_TYPES = ['ACCESS', 'CORRECTION', 'DELETION', 'TRANSFER']
 const VALID_STATUSES = ['PENDING', 'IN_REVIEW', 'RESOLVED', 'REJECTED']
 
 export async function GET(request) {
@@ -33,8 +33,7 @@ export async function GET(request) {
   const statusFilter = searchParams.get('status')
 
   const where = {
-    clinicId,
-    ...(own ? { userId: session.userId } : {}),
+    ...(own ? { userId: session.userId } : { clinicId }),
     ...(typeFilter && VALID_TYPES.includes(typeFilter) ? { type: typeFilter } : {}),
     ...(statusFilter && VALID_STATUSES.includes(statusFilter) ? { status: statusFilter } : {}),
   }
@@ -51,6 +50,12 @@ export async function GET(request) {
         resolvedAt: true,
         createdAt: true,
         updatedAt: true,
+        transfer: {
+          select: {
+            id: true, status: true, sourceDentistId: true, destinationDentistId: true, destinationClinic: { select: { name: true } },
+            items: { select: { id: true, sourceRecordId: true, sourceRecord: { select: { title: true } } } },
+          },
+        },
         user: { select: { firstName: true, lastName: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -85,7 +90,7 @@ export async function POST(request) {
   const { type } = parsed.body
   const description = str(parsed.body.description, 2000)
 
-  if (!type || !VALID_TYPES.includes(type)) {
+  if (!type || !VALID_TYPES.includes(type) || type === 'TRANSFER') {
     return NextResponse.json({ error: 'Invalid request type. Must be ACCESS, CORRECTION, or DELETION.' }, { status: 400 })
   }
 

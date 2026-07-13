@@ -13,7 +13,7 @@ const FMT_SHORT = { month: 'short', day: 'numeric', year: 'numeric' }
 // ─── Patient ──────────────────────────────────────────────────────────────────
 
 async function PatientDashboard({ session }) {
-  const patient = await prisma.patient.findUnique({ where: { userId: session.userId } })
+  const patient = await prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: session.clinicId } } })
   const now = new Date()
 
   const baseWhere = patient ? { patientId: patient.id, clinicId: patient.clinicId, isDeleted: false } : null
