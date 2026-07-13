@@ -53,8 +53,6 @@ export default function ProfilePage() {
   const [username, setUsername] = useState(null)
   const [role, setRole] = useState(null)
   const [dataRightsOpen, setDataRightsOpen] = useState(false)
-  const [enrollments, setEnrollments] = useState([])
-  const [activeClinicId, setActiveClinicId] = useState('')
 
   useEffect(() => {
     fetch('/api/profile')
@@ -79,20 +77,6 @@ export default function ProfilePage() {
       .finally(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    fetch('/api/patient/clinics')
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => { setEnrollments(data.enrollments ?? []); setActiveClinicId(data.activeClinicId ?? '') })
-      .catch(() => {})
-  }, [])
-
-  async function switchClinic(clinicId) {
-    if (!clinicId || clinicId === activeClinicId) return
-    const res = await fetch('/api/patient/clinics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinicId }) })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) { showToast(data.error ?? 'Failed to switch clinic', 'error'); return }
-    window.location.assign(`/${clinicId}/dashboard`)
-  }
 
   function handleChange(field) {
     return (e) => {
@@ -277,14 +261,6 @@ export default function ProfilePage() {
             {role === 4 && (
               <>
                 <Divider sx={{ my: 1 }} />
-                {enrollments.length > 1 && (
-                  <Box>
-                    <Typography variant='subtitle1' fontWeight={600} gutterBottom>Active clinic</Typography>
-                    <TextField select fullWidth size='small' value={activeClinicId} onChange={(e) => switchClinic(e.target.value)} sx={{ maxWidth: 420 }}>
-                      {enrollments.map((enrollment) => <MenuItem key={enrollment.clinic.id} value={enrollment.clinic.id}>{enrollment.clinic.name} ({enrollment.patientCode})</MenuItem>)}
-                    </TextField>
-                  </Box>
-                )}
                 <Box>
                   <Typography variant='subtitle1' fontWeight={600} color='text.primary' gutterBottom>
                     Data Rights

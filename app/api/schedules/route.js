@@ -17,10 +17,9 @@
  *     via notifyStaffBooking — the pending badge in the sidebar increments
  */
 import { NextResponse, after } from 'next/server'
-import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notifyStaffBooking } from '@/lib/notifications'
-import { ROLES } from '@/lib/roles'
+import { getActivePatientContext } from '@/lib/patient-context'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { generateAppointmentCode, getPatientAppointments } from '@/lib/appointments'
@@ -35,31 +34,7 @@ dayjs.extend(utc)
 dayjs.extend(timezone)
 
 async function getPatientCaller() {
-  const session = await getSession()
-  if (!session) return null
-  // Single query (instead of user + patient lookups) — role + tenant come from the
-  // patient's user relation. getSession() already validated the session token.
-  const patient = await prisma.patient.findUnique({
-    where: { userId: session.userId },
-    select: {
-      id: true,
-      clinicId: true,
-      firstName: true,
-      lastName: true,
-      user: { select: { role: true, clinicId: true } },
-    },
-  })
-  if (!patient || patient.user?.role !== ROLES.PATIENT) return null
-  // Tenant check: patient profile must belong to the same clinic as the user account
-  if (patient.clinicId !== patient.user.clinicId) return null
-  return {
-    role: patient.user.role,
-    clinicId: patient.user.clinicId,
-    patientId: patient.id,
-    firstName: patient.firstName,
-    lastName: patient.lastName,
-    userId: session.userId,
-  }
+  return getActivePatientContext()
 }
 
 export async function GET(request) {

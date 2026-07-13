@@ -3,6 +3,7 @@ import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { logAudit, getRequestMeta } from '@/lib/audit'
+import { dentistTreatsPatient } from '@/lib/records-access'
 
 // GET /api/records/[patientId]/visits — appointment visit history for a patient (dentist-scoped)
 export async function GET(request, { params }) {
@@ -28,11 +29,9 @@ export async function GET(request, { params }) {
 
   const { patientId } = await params
 
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, clinicId: dentist.clinicId, isDeleted: false },
-    select: { id: true },
-  })
-  if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
+  if (!(await dentistTreatsPatient({ dentistId: dentist.id, patientId, clinicId: dentist.clinicId }))) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
+  }
 
   const visits = await prisma.appointment.findMany({
     where: { patientId, clinicId: dentist.clinicId, dentistId: dentist.id, isDeleted: false },

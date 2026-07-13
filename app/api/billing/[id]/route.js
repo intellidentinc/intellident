@@ -5,6 +5,7 @@ import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
 import { computeBillingStatus, generateReceiptNumber } from '@/lib/billing'
+import { getActivePatientContext } from '@/lib/patient-context'
 
 async function getStaffCaller() {
   const session = await getSession()
@@ -16,13 +17,8 @@ async function getStaffCaller() {
 }
 
 async function getPatientCaller() {
-  const session = await getSession()
-  if (!session) return null
-  const user = await getAuthContext()
-  if (!user || user.role !== ROLES.PATIENT) return null
-  const patient = await prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: user.clinicId } } })
-  if (!patient || patient.clinicId !== user.clinicId) return null
-  return { role: user.role, clinicId: user.clinicId, patientId: patient.id, userId: session.userId, isStaff: false }
+  const patient = await getActivePatientContext()
+  return patient ? { ...patient, isStaff: false } : null
 }
 
 const BILLING_INCLUDE = {

@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
 import { generateReceiptNumber } from '@/lib/billing'
+import { getActivePatientContext } from '@/lib/patient-context'
 
 async function getPatientCaller() {
-  const session = await getSession()
-  if (!session) return null
-  const user = await getAuthContext()
-  if (!user || user.role !== ROLES.PATIENT) return null
-  const patient = await prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: user.clinicId } } })
-  if (!patient || patient.clinicId !== user.clinicId) return null
-  return { clinicId: user.clinicId, patientId: patient.id }
+  return getActivePatientContext()
 }
 
 export async function GET() {

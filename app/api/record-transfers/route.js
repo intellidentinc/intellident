@@ -7,6 +7,7 @@ import { checkRateLimit } from '@/lib/rateLimit'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { notifyStaff } from '@/lib/notifications'
 import { getTransferDentist, transferInclude } from './helpers'
+import { getActivePatientContext } from '@/lib/patient-context'
 
 export async function GET(request) {
   const session = await getSession()
@@ -38,6 +39,8 @@ export async function POST(request) {
   const caller = await getAuthContext()
   if (!session || !caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (caller.role !== ROLES.PATIENT) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const patientContext = await getActivePatientContext()
+  if (!patientContext) return NextResponse.json({ error: 'Active patient enrollment not found' }, { status: 403 })
   const { ip, userAgent } = getRequestMeta(request)
   const rl = await checkRateLimit(`${ip ?? 'unknown'}:record-transfer`, 5, 3600)
   if (!rl.allowed) return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
@@ -49,13 +52,11 @@ export async function POST(request) {
   if (!destinationClinicId || recordIds.length === 0 || recordIds.length > 50) return NextResponse.json({ error: 'Choose a destination clinic and at least one record' }, { status: 400 })
   if (destinationClinicId === caller.clinicId) return NextResponse.json({ error: 'Choose a different destination clinic' }, { status: 400 })
 
-  const [sourcePatient, destinationClinic] = await Promise.all([
-    prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: caller.clinicId } }, select: { id: true } }),
-    prisma.clinic.findFirst({ where: { id: destinationClinicId, isDeleted: false, isEnabled: true }, select: { id: true, name: true } }),
-  ])
-  if (!sourcePatient) return NextResponse.json({ error: 'Source patient enrollment not found' }, { status: 404 })
+  const destinationClinic = await prisma.clinic.findFirst({
+    where: { id: destinationClinicId, isDeleted: false, isEnabled: true }, select: { id: true, name: true },
+  })
   if (!destinationClinic) return NextResponse.json({ error: 'Destination clinic not found' }, { status: 404 })
-  const records = await prisma.patientRecord.findMany({ where: { id: { in: recordIds }, patientId: sourcePatient.id, clinicId: caller.clinicId, isDeleted: false, status: 'ACTIVE' }, select: { id: true } })
+  const records = await prisma.patientRecord.findMany({ where: { id: { in: recordIds }, patientId: patientContext.patientId, clinicId: patientContext.clinicId, isDeleted: false, status: 'ACTIVE' }, select: { id: true } })
   if (records.length !== recordIds.length) return NextResponse.json({ error: 'One or more selected records are unavailable' }, { status: 400 })
 
   const created = await prisma.$transaction(async (tx) => {
@@ -63,7 +64,7 @@ export async function POST(request) {
     return tx.recordTransfer.create({
       data: {
         dataRequestId: dataRequest.id, sourceClinicId: caller.clinicId, destinationClinicId,
-        sourcePatientId: sourcePatient.id, items: { create: recordIds.map((sourceRecordId) => ({ sourceRecordId })) },
+        sourcePatientId: patientContext.patientId, items: { create: recordIds.map((sourceRecordId) => ({ sourceRecordId })) },
       },
       include: transferInclude,
     })

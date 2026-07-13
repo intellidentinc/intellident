@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { parseJsonBody, str, secret } from '@/lib/validate'
 import { logAudit, getRequestMeta } from '@/lib/audit'
-import { getRecordRecipients, validateWraps } from '@/lib/records-access'
+import { dentistTreatsPatient, getRecordRecipients, validateWraps } from '@/lib/records-access'
 
 async function getDentistForClinic(session) {
   const caller = await getAuthContext()
@@ -33,15 +33,15 @@ export async function GET(request, { params }) {
 
   const { patientId } = await params
 
-  // Ensure patient belongs to same clinic and has appointment with this dentist
+  if (!(await dentistTreatsPatient({ dentistId: dentist.dentistId, patientId, clinicId: dentist.clinicId }))) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
+  }
+
   const patient = await prisma.patient.findFirst({
     where: {
       id: patientId,
       clinicId: dentist.clinicId,
       isDeleted: false,
-      appointments: {
-        some: { dentistId: dentist.dentistId, isDeleted: false, status: { in: ['CONFIRMED', 'COMPLETED'] } }
-      }
     },
     select: { id: true, firstName: true, lastName: true, patientCode: true }
   })
@@ -79,17 +79,9 @@ export async function POST(request, { params }) {
 
   if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
 
-  const patient = await prisma.patient.findFirst({
-    where: {
-      id: patientId,
-      clinicId: dentist.clinicId,
-      isDeleted: false,
-      appointments: {
-        some: { dentistId: dentist.dentistId, isDeleted: false, status: { in: ['CONFIRMED', 'COMPLETED'] } }
-      }
-    }
-  })
-  if (!patient) return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
+  if (!(await dentistTreatsPatient({ dentistId: dentist.dentistId, patientId, clinicId: dentist.clinicId }))) {
+    return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
+  }
 
   // Envelope encryption: when notes are present, the client sends one CEK wrap per
   // authorized reader. The server re-derives the authoritative recipient set and

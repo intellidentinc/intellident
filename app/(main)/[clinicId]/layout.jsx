@@ -46,12 +46,18 @@ export default async function ClinicLayout({ children, params }) {
   // the final value, so a momentarily stale cookie role is harmless.
   const staffSession = [ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPERADMIN].includes(session.role);
 
-  const [user, clinic, rawPendingCount] = await Promise.all([
+  const [user, clinic, rawPendingCount, patientEnrollment] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } }),
     getClinicProfile(clinicId),
     staffSession
       ? prisma.appointment.count({ where: { clinicId, isDeleted: false, status: 'PENDING' } })
       : Promise.resolve(0),
+    session.role === ROLES.PATIENT
+      ? prisma.patient.findUnique({
+          where: { userId_clinicId: { userId: session.userId, clinicId } },
+          select: { isDeleted: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   if (!clinic) {
@@ -59,6 +65,10 @@ export default async function ClinicLayout({ children, params }) {
   }
 
   if (!clinic.isEnabled && !session.superAdmin) {
+    redirect('/sign-in');
+  }
+
+  if (user?.role === ROLES.PATIENT && (!patientEnrollment || patientEnrollment.isDeleted)) {
     redirect('/sign-in');
   }
 

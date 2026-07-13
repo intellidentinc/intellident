@@ -8,13 +8,12 @@
  * Params: serviceIds (comma-separated), dentistId ('ANY' or specific ID), date (YYYY-MM-DD)
  */
 import { NextResponse } from 'next/server'
-import { getAuthContext } from '@/lib/auth'
-import { ROLES } from '@/lib/roles'
+import { getActivePatientContext } from '@/lib/patient-context'
 import { computeAvailableSlots } from '@/lib/slots'
 
 export async function GET(request) {
-  const user = await getAuthContext()
-  if (!user || user.role !== ROLES.PATIENT) {
+  const patient = await getActivePatientContext()
+  if (!patient) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -30,7 +29,7 @@ export async function GET(request) {
   const serviceIds = serviceIdsParam.split(',').filter(Boolean)
 
   const slots = await computeAvailableSlots({
-    clinicId: user.clinicId,
+    clinicId: patient.clinicId,
     serviceIds,
     dentistId,
     dateStr,

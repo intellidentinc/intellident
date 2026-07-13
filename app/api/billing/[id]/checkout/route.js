@@ -3,6 +3,7 @@ import { getSession, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { createCheckoutSession } from '@/lib/paymongo'
+import { getActivePatientContext } from '@/lib/patient-context'
 
 async function getCaller() {
   const session = await getSession()
@@ -16,9 +17,8 @@ async function getCaller() {
   }
 
   if (user.role === ROLES.PATIENT) {
-    const patient = await prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: user.clinicId } } })
-    if (!patient || patient.clinicId !== user.clinicId) return null
-    return { role: user.role, clinicId: user.clinicId, patientId: patient.id, isStaff: false }
+    const patient = await getActivePatientContext()
+    return patient ? { ...patient, isStaff: false } : null
   }
 
   return null

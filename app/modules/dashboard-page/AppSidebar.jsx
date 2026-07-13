@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import SignOutButton from './SignOutButton'
 import ExitSuperAdminButton from './ExitSuperAdminButton'
+import { useToast } from '@/app/providers/ToastProvider'
 
 function getInitials(firstName, lastName) {
   const f = firstName?.[0] ?? ''
@@ -165,6 +166,35 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
   const badges = { pending: pendingCount }
   const pathname = usePathname()
   const { state, setOpen, isMobile } = useSidebar()
+  const { showToast } = useToast()
+  const [patientClinics, setPatientClinics] = useState([])
+  const [switchingClinic, setSwitchingClinic] = useState(false)
+
+  useEffect(() => {
+    if (role !== ROLES.PATIENT) return
+    fetch('/api/patient/clinics')
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setPatientClinics(data.enrollments ?? []))
+      .catch(() => setPatientClinics([]))
+  }, [role])
+
+  async function switchPatientClinic(clinicId) {
+    if (!clinicId || clinicId === session?.clinicId || switchingClinic) return
+    setSwitchingClinic(true)
+    try {
+      const response = await fetch('/api/patient/clinics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicId }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Failed to switch clinic')
+      window.location.assign(`/${clinicId}/dashboard`)
+    } catch (error) {
+      showToast(error.message || 'Failed to switch clinic', 'error')
+      setSwitchingClinic(false)
+    }
+  }
 
   // Hover-to-expand: temporarily open the rail while the pointer is over it,
   // collapsing again on leave — unless the user pinned it open via the trigger.
@@ -207,6 +237,27 @@ export default function AppSidebar({ session, role = ROLES.PATIENT, clinicName, 
 
       {/* Nav */}
       <SidebarContent className='py-3'>
+        {role === ROLES.PATIENT && patientClinics.length > 1 && (
+          <div className='mx-3 mb-3 rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-2 group-data-[collapsible=icon]:mx-1.5 group-data-[collapsible=icon]:p-1.5'>
+            <label htmlFor='patient-clinic-switcher' className='mb-1 block px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden'>
+              Active clinic
+            </label>
+            <select
+              id='patient-clinic-switcher'
+              value={session?.clinicId ?? ''}
+              disabled={switchingClinic}
+              onChange={(event) => switchPatientClinic(event.target.value)}
+              className='h-8 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-[11.5px] font-medium text-sidebar-foreground outline-none focus:border-[#2563eb] disabled:opacity-60 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:text-[0px]'
+              title='Switch active clinic'
+            >
+              {patientClinics.map((enrollment) => (
+                <option key={enrollment.clinic.id} value={enrollment.clinic.id}>
+                  {enrollment.clinic.name} ({enrollment.patientCode})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {navGroups.map((group) => (
           <SidebarGroup key={group.label} className='px-3 mb-1 group-data-[collapsible=icon]:px-1.5'>
             <SidebarGroupLabel className='text-[10px] font-semibold tracking-[0.1em] uppercase text-sidebar-foreground/35 px-2 mb-0.5'>

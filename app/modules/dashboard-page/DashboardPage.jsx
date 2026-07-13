@@ -6,6 +6,7 @@ import PatientDashboardClient from './PatientDashboardClient'
 import ReceptionistDashboardClient from './ReceptionistDashboardClient'
 import AdminDashboardClient from './AdminDashboardClient'
 import DentistDashboardClient from './DentistDashboardClient'
+import { getActivePatientContext } from '@/lib/patient-context'
 
 const FMT_FULL = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }
 const FMT_SHORT = { month: 'short', day: 'numeric', year: 'numeric' }
@@ -13,10 +14,10 @@ const FMT_SHORT = { month: 'short', day: 'numeric', year: 'numeric' }
 // ─── Patient ──────────────────────────────────────────────────────────────────
 
 async function PatientDashboard({ session }) {
-  const patient = await prisma.patient.findUnique({ where: { userId_clinicId: { userId: session.userId, clinicId: session.clinicId } } })
+  const patient = await getActivePatientContext()
   const now = new Date()
 
-  const baseWhere = patient ? { patientId: patient.id, clinicId: patient.clinicId, isDeleted: false } : null
+  const baseWhere = patient ? { patientId: patient.patientId, clinicId: patient.clinicId, isDeleted: false } : null
 
   const [nextApptRaw, stats, upcomingCount] = await Promise.all([
     patient
@@ -186,7 +187,13 @@ async function DentistDashboard({ session }) {
       where: { dentistId: dentist.id, clinicId: clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: now, lt: weekEnd } },
     }) : 0,
     dentist ? prisma.patient.count({
-      where: { clinicId: clinicId, appointments: { some: { dentistId: dentist.id, isDeleted: false, status: { in: ['CONFIRMED', 'COMPLETED'] } } } },
+      where: {
+        clinicId: clinicId,
+        OR: [
+          { appointments: { some: { dentistId: dentist.id, isDeleted: false, status: { in: ['CONFIRMED', 'COMPLETED'] } } } },
+          { careAssignments: { some: { dentistId: dentist.id, clinicId, isActive: true } } },
+        ],
+      },
     }) : 0,
     dentist ? prisma.appointment.findFirst({
       where: { dentistId: dentist.id, clinicId: clinicId, isDeleted: false, status: { in: ['CONFIRMED', 'PENDING'] }, scheduledAt: { gte: now } },

@@ -1,34 +1,21 @@
 import { NextResponse } from 'next/server'
-import { getSession, getAuthContext, isStepUpValid } from '@/lib/auth'
+import { isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ROLES } from '@/lib/roles'
+import { getActivePatientContext } from '@/lib/patient-context'
 import { logAudit, getRequestMeta } from '@/lib/audit'
 
 export async function GET(request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const caller = await getActivePatientContext()
+  if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const user = await getAuthContext()
-
-  if (!user || user.role !== ROLES.PATIENT) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  if (!isStepUpValid(session)) {
+  if (!isStepUpValid(caller.session)) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
-
-  const patient = await prisma.patient.findFirst({
-    where: { userId: session.userId, clinicId: user.clinicId, isDeleted: false },
-    select: { id: true }
-  })
-
-  if (!patient) return NextResponse.json({ error: 'Patient record not found' }, { status: 404 })
 
   // records and visits are independent — fetch in parallel
   const [records, visits] = await Promise.all([
     prisma.patientRecord.findMany({
-      where: { patientId: patient.id, clinicId: user.clinicId, isDeleted: false },
+      where: { patientId: caller.patientId, clinicId: caller.clinicId, isDeleted: false },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -41,8 +28,8 @@ export async function GET(request) {
     // Also fetch completed/confirmed appointments as visit history
     prisma.appointment.findMany({
       where: {
-        patientId: patient.id,
-        clinicId: user.clinicId,
+        patientId: caller.patientId,
+        clinicId: caller.clinicId,
         isDeleted: false,
         status: { in: ['COMPLETED', 'CONFIRMED'] }
       },
@@ -64,6 +51,6 @@ export async function GET(request) {
   ])
 
   const { ip, userAgent } = getRequestMeta(request)
-  logAudit({ userId: session.userId, clinicId: user.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: patient.id, ipAddress: ip, userAgent })
+  logAudit({ userId: caller.userId, clinicId: caller.clinicId, action: 'VIEW', entity: 'PatientRecord', entityId: caller.patientId, ipAddress: ip, userAgent })
   return NextResponse.json({ records, visits })
 }

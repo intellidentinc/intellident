@@ -1,8 +1,7 @@
 import SchedulesPage from '@/app/modules/schedules-page/SchedulesPage'
-import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getPatientAppointments } from '@/lib/appointments'
-import { ROLES } from '@/lib/roles'
+import { getActivePatientContext } from '@/lib/patient-context'
 
 export const metadata = { title: 'My Schedules | IntelliDent' }
 
@@ -10,25 +9,17 @@ export const metadata = { title: 'My Schedules | IntelliDent' }
 // load — no post-hydration round-trip. The [clinicId] layout already guarded the
 // session/clinic; we only need the patientId here.
 export default async function Page() {
-  const session = await getSession()
+  const patient = await getActivePatientContext()
 
   let initialRows = []
   let clinicContact = null
-  if (session) {
-    const [patient, clinic] = await Promise.all([
-      prisma.patient.findUnique({
-        where: { userId: session.userId },
-        select: { id: true, user: { select: { role: true } } },
-      }),
-      prisma.clinic.findUnique({
-        where: { id: session.clinicId },
-        select: { phone: true, landline: true, email: true },
-      }),
-    ])
+  if (patient) {
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: patient.clinicId },
+      select: { phone: true, landline: true, email: true },
+    })
     clinicContact = clinic
-    if (patient && patient.user?.role === ROLES.PATIENT) {
-      initialRows = await getPatientAppointments(patient.id, 'upcoming')
-    }
+    initialRows = await getPatientAppointments(patient.patientId, 'upcoming')
   }
 
   return <SchedulesPage initialRows={initialRows} initialTab='upcoming' clinicContact={clinicContact} />

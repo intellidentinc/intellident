@@ -29,19 +29,26 @@ export async function GET(request) {
     status: { in: ['CONFIRMED', 'COMPLETED'] },
   }
 
+  const accessFilter = {
+    OR: [
+      { appointments: { some: apptFilter } },
+      { careAssignments: { some: { dentistId: dentist.id, clinicId: dentist.clinicId, isActive: true } } },
+    ],
+  }
+
   const where = {
     clinicId: dentist.clinicId,
     isDeleted: false,
-    appointments: { some: apptFilter },
-    ...(search
-      ? {
-          OR: [
+    AND: [
+      accessFilter,
+      ...(search ? [{
+        OR: [
             { firstName:   { contains: search, mode: 'insensitive' } },
             { lastName:    { contains: search, mode: 'insensitive' } },
             { patientCode: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {}),
+        ],
+      }] : []),
+    ],
   }
 
   const [total, patients] = await Promise.all([
@@ -66,6 +73,11 @@ export async function GET(request) {
         _count: {
           select: { appointments: { where: apptFilter } },
         },
+        careAssignments: {
+          where: { dentistId: dentist.id, clinicId: dentist.clinicId, isActive: true },
+          select: { id: true, transferId: true },
+          take: 1,
+        },
       },
       orderBy: { lastName: 'asc' },
       skip: page * pageSize,
@@ -73,5 +85,12 @@ export async function GET(request) {
     }),
   ])
 
-  return NextResponse.json({ patients, total })
+  return NextResponse.json({
+    patients: patients.map((patient) => ({
+      ...patient,
+      accessSource: patient.careAssignments.length > 0 && patient.appointments.length === 0 ? 'TRANSFER' : 'APPOINTMENT',
+      careAssignments: undefined,
+    })),
+    total,
+  })
 }

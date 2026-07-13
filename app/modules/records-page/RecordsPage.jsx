@@ -26,6 +26,8 @@ const STATUS_CHIP = {
   COMPLETED: { bg: '#dcfce7', color: '#15803d', label: 'Completed' },
 }
 
+const TRANSFER_CHIP = { bg: '#ede9fe', color: '#6d28d9', label: 'Transferred patient' }
+
 export default function RecordsPage() {
   const { showToast } = useToast()
   const [rows, setRows]         = useState([])
@@ -73,7 +75,7 @@ export default function RecordsPage() {
         <Box>
           <Typography variant='h5' fontWeight={700} color='text.primary'>Patient Records</Typography>
           <Typography variant='body2' color='text.secondary' sx={{ mt: 0.25 }}>
-            Patients with confirmed or completed appointments with you
+            Patients with appointments or an active receiving-dentist assignment
           </Typography>
         </Box>
 
@@ -130,7 +132,7 @@ export default function RecordsPage() {
                 )}
                 {!loading && rows.map((patient) => {
                   const lastAppt = patient.appointments[0] ?? null
-                  const chip = lastAppt ? (STATUS_CHIP[lastAppt.status] ?? null) : null
+                  const chip = lastAppt ? (STATUS_CHIP[lastAppt.status] ?? null) : (patient.accessSource === 'TRANSFER' ? TRANSFER_CHIP : null)
                   return (
                     <TableRow key={patient.id} hover onClick={() => setSelectedPatient(patient)} sx={{ '&:last-child td': { border: 0 }, '&:hover': { bgcolor: '#f8fafc' }, cursor: 'pointer' }}>
                       <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#64748b' }}>
