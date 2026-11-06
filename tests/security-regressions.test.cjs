@@ -203,6 +203,127 @@ test('a permitted password change updates keys and revokes sessions', async () =
   assert.equal(stats.cleared, 1);
 });
 
+function stepUpFixture({ authenticated = true, validPassword = false } = {}) {
+  const session = { userId: 'fixture-user', sessionToken: 'first-session' };
+  let ip = '192.0.2.1';
+  let now = Date.now();
+  let reads = 0;
+  let comparisons = 0;
+  let consumed = 0;
+  let queue = Promise.resolve();
+  const grants = [];
+  const windows = [];
+  const rateLimit = {
+    deleteMany: async ({ where }) => {
+      for (let i = windows.length - 1; i >= 0; i--) {
+        if (windows[i].key === where.key && windows[i].windowEnd <= where.windowEnd.lte) windows.splice(i, 1);
+      }
+    },
+    findMany: async ({ where }) => windows.filter((row) => row.key === where.key && row.windowEnd > where.windowEnd.gt),
+    update: async ({ where, data }) => { windows.find((row) => row.id === where.id).count += data.count.increment; },
+    create: async ({ data }) => { windows.push({ ...data, id: windows.length + 1 }); },
+  };
+  const { checkRateLimit } = load('lib/rateLimit.js', ['checkRateLimit'], {
+    Date: class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } },
+    prisma: {
+      $transaction: (callback) => {
+        const pending = queue.then(() => callback({ rateLimit, $executeRaw: async () => {} }));
+        queue = pending.catch(() => {});
+        return pending;
+      },
+    },
+  });
+  const { POST } = load('app/api/auth/step-up/route.js', ['POST'], {
+    getSession: async () => authenticated ? { ...session } : null,
+    getRequestMeta: () => ({ ip }), checkRateLimit,
+    parseJsonBody: async (body) => ({ body }), secret: (value) => value, hexToken: (value) => value,
+    prisma: { user: { findUnique: async () => { reads++; return { password: 'fixture-hash' }; } } },
+    bcrypt: { compare: async () => { comparisons++; return validPassword; } },
+    consumeOtp: async ({ purpose, scope, userId }) => {
+      assert.equal(purpose, 'step-up');
+      assert.equal(scope, session.sessionToken);
+      assert.equal(userId, session.userId);
+      consumed++;
+      return {};
+    },
+    grantStepUp: async (mode = 'password') => { grants.push(mode); return true; }, logAudit: () => {},
+  });
+  return {
+    POST, session, setIp: (value) => { ip = value; }, advance: (ms) => { now += ms; },
+    stats: () => ({ reads, comparisons, consumed, grants, windows }),
+  };
+}
+
+test('password step-up stops at five guesses despite IP and session rotation', async () => {
+  const fixture = stepUpFixture();
+  for (let i = 0; i < 12; i++) {
+    fixture.setIp(`192.0.2.${i + 1}`);
+    fixture.session.sessionToken = `session-${i}`;
+    assert.equal((await fixture.POST({ password: 'wrong' })).status, i < 5 ? 401 : 429);
+  }
+  assert.equal(fixture.stats().reads, 5);
+  assert.equal(fixture.stats().comparisons, 5);
+  assert.equal(fixture.stats().grants.length, 0);
+});
+
+test('parallel password step-up guesses share the account budget', async () => {
+  const fixture = stepUpFixture();
+  const responses = await Promise.all(Array.from({ length: 20 }, () => fixture.POST({ password: 'wrong' })));
+  assert.equal(responses.filter((response) => response.status === 401).length, 5);
+  assert.equal(responses.filter((response) => response.status === 429).length, 15);
+  assert.equal(fixture.stats().comparisons, 5);
+  assert.equal(fixture.stats().grants.length, 0);
+});
+
+test('password step-up accounts have separate budgets and still share the IP limit', async () => {
+  const fixture = stepUpFixture();
+  for (let i = 0; i < 10; i++) {
+    fixture.session.userId = `user-${i}`;
+    assert.equal((await fixture.POST({ password: 'wrong' })).status, 401);
+  }
+  fixture.session.userId = 'another-user';
+  assert.equal((await fixture.POST({ password: 'wrong' })).status, 429);
+  assert.equal(fixture.stats().reads, 10);
+  assert.equal(fixture.stats().comparisons, 10);
+  assert.equal(fixture.stats().grants.length, 0);
+});
+
+test('password step-up budgets expire after fifteen minutes', async () => {
+  const fixture = stepUpFixture();
+  for (let i = 0; i < 5; i++) await fixture.POST({ password: 'wrong' });
+  fixture.advance(15 * 60 * 1000 - 1);
+  assert.equal((await fixture.POST({ password: 'wrong' })).status, 429);
+  fixture.advance(1);
+  assert.equal((await fixture.POST({ password: 'wrong' })).status, 401);
+  assert.equal(fixture.stats().comparisons, 6);
+});
+
+test('unauthenticated step-up does not read passwords, spend budgets, or grant access', async () => {
+  const fixture = stepUpFixture({ authenticated: false });
+  assert.equal((await fixture.POST({ password: 'wrong' })).status, 401);
+  assert.equal(fixture.stats().reads, 0);
+  assert.equal(fixture.stats().comparisons, 0);
+  assert.equal(fixture.stats().windows.length, 0);
+  assert.equal(fixture.stats().grants.length, 0);
+});
+
+test('a valid password grants step-up only while the account budget permits', async () => {
+  const fixture = stepUpFixture({ validPassword: true });
+  for (let i = 0; i < 5; i++) assert.equal((await fixture.POST({ password: 'correct' })).body.ok, true);
+  assert.equal((await fixture.POST({ password: 'correct' })).status, 429);
+  assert.deepEqual(fixture.stats().grants, Array(5).fill('password'));
+  assert.equal(fixture.stats().comparisons, 5);
+});
+
+test('an exhausted password budget does not block the separate OTP grant', async () => {
+  const fixture = stepUpFixture();
+  for (let i = 0; i < 5; i++) await fixture.POST({ password: 'wrong' });
+  assert.equal((await fixture.POST({ pendingToken: 'fixture-token', code: '123456' })).body.ok, true);
+  assert.equal(fixture.stats().comparisons, 5);
+  assert.equal(fixture.stats().consumed, 1);
+  assert.deepEqual(fixture.stats().grants, ['otp']);
+});
+
 const { isStepUpValid } = load('lib/auth.js', ['isStepUpValid'], { cache: (fn) => fn });
 const recordRoutes = [
   ['app/api/records/[patientId]/route.js', 'POST'],

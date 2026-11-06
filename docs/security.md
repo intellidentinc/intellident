@@ -32,6 +32,8 @@ Password verification and login failure/success updates serialize on the user ro
 
 Password changes are limited before password comparison to five requests per account and twenty per client IP in fifteen minutes. The account limit applies across sessions and IP changes.
 
+Password step-up is limited before password lookup/comparison to five requests per account and ten per client IP in fifteen minutes. The account budget applies across session rotation and IP changes, and successful requests also consume it. Exhausted budgets return 429 without granting access. OTP step-up uses its separate challenge and rate-limit policy.
+
 Rate limits serialize each key in PostgreSQL before checking or creating a window, including concurrent first requests. Existing duplicate windows count toward the budget. Authentication endpoints, public document/application submissions, AI chat, and AI slot recommendations are limited.
 
 On Vercel, infrastructure-provided forwarded headers are trusted. Other reverse-proxy deployments must set TRUST_PROXY_HEADERS=true only when the proxy sanitizes the header and appends the real client IP. The rightmost IP is validated with Node isIP; untrusted or invalid headers use a shared unknown-client bucket, never a caller-selected identity.
@@ -72,6 +74,8 @@ In-app restore requires a password step-up grant followed by a restore OTP bound
 
 ## Dependency and lint maintenance
 
-Next.js and Nodemailer use patched releases. The old global glob override and ESLint chain have been removed. npm run lint runs Oxlint with native React, hooks, accessibility, and Next.js checks; compiler/style diagnostics remain warnings so the security fix does not require a UI rewrite. See .oxlintrc.json for the explicit error-level rules. Use Node 22.12+ for the tooling.
+Next.js and its bundle analyzer are pinned to 16.4.3, Nodemailer to 10.3.1, and Prisma/client to matching 6.12.0 releases. The lockfile is reconciled with the manifest; the obsolete ESLint chain and deepmerge-ts dependency are absent. Deploy the manifest and lockfile together and use npm ci to reproduce the dependency tree. npm run lint runs Oxlint with native React, hooks, accessibility, and Next.js checks; compiler/style diagnostics remain warnings so the security fix does not require a UI rewrite. See .oxlintrc.json for the explicit error-level rules. Use Node 22.12+ for the tooling.
 
 Run npm run test:security, full and production-only npm audit, npm run lint, and npm run build after security or dependency changes. The security regression suite isolates external services; live PostgreSQL concurrency and browser flows still need staging validation. A clean audit reflects the registry at the time of checking and does not establish that the application has no unknown vulnerabilities.
+
+Verification on November 6, 2026: npm ci passed, full and production-only audits each reported zero vulnerabilities, all 23 security regression tests passed, lint exited successfully with existing application warnings, Prisma schema validation passed, and the production build generated all 61 pages. The build now runs prisma generate first so clean installations do not rely on a previously generated client. Next.js still reports the existing middleware-convention deprecation and an unrelated parent-directory lockfile warning. No live PostgreSQL concurrency or browser end-to-end tests were performed.

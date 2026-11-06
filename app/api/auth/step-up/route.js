@@ -61,6 +61,11 @@ export async function POST(request) {
   }
 
   // ── Password mode (export / backup / step-up page) ───────────────────────
+  // Keep the account budget stable across IP changes and session rotation.
+  const accountLimit = await checkRateLimit(`step-up-password:user:${session.userId}`, 5, 15 * 60);
+  if (!accountLimit.allowed) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
   const { allowed } = await checkRateLimit(`${ip}:step-up-password`, 10, 15 * 60);
   if (!allowed) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
