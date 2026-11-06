@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
   const session = await requireSuperAdmin()
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  if (!isStepUpValid(session)) {
+  if (!isStepUpValid(session, 'password')) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
 
@@ -180,6 +180,8 @@ export async function GET(request, { params }) {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'private, no-store',
+      'Pragma': 'no-cache',
       'Content-Disposition': `attachment; filename="${filename}"`,
     },
   })

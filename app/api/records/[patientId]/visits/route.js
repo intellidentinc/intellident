@@ -10,7 +10,7 @@ export async function GET(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (!isStepUpValid(session)) {
+  if (!isStepUpValid(session, 'otp')) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
 

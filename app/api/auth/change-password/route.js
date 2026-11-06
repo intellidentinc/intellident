@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { getSession, clearSession } from '@/lib/auth';
+import { revokeUserSessions } from '@/lib/session-state';
 import { sendPasswordChangedEmail } from '@/lib/email';
 import { parseJsonBody, secret } from '@/lib/validate';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { getRequestMeta } from '@/lib/audit';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -41,6 +44,17 @@ export async function POST(request) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { ip } = getRequestMeta(request);
+    // The account limit survives session rotation and changes in the caller's IP.
+    const accountLimit = await checkRateLimit(`change-password:user:${session.userId}`, 5, 15 * 60);
+    if (!accountLimit.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+    const ipLimit = await checkRateLimit(`change-password:ip:${ip}`, 20, 15 * 60);
+    if (!ipLimit.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
     }
 
     const parsed = await parseJsonBody(request);
@@ -102,22 +116,25 @@ export async function POST(request) {
       clinic.passwordExpiryRoles.includes(user.role);
     const expiryDays = clinic?.passwordExpiryDays ?? 90;
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        passwordHistory: newHistory,
-        wrappedKey,
-        keySalt,
-        mustChangePassword: false,
-        // Set a fresh expiry when the policy covers this role; clear any stale expiry otherwise.
-        passwordExpiresAt: expiryEligible
-          ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
-          : null,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id, password: user.password },
+        data: {
+          password: hashedPassword,
+          passwordHistory: newHistory,
+          wrappedKey,
+          keySalt,
+          mustChangePassword: false,
+          passwordExpiresAt: expiryEligible
+            ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+            : null,
+        },
+      });
+
+      await revokeUserSessions(user.id, tx);
     });
 
-    await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName });
+    await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName }).catch(() => {});
 
     // Invalidate the current session so the client must re-authenticate
     await clearSession();

@@ -1,3 +1,4 @@
+const { bootstrapPassword } = require('./bootstrap.cjs');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 
@@ -157,7 +158,7 @@ const clinics = [
   { name: 'Cabasal Dental Clinic',          address: 'Pasig City',  code: 'CAB' },
 ];
 
-const PASSWORD = '12345678';
+const PASSWORD = bootstrapPassword(false);
 
 function usersForClinic(slug) {
   return [
@@ -259,6 +260,7 @@ async function main() {
           firstName:  u.firstName,
           lastName:   u.lastName,
           password:   hashedPassword,
+        mustChangePassword: true,
           role:       u.role,
           clinicId:   clinic.id,
           wrappedKey,
@@ -346,7 +348,6 @@ async function main() {
     }
   }
 
-  console.log('\nDone. Password for all users: ' + PASSWORD);
 }
 
 main()

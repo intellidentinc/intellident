@@ -32,20 +32,15 @@ export async function PATCH(request, { params }) {
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, isDeleted: true, role: true, patients: { where: { clinicId, isDeleted: false }, select: { id: true } } },
+    select: { id: true, isDeleted: true, role: true, email: true, patients: { where: { clinicId, isDeleted: false }, select: { id: true } } },
   })
 
   if (!target || target.isDeleted || target.role !== ROLES.PATIENT || target.patients.length !== 1) {
     return NextResponse.json({ error: 'Patient not found' }, { status: 404 })
   }
 
-  if (email !== undefined) {
-    const emailConflict = await prisma.user.findFirst({
-      where: { email: email.trim().toLowerCase(), id: { not: id } },
-    })
-    if (emailConflict) {
-      return NextResponse.json({ error: 'An account with this email already exists' }, { status: 400 })
-    }
+  if (email !== target.email) {
+    return NextResponse.json({ error: 'Login email cannot be changed through patient administration.' }, { status: 403 })
   }
 
   await prisma.$transaction(async (tx) => {
@@ -54,7 +49,6 @@ export async function PATCH(request, { params }) {
       data: {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        email: email.trim().toLowerCase(),
         phone: phone?.trim() || null,
       },
     })

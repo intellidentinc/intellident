@@ -8,7 +8,7 @@ export async function GET(request, { params }) {
   const caller = await getActivePatientContext()
   if (!caller) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  if (!isStepUpValid(caller.session)) {
+  if (!isStepUpValid(caller.session, 'otp')) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
 

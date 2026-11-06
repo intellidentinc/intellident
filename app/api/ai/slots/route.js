@@ -1,3 +1,4 @@
+import { checkRateLimit } from '@/lib/rateLimit'
 import { NextResponse, after } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -13,13 +14,6 @@ const AI_SLOTS_MODEL = 'gpt-5-mini'
 // algorithmic fallback (generic tags, no reasons). 15s gives real headroom — the
 // Vercel function ceiling is far higher (300s).
 const AI_SLOTS_TIMEOUT_MS = 15000
-
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('AI timeout')), ms)),
-  ])
-}
 
 // Deterministic fallback used when the model times out, errors, or returns nothing.
 function algorithmicSuggestions(slots) {
@@ -37,6 +31,12 @@ function algorithmicSuggestions(slots) {
 export async function GET(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const limits = await Promise.all([
+    checkRateLimit('ai-slots:user:' + session.userId, 10, 5 * 60),
+    checkRateLimit('ai-slots:clinic:' + session.clinicId, 100, 5 * 60),
+  ])
+  if (limits.some((limit) => !limit.allowed)) return NextResponse.json({ error: 'Too many recommendations. Please try later.' }, { status: 429 })
 
   const { searchParams } = new URL(request.url)
   const serviceIdsParam = searchParams.get('serviceIds') ?? searchParams.get('serviceId')
@@ -83,7 +83,7 @@ Rules:
 
   let suggestions
   try {
-    const raw = await withTimeout(generateJSON(prompt, AI_SLOTS_MODEL), AI_SLOTS_TIMEOUT_MS)
+    const raw = await generateJSON(prompt, AI_SLOTS_MODEL, { signal: AbortSignal.timeout(AI_SLOTS_TIMEOUT_MS) })
     // generateJSON uses json_object mode, so the model returns an object — accept
     // either a bare array or { slots | suggestions: [...] }.
     const arr = Array.isArray(raw) ? raw : (raw?.slots ?? raw?.suggestions ?? [])

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { supabase } from '@/lib/supabase'
+import { removeStorageObjects } from '@/lib/storage'
 import { getRecordsDentist, dentistTreatsPatient } from '@/lib/records-access'
 
 const BUCKET = 'record-attachments'
@@ -10,6 +10,9 @@ const BUCKET = 'record-attachments'
 export async function DELETE(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStepUpValid(session, 'otp')) {
+    return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
+  }
 
   const dentist = await getRecordsDentist(session)
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -31,8 +34,11 @@ export async function DELETE(request, { params }) {
   })
   if (!attachment) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
 
-  // Remove from Supabase storage (best-effort — soft-delete regardless)
-  await supabase.storage.from(BUCKET).remove([attachment.fileUrl]).catch(() => {})
+  try {
+    await removeStorageObjects(BUCKET, [attachment.fileUrl])
+  } catch {
+    return NextResponse.json({ error: 'File deletion failed. Please retry.' }, { status: 502 })
+  }
 
   await prisma.attachment.update({
     where: { id: attachmentId },

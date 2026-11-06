@@ -1,6 +1,8 @@
+import { ensurePrivateBucket } from '@/lib/storage'
+import { getRequestMeta } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
-import { getSession } from '@/lib/auth'
+import { getSession, isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { supabase } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rateLimit'
@@ -39,11 +41,14 @@ function isCompressed(buf) {
 export async function POST(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStepUpValid(session, 'otp')) {
+    return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
+  }
 
   const dentist = await getRecordsDentist(session)
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const { ip } = getRequestMeta(request)
   const { allowed } = await checkRateLimit(`${ip}:record-attach`, 30, 3600)
   if (!allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
@@ -83,7 +88,11 @@ export async function POST(request, { params }) {
   // Sanitize original file name — strip path separators, limit length
   const safeFileName = file.name.replace(/[/\\]/g, '').slice(0, 255) || `file.${detected.ext}`
 
-  await supabase.storage.createBucket(BUCKET, { public: false }).catch(() => {})
+  try {
+    await ensurePrivateBucket(BUCKET)
+  } catch {
+    return NextResponse.json({ error: 'Private storage is unavailable. Try again later.' }, { status: 503 })
+  }
 
   const storagePath = `${dentist.clinicId}/${patientId}/${recordId}/${Date.now()}-${randomBytes(10).toString('hex')}.${detected.ext}`
 

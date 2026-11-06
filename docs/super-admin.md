@@ -6,25 +6,11 @@ The Super Admin is a privileged account (role `0`) that sits above all clinic-sc
 
 ---
 
-## Credentials (seed)
+## Administrator bootstrap
 
-| Field    | Value                          |
-|----------|-------------------------------|
-| Email    | `superadmin@intellident.app`  |
-| Password | `12345678`                    |
-| Role     | `0` (SUPERADMIN)              |
-| Clinic   | none                          |
+The seed script creates superadmin@intellident.app with role 0 and no clinic affiliation. It requires ALLOW_ADMIN_BOOTSTRAP=true and an operator-provided SEED_ADMIN_PASSWORD meeting the bootstrap policy. There is no built-in password. Run node prisma/seed-super.js only for an intentional bootstrap; it skips an existing account. New accounts must change the bootstrap password at first login.
 
-Run the seed once to create the account:
-
-```bash
-node prisma/seed-super.js
-```
-
-Safe to run multiple times — skips if the account already exists.
-
----
-
+See [security controls](security.md) for password policy and rotation requirements.
 ## How It Works
 
 ### 1. Login
@@ -160,37 +146,11 @@ Only PENDING applications can be processed — attempting to re-process returns 
 
 ---
 
-## Backup & Restore
+## Backup and restore
 
-Super admins can export a clinic's data and initiate a restore workflow from within the clinic admin panel.
+Backup and restore require a password-specific step-up grant. Backup JSON includes bcrypt hashes and encrypted key blobs, plus clinic operational data; treat it as a credential-bearing sensitive artifact and encrypt it at rest. PatientRecord notes and RecordKey envelopes are excluded. Backup JSON is not cryptographically signed.
 
-### Backup (`GET /api/super/clinics/[id]/backup`)
-
-- Requires superadmin role + valid step-up authentication (re-entered password within 15 min)
-- Exports a timestamped JSON file containing: clinic profile, patients, services, appointments, billing records, and the last 5,000 audit log entries
-- **Excludes `PatientRecord` notes** — those are E2EE-encrypted and the server never holds the plaintext key
-- Audit-logged as `action: BACKUP, entity: Clinic`
-
-### Restore — 3-step wizard (`RestoreModal.jsx`)
-
-The restore flow does not directly modify the database — it produces a confirmation token that the superadmin then uses in the Neon console to trigger a point-in-time restore.
-
-**Step 1 — Reason**
-The superadmin enters a free-text reason for the restore (stored in the audit log).
-
-**Step 2 — OTP request (`POST /api/super/clinics/[id]/restore/request-otp`)**
-- Requires superadmin role + valid step-up
-- Rate-limited: 5 requests per 15 minutes per IP
-- Sends a 6-digit OTP to the superadmin's registered email (10-minute expiry, max 5 verification attempts)
-
-**Step 3 — Confirmation (`POST /api/super/clinics/[id]/restore/confirm`)**
-- Validates the OTP code
-- Creates and returns a confirmation token (UUID)
-- Writes an audit log entry (`action: RESTORE`) with the reason, confirmation token, and snapshot reference
-- The superadmin uses the confirmation token as an incident reference when performing the actual restore in the Neon dashboard
-
----
-
+Restore requests an OTP bound to the initiating session and target clinic. The confirmation endpoint accepts multipart fields pendingToken, code, reason, optional snapshotDescription, and a matching-clinic JSON file (maximum 25 MB). It consumes the code once, executes ownership-checked transactional upserts, and returns the restore summary and audit confirmation token. It actually modifies the application database. Neon PITR is a separate operator procedure.
 ## Security Notes
 
 - The `/super` route is guarded server-side — any non-zero role is rejected before rendering
@@ -198,3 +158,7 @@ The superadmin enters a free-text reason for the restore (stored in the audit lo
 - Every clinic entry is written to `AuditLog` (`action: VIEW`, metadata includes `superadmin-enter`)
 - The super admin can use all ADMIN features inside a clinic (users, services, appointments, settings, audit log) but does not have a patient/dentist/receptionist profile record in that clinic
 - Because `clinicId` is set in the session when inside a clinic, all existing zero-trust DB queries continue to work without modification
+
+## Bootstrap security update
+
+Seeded public passwords are no longer supported. Set ALLOW_ADMIN_BOOTSTRAP=true and a unique SEED_ADMIN_PASSWORD with at least twelve characters and upper/lowercase, number, and symbol before running an administrator bootstrap script. New accounts must change that password on first login. Rotate previously deployed default credentials. Current session and recovery controls are described in [security.md](security.md).

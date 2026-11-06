@@ -1,7 +1,6 @@
 import { NextResponse, after } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { verifyWebhookSignature } from '@/lib/paymongo'
-import { computeBillingStatus, generateReceiptNumber } from '@/lib/billing'
+import { recordPayment } from '@/lib/payments'
 import { createNotification } from '@/lib/notifications'
 import { logAudit } from '@/lib/audit'
 
@@ -29,7 +28,7 @@ export async function POST(request) {
   const metadata   = attrs.metadata ?? {}
   const billingId  = metadata.billingId
   const clinicId   = metadata.clinicId
-  const paymentType = metadata.paymentType ?? 'FULL'
+  const paymentType = ['FULL', 'RESERVATION', 'PARTIAL'].includes(metadata.paymentType) ? metadata.paymentType : 'FULL'
 
   // Extract PayMongo payment details
   const pmPayments = attrs.payments ?? []
@@ -39,52 +38,20 @@ export async function POST(request) {
   }
 
   const paymongoPaymentId         = pmPayment.id
-  const paymongoCheckoutSessionId = event.data.id
+  const paymongoCheckoutSessionId = event.data.attributes.data?.id
   const amountInCentavos          = pmPayment.attributes?.amount ?? 0
   const amount                    = amountInCentavos / 100
 
-  // Idempotency — skip if already processed
-  const existing = await prisma.payment.findFirst({
-    where: { paymongoPaymentId },
-  })
-  if (existing) return NextResponse.json({ received: true })
-
-  // Load billing
-  const billing = await prisma.billing.findFirst({
-    where: { id: billingId, isDeleted: false },
-    include: {
-      patient: {
-        include: { user: { select: { id: true, firstName: true } } },
-      },
-    },
-  })
-  if (!billing || billing.status === 'PAID' || billing.status === 'REFUNDED') {
-    return NextResponse.json({ received: true })
+  if (typeof billingId !== 'string' || typeof clinicId !== 'string' || typeof paymongoPaymentId !== 'string' || !Number.isSafeInteger(amountInCentavos) || amountInCentavos <= 0) {
+    return NextResponse.json({ error: 'Invalid payment metadata' }, { status: 400 })
   }
-
-  const newAmountPaid = billing.amountPaid + amount
-  const newBalance    = Math.max(0, billing.balance - amount)
-  const newStatus     = computeBillingStatus(newAmountPaid, billing.amount)
-
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.create({
-      data: {
-        billingId,
-        amount,
-        method: 'PAYMONGO',
-        type: paymentType,
-        paymongoCheckoutSessionId,
-        paymongoPaymentId,
-      },
-    })
-
-    const data = { amountPaid: newAmountPaid, balance: newBalance, status: newStatus }
-    if (newStatus === 'PAID' && !billing.receiptNumber) {
-      data.receiptNumber = await generateReceiptNumber(billing.clinicId, tx)
-    }
-
-    await tx.billing.update({ where: { id: billingId }, data })
+  const result = await recordPayment({
+    billingId, clinicId, amount, method: 'PAYMONGO', type: paymentType,
+    paymongoPaymentId, paymongoCheckoutSessionId,
   })
+  if (result.duplicate) return NextResponse.json({ received: true })
+  if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
+  const { billing } = result
 
   // Fire-and-forget: notify patient
   const patientUser = billing.patient?.user

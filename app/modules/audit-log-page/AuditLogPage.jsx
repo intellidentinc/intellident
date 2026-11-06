@@ -1,5 +1,7 @@
 'use client'
 
+import { csvCell } from '@/lib/csv'
+
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -206,7 +208,6 @@ function MetadataRow({ log, colSpan }) {
                     <Box
                       component='pre'
                       sx={{
-                        mt: 0.5,
                         p: 1,
                         bgcolor: '#fff',
                         border: '1px solid',
@@ -375,7 +376,7 @@ export default function AuditLogPage() {
     try {
       const logs = await fetchAllForExport()
       const header = ['Timestamp', 'User', 'Email', 'Role', 'Action', 'Entity', 'Record ID', 'IP Address']
-      const escapeCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+      const escapeCell = csvCell
       const rows = logs.map((l) => [
         dayjs(l.createdAt).format('YYYY-MM-DD HH:mm:ss'),
         l.user ? `${l.user.firstName ?? ''} ${l.user.lastName ?? ''}`.trim() : 'System',

@@ -1,5 +1,7 @@
 'use client'
 
+import { csvCell } from '@/lib/csv'
+
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Box from '@mui/material/Box'
@@ -172,7 +174,7 @@ export default function BillingPage({ initialRows = [], initialTotal = 0 }) {
     setExporting(true)
     try {
       const billings = await fetchAllForExport()
-      const escapeCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+      const escapeCell = csvCell
       const lines = billings.map((b) => exportRow(b).map(escapeCell).join(','))
       const csv = [EXPORT_HEADER.join(','), ...lines].join('\r\n')
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })

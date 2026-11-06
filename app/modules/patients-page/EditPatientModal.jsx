@@ -181,11 +181,12 @@ export default function EditPatientModal({ open, patient, onClose, onSuccess }) 
           id='edit-email'
           label='Email Address'
           type='email'
+              disabled
           value={form.email}
           onChange={handleChange('email')}
           placeholder='juan@example.com'
           error={!!errors.email}
-          helperText={errors.email}
+          helperText={errors.email || 'Your login email is protected and cannot be edited here.'}
           required
         />
 

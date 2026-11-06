@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ROLES, ROLE_LABELS, isAdmin } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody } from '@/lib/validate'
+import { revokeUserSessions } from '@/lib/session-state'
 import { reconcileRoleProfile } from '@/lib/userProfiles'
 
 async function getAdminCaller() {
@@ -17,13 +18,13 @@ async function getAdminCaller() {
   return { ...caller, clinicId, id: session.userId }
 }
 
-async function getTargetUser(id, clinicId) {
+async function getTargetUser(id, clinicId, allowGlobal = false) {
   const target = await prisma.user.findUnique({
     where: { id },
     select: { clinicId: true, isDeleted: true, firstName: true, lastName: true, role: true }
   })
 
-  if (!target || target.isDeleted || target.clinicId !== clinicId) return null
+  if (!target || target.isDeleted || target.clinicId !== clinicId || (target.role === ROLES.PATIENT && !allowGlobal)) return null
   return target
 }
 
@@ -37,15 +38,15 @@ export async function PATCH(request, { params }) {
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   const body = parsed.body
 
-  const target = await getTargetUser(id, caller.clinicId)
+  const target = await getTargetUser(id, caller.clinicId, caller.role === ROLES.SUPERADMIN)
   if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // Toggle active status
   if (typeof body.isActive === 'boolean') {
-    const updated = await prisma.user.update({
-      where: { id },
-      data: { isActive: body.isActive },
-      select: { id: true, isActive: true }
+    const updated = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id }, data: { isActive: body.isActive }, select: { id: true, isActive: true } })
+      await revokeUserSessions(id, tx)
+      return user
     })
 
     const session = await getSession()
@@ -88,6 +89,7 @@ export async function PATCH(request, { params }) {
         lastName: target.lastName,
       })
 
+      await revokeUserSessions(id, tx)
       return user
     })
   } catch (err) {
@@ -111,7 +113,7 @@ export async function DELETE(request, { params }) {
   const { ip, userAgent } = getRequestMeta(request)
   const { id } = await params
 
-  const target = await getTargetUser(id, caller.clinicId)
+  const target = await getTargetUser(id, caller.clinicId, caller.role === ROLES.SUPERADMIN)
   if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const now = new Date()
@@ -126,6 +128,7 @@ export async function DELETE(request, { params }) {
     await tx.patient.updateMany({ where: { userId: id, isDeleted: false }, data: { isDeleted: true, deletedAt: now } })
     await tx.dentist.updateMany({ where: { userId: id, isDeleted: false }, data: { isDeleted: true, deletedAt: now } })
     await tx.receptionist.updateMany({ where: { userId: id, isDeleted: false }, data: { isDeleted: true, deletedAt: now } })
+    await revokeUserSessions(id, tx)
   })
 
   const session = await getSession()

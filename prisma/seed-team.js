@@ -1,3 +1,4 @@
+const { bootstrapPassword } = require('./bootstrap.cjs');
 /**
  * seed-team.js
  * Seeds the three capstone team member accounts across all three clinics.
@@ -10,7 +11,7 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 
 const ROLES = { ADMIN: 1, DENTIST: 2, RECEPTIONIST: 3, PATIENT: 4 };
-const PASSWORD = '12345678';
+const PASSWORD = bootstrapPassword(false);
 
 const prisma = new PrismaClient();
 const enc = new TextEncoder();
@@ -103,6 +104,7 @@ async function main() {
         firstName: member.firstName,
         lastName: member.lastName,
         password: hashedPassword,
+        mustChangePassword: true,
         passwordHistory: [hashedPassword],
         role: member.role,
         clinicId: clinic.id,
@@ -130,7 +132,6 @@ async function main() {
     }
   }
 
-  console.log('\nDone. Password for all accounts: ' + PASSWORD);
 }
 
 main()

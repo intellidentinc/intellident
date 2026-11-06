@@ -68,18 +68,16 @@ export async function POST(request) {
     return NextResponse.json({ error: 'publicKey, encryptedPrivateKey, and privateKeyIv are required' }, { status: 400 })
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { publicKey: true },
-  })
-  if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  // Set-if-null — do not overwrite an existing keypair.
-  if (user.publicKey) return NextResponse.json({ ok: true, alreadyProvisioned: true })
-
-  await prisma.user.update({
-    where: { id: session.userId },
+  const expectedWrappedKey = secret(parsed.body.expectedWrappedKey, 1024)
+  if (!expectedWrappedKey) return NextResponse.json({ error: 'Account key context is required' }, { status: 400 })
+  await prisma.user.updateMany({
+    where: { id: session.userId, publicKey: null, wrappedKey: expectedWrappedKey, isActive: true, isDeleted: false },
     data: { publicKey, encryptedPrivateKey, privateKeyIv },
   })
-  return NextResponse.json({ ok: true })
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { publicKey: true, encryptedPrivateKey: true, privateKeyIv: true, wrappedKey: true, keySalt: true },
+  })
+  if (!user?.publicKey || user.wrappedKey !== expectedWrappedKey) return NextResponse.json({ error: 'Account keys changed. Sign in again.' }, { status: 409 })
+  return NextResponse.json(user)
 }

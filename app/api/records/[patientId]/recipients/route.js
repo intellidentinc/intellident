@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession, getAuthContext } from '@/lib/auth'
+import { getSession, getAuthContext, isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRecordsDentist, dentistTreatsPatient, getRecordRecipients } from '@/lib/records-access'
@@ -17,6 +17,9 @@ import { getRecordsDentist, dentistTreatsPatient, getRecordRecipients } from '@/
 export async function GET(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStepUpValid(session, 'otp')) {
+    return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
+  }
 
   const { patientId } = await params
 

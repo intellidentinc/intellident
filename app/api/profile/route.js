@@ -57,10 +57,9 @@ export async function PATCH(request) {
     return NextResponse.json({ error: 'Mobile must be +63XXXXXXXXXX (10 digits after +63)' }, { status: 400 })
   }
 
-  const existing = await prisma.user.findFirst({
-    where: { email, NOT: { id: session.userId } }
-  })
-  if (existing) return NextResponse.json({ error: 'Email is already in use' }, { status: 409 })
+  if (email !== session.email) {
+    return NextResponse.json({ error: 'Login email changes require a verified account recovery process.' }, { status: 403 })
+  }
 
   const updated = await prisma.user.update({
     where: { id: session.userId },
@@ -68,7 +67,6 @@ export async function PATCH(request) {
       firstName,
       middleInitial: middleInitial || null,
       lastName,
-      email,
       phone: phone || null,
       address: address && typeof address === 'object' ? JSON.stringify(address) : null,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,

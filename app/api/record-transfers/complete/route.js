@@ -14,7 +14,7 @@ const BUCKET = 'record-attachments'
 export async function POST(request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isStepUpValid(session)) return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
+  if (!isStepUpValid(session, 'otp')) return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   const dentist = await getTransferDentist(session)
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const parsed = await parseJsonBody(request)

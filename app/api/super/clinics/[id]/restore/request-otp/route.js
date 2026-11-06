@@ -1,6 +1,5 @@
 import { NextResponse, after } from 'next/server'
-import crypto from 'crypto'
-import bcrypt from 'bcrypt'
+import { issueOtp } from '@/lib/otp'
 import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
@@ -21,7 +20,7 @@ export async function POST(request, { params }) {
   if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { session, user } = auth
 
-  if (!isStepUpValid(session)) {
+  if (!isStepUpValid(session, 'password')) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
 
@@ -46,13 +45,8 @@ export async function POST(request, { params }) {
     data: { usedAt: new Date() },
   })
 
-  const otp = String(crypto.randomInt(100000, 1000000))
-  const pendingToken = crypto.randomBytes(32).toString('hex')
-  const codeHash = await bcrypt.hash(otp, 8)
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
-
-  await prisma.mfaOtp.create({
-    data: { userId: session.userId, pendingToken, codeHash, expiresAt },
+  const { pendingToken, code: otp } = await issueOtp({
+    userId: session.userId, purpose: 'restore', scope: session.sessionToken + ':' + clinicId,
   })
 
   after(

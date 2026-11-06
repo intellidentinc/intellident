@@ -47,6 +47,7 @@ export async function GET(request) {
   const where = {
     clinicId,
     isDeleted: false,
+    ...(caller.role !== ROLES.SUPERADMIN ? { role: { not: ROLES.PATIENT } } : {}),
     ...(search
       ? {
           OR: [

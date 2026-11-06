@@ -143,7 +143,7 @@ export default function AcceptTermsPage() {
               ]} />
               <Para>
                 You must not use the system to misrepresent your identity, tamper with records, interfere with
-                other users' data, or conduct any unauthorized security testing against the platform.
+                other users&apos; data, or conduct any unauthorized security testing against the platform.
               </Para>
             </Section>
 
@@ -160,7 +160,7 @@ export default function AcceptTermsPage() {
               <Para>
                 IntelliDent reserves the right to suspend or deactivate your account if you violate these Terms,
                 provide false information during registration, or engage in conduct that is harmful to other users
-                or the system. You may request account deletion at any time by contacting your clinic's
+                or the system. You may request account deletion at any time by contacting your clinic&apos;s
                 administrator.
               </Para>
             </Section>

@@ -6,14 +6,13 @@
  * On failure: increments attempt counter; invalidates after 5 failed attempts.
  */
 import { NextResponse } from 'next/server';
-import bcrypt from 'bcrypt';
+import { consumeOtp } from '@/lib/otp';
 import { prisma } from '@/lib/prisma';
 import { finalizeLogin } from '@/lib/login';
 import { getRequestMeta } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { parseJsonBody, hexToken, secret } from '@/lib/validate';
 
-const MAX_OTP_ATTEMPTS = 5;
 
 export async function POST(request) {
   try {
@@ -34,54 +33,9 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Missing token or code' }, { status: 400 });
     }
 
-    const mfa = await prisma.mfaOtp.findUnique({
-      where: { pendingToken },
-      include: {
-        user: {
-          select: {
-            id: true, email: true, firstName: true, lastName: true, clinicId: true, role: true,
-            termsAcceptedAt: true, mustChangePassword: true, passwordExpiresAt: true,
-            wrappedKey: true, keySalt: true,
-            publicKey: true, encryptedPrivateKey: true, privateKeyIv: true,
-          },
-        },
-      },
-    });
-
-    if (!mfa) {
-      return NextResponse.json({ error: 'Invalid or expired session. Please sign in again.' }, { status: 400 });
-    }
-
-    if (mfa.usedAt) {
-      return NextResponse.json({ error: 'This code has already been used. Please sign in again.' }, { status: 400 });
-    }
-
-    if (mfa.expiresAt < new Date()) {
-      return NextResponse.json({ error: 'Code has expired. Please sign in again.' }, { status: 400 });
-    }
-
-    if (mfa.attempts >= MAX_OTP_ATTEMPTS) {
-      return NextResponse.json({ error: 'Too many incorrect attempts. Please sign in again.' }, { status: 429 });
-    }
-
-    const isValid = await bcrypt.compare(String(code).trim(), mfa.codeHash);
-
-    if (!isValid) {
-      const newAttempts = mfa.attempts + 1;
-      await prisma.mfaOtp.update({ where: { id: mfa.id }, data: { attempts: newAttempts } });
-
-      const remaining = MAX_OTP_ATTEMPTS - newAttempts;
-      if (remaining <= 0) {
-        return NextResponse.json({ error: 'Too many incorrect attempts. Please sign in again.' }, { status: 429 });
-      }
-      return NextResponse.json(
-        { error: `Incorrect code. ${remaining} attempt(s) remaining.` },
-        { status: 401 }
-      );
-    }
-
-    // Mark OTP as used
-    await prisma.mfaOtp.update({ where: { id: mfa.id }, data: { usedAt: new Date() } });
+    const result = await consumeOtp({ pendingToken, code: code.trim(), purpose: 'login' });
+    if (result.error) return NextResponse.json({ error: result.error }, { status: result.status });
+    const mfa = result.challenge;
 
     const { user } = mfa;
 

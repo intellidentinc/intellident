@@ -18,17 +18,13 @@
  */
 import { NextResponse, after } from 'next/server';
 import bcrypt from 'bcrypt';
-import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { issueOtp } from '@/lib/otp';
+import { verifyLoginPassword } from '@/lib/login-attempts';
 import { sendMfaOtpEmail, sendAccountLockedAlert } from '@/lib/email';
-
-// Configurable lockout constants (override via env vars)
-const MAX_ATTEMPTS     = parseInt(process.env.LOCKOUT_MAX_ATTEMPTS      ?? '5');
-const WINDOW_MS        = parseInt(process.env.LOCKOUT_WINDOW_MINUTES    ?? '5')  * 60 * 1000;
-const LOCK_DURATION_MS = parseInt(process.env.LOCKOUT_DURATION_MINUTES  ?? '15') * 60 * 1000;
 
 // Generic credential error — identical for "unknown email" and "wrong password"
 // so the response cannot be used to enumerate which emails are registered.
@@ -61,7 +57,7 @@ export async function POST(request) {
     }
 
     // PHASE 0: Rate-limit check + user lookup in parallel (saves 1 DB round-trip)
-    const [{ allowed }, user] = await Promise.all([
+    const [{ allowed }, candidate] = await Promise.all([
       checkRateLimit(`${ip}:sign-in`, 20, 15 * 60),
       prisma.user.findUnique({ where: { email } }),
     ]);
@@ -70,7 +66,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
     }
 
-    if (!user || user.isDeleted) {
+    if (!candidate || candidate.isDeleted) {
       // Run bcrypt against a dummy hash so the no-user path takes the same time
       // as a real comparison (kills the timing oracle), then return the generic
       // error that's byte-identical to the wrong-password response.
@@ -81,65 +77,24 @@ export async function POST(request) {
       );
     }
 
-    // Note: the deactivated-account check is deliberately deferred until AFTER the
-    // password is verified (see below) so account status cannot be probed without
-    // valid credentials.
-
-    // Check if account is currently locked. Return the SAME generic response (body + 401)
-    // as a wrong password so a locked account is indistinguishable from an unknown email or
-    // a bad password — a distinct message/status (e.g. 423) would confirm the account exists
-    // and is locked, leaking enumeration info. Lockout is still enforced: the request fails.
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      return NextResponse.json(
-        { error: INVALID_CREDENTIALS },
-        { status: 401 }
-      );
-    }
-
-    // PHASE 1: bcrypt (CPU-bound, unavoidable)
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-
-    if (!isPasswordValid) {
-      const now = new Date();
-      const windowStart = new Date(now.getTime() - WINDOW_MS);
-
-      const attemptsInWindow =
-        user.lastFailedAt && user.lastFailedAt > windowStart
-          ? user.failedLoginAttempts + 1
-          : 1;
-
-      const shouldLock = attemptsInWindow >= MAX_ATTEMPTS;
-      const lockedUntil = shouldLock ? new Date(now.getTime() + LOCK_DURATION_MS) : null;
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: attemptsInWindow,
-          lastFailedAt: now,
-          ...(lockedUntil ? { lockedUntil } : {}),
-        },
-      });
-
-      logAudit({
+    const result = await verifyLoginPassword(candidate.id, password);
+    const { user } = result;
+    if (!result.valid) {
+      if (result.attempts) logAudit({
         userId: user.id, clinicId: user.clinicId,
         action: 'LOGIN_FAILED', entity: 'User', entityId: user.id,
         ipAddress: ip, userAgent,
-        metadata: { attempt: attemptsInWindow, maxAttempts: MAX_ATTEMPTS },
+        metadata: { attempt: result.attempts, maxAttempts: result.maxAttempts },
       });
 
-      if (shouldLock) {
+      if (result.newlyLocked) {
         logAudit({
           userId: user.id, clinicId: user.clinicId,
           action: 'LOCKOUT', entity: 'User', entityId: user.id,
           ipAddress: ip, userAgent,
-          metadata: { attempts: attemptsInWindow, lockedUntil },
+          metadata: { attempts: result.attempts, lockedUntil: result.lockedUntil },
         });
-        after(sendAccountLockedAlert({ to: user.email, firstName: user.firstName, lockedUntil }).catch((err) => console.error('sendAccountLockedAlert failed:', err)));
-        const lockMinutes = LOCK_DURATION_MS / 60000;
-        return NextResponse.json(
-          { error: `Too many failed attempts. Account locked for ${lockMinutes} minutes.` },
-          { status: 423 }
-        );
+        after(sendAccountLockedAlert({ to: user.email, firstName: user.firstName, lockedUntil: result.lockedUntil }).catch((err) => console.error('sendAccountLockedAlert failed:', err)));
       }
 
       // Generic response (no remaining-attempts count) so a wrong password is
@@ -166,19 +121,13 @@ export async function POST(request) {
       );
     }
 
-    // PHASE 2: Reset lockout + clinic check in parallel (saves 1 DB round-trip)
-    const [, clinic] = await Promise.all([
-      prisma.user.update({
-        where: { id: user.id },
-        data: { failedLoginAttempts: 0, lastFailedAt: null, lockedUntil: null },
-      }),
-      user.clinicId
-        ? prisma.clinic.findUnique({
+    // The lockout reset happened under the same row lock as password verification.
+    const clinic = user.clinicId
+        ? await prisma.clinic.findUnique({
             where: { id: user.clinicId },
             select: { isEnabled: true, passwordExpiryEnabled: true, passwordExpiryRoles: true, singleSessionEnabled: true },
           })
-        : Promise.resolve(null),
-    ]);
+        : null;
 
     if (user.clinicId && (!clinic || !clinic.isEnabled)) {
       return NextResponse.json(
@@ -189,15 +138,7 @@ export async function POST(request) {
 
     // MFA (email OTP) step — credentials are valid; issue a one-time code and defer session
     // creation to POST /api/auth/verify-otp, which runs finalizeLogin() once the code is confirmed.
-    const otp = String(crypto.randomInt(100000, 1000000));
-    const pendingToken = crypto.randomBytes(32).toString('hex');
-    const codeHash = await bcrypt.hash(otp, 8);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    await prisma.mfaOtp.deleteMany({ where: { userId: user.id, usedAt: null } });
-    await prisma.mfaOtp.create({
-      data: { userId: user.id, pendingToken, codeHash, rememberMe, expiresAt },
-    });
+    const { pendingToken, code: otp } = await issueOtp({ userId: user.id, purpose: 'login', rememberMe, expectedPasswordHash: user.password });
 
     try {
       await sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp });

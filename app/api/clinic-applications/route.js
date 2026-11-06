@@ -1,3 +1,4 @@
+import { getRequestMeta } from '@/lib/audit'
 import { NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseJsonBody, str, sanitizeEmail } from '@/lib/validate'
@@ -10,7 +11,7 @@ const MAX_DOCS   = 5
 const MAX_SERVICES = 50
 
 export async function POST(request) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const { ip } = getRequestMeta(request)
   const { allowed } = await checkRateLimit(`${ip}:clinic-apply`, 5, 3600)
   if (!allowed) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })

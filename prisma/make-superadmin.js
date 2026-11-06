@@ -1,3 +1,4 @@
+const { bootstrapPassword } = require('./bootstrap.cjs');
 /**
  * prisma/make-superadmin.js
  *
@@ -15,7 +16,7 @@ const prisma = new PrismaClient()
 
 const SUPERADMIN_ROLE = 0
 const EMAIL = 'intellident.inc@gmail.com'
-const PASSWORD = '12345678'
+const PASSWORD = bootstrapPassword(true)
 
 const enc = new TextEncoder()
 
@@ -49,22 +50,28 @@ async function main() {
     const hashedPassword = await bcrypt.hash(PASSWORD, 12)
     const { wrappedKey, keySalt } = await generateKeyMaterial(PASSWORD)
 
-    await prisma.user.update({
-      where: { email: EMAIL },
-      data: {
-        role: SUPERADMIN_ROLE,
-        clinicId: null,
-        password: hashedPassword,
-        passwordHistory: [hashedPassword],
-        wrappedKey,
-        keySalt,
-      },
-    })
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { email: EMAIL },
+        data: {
+          role: SUPERADMIN_ROLE,
+          clinicId: null,
+          password: hashedPassword,
+          mustChangePassword: true,
+          passwordHistory: [hashedPassword],
+          wrappedKey,
+          keySalt,
+          publicKey: null, encryptedPrivateKey: null, privateKeyIv: null,
+        },
+      })
 
-    console.log('─────────────────────────────────────')
+      await tx.userSession.updateMany({ where: { userId: existing.id, terminatedAt: null }, data: { terminatedAt: new Date() } })
+      await tx.mfaOtp.updateMany({ where: { userId: existing.id, usedAt: null }, data: { usedAt: new Date() } })
+      await tx.passwordResetToken.updateMany({ where: { email: EMAIL, usedAt: null }, data: { usedAt: new Date() } })
+      await tx.recordKey.deleteMany({ where: { userId: existing.id } })
+    })
     console.log('Super admin updated!')
     console.log(`  Email   : ${EMAIL}`)
-    console.log(`  Password: ${PASSWORD}`)
     console.log('─────────────────────────────────────')
   } else {
     const hashedPassword = await bcrypt.hash(PASSWORD, 12)
@@ -76,6 +83,7 @@ async function main() {
         firstName: 'IntelliDent',
         lastName: 'Admin',
         password: hashedPassword,
+        mustChangePassword: true,
         passwordHistory: [hashedPassword],
         role: SUPERADMIN_ROLE,
         clinicId: null,
@@ -87,7 +95,6 @@ async function main() {
     console.log('─────────────────────────────────────')
     console.log('Super admin created!')
     console.log(`  Email   : ${EMAIL}`)
-    console.log(`  Password: ${PASSWORD}`)
     console.log('─────────────────────────────────────')
   }
 }

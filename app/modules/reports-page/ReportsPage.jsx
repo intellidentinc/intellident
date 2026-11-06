@@ -1,5 +1,7 @@
 'use client'
 
+import { csvCell } from '@/lib/csv'
+
 import { useState, useEffect, useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -388,7 +390,7 @@ export default function ReportsPage() {
     try {
       const rows = await fetchExportRows()
       const { headers, buildRow } = getExportConfig()
-      const esc  = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+      const esc = csvCell
       const csv  = [headers.join(','), ...rows.map(r => buildRow(r).map(esc).join(','))].join('\r\n')
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
       triggerDownload(blob, `${tab}-report-${dayjs().tz(PHT).format('YYYY-MM-DD')}.csv`)

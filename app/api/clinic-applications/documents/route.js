@@ -1,3 +1,5 @@
+import { ensurePrivateBucket } from '@/lib/storage'
+import { getRequestMeta } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { supabase } from '@/lib/supabase'
@@ -34,7 +36,7 @@ function isCompressed(buf) {
 }
 
 export async function POST(request) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const { ip } = getRequestMeta(request)
   const { allowed } = await checkRateLimit(`${ip}:clinic-docs`, 20, 3600)
   if (!allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
@@ -69,19 +71,10 @@ export async function POST(request) {
   // Ensure bucket exists as PRIVATE — these are sensitive onboarding documents
   // (BIR filings, business permits, government IDs, PRC licenses). They must never
   // be publicly readable; the super admin views them via short-lived signed URLs.
-  const { error: bucketError } = await supabase.storage.createBucket(BUCKET, { public: false })
-  if (bucketError) {
-    if (bucketError.message?.includes('already exists')) {
-      // Enforce private on a pre-existing bucket that may have been created public.
-      // Do not silently swallow a failure here — a public bucket would expose these
-      // sensitive documents, so the failure must at least be logged for follow-up.
-      const { error: updateError } = await supabase.storage
-        .updateBucket(BUCKET, { public: false })
-        .catch((e) => ({ error: e }))
-      if (updateError) console.error('[clinic-docs] failed to enforce private bucket:', updateError)
-    } else {
-      console.error('[clinic-docs] bucket creation error:', bucketError)
-    }
+  try {
+    await ensurePrivateBucket(BUCKET)
+  } catch {
+    return NextResponse.json({ error: 'Private storage is unavailable. Try again later.' }, { status: 503 })
   }
 
   // Extension and content-type come from magic-byte detection, not the client

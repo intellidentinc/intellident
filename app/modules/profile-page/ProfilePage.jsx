@@ -184,11 +184,12 @@ export default function ProfilePage() {
               id='email'
               label='Email'
               type='email'
+              disabled
               value={form.email}
               onChange={handleChange('email')}
               placeholder='you@example.com'
               error={!!errors.email}
-              helperText={errors.email}
+              helperText={errors.email || 'Your login email is protected and cannot be edited here.'}
               required
             />
             <Input

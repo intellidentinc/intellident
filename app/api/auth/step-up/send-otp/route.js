@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
-import bcrypt from 'bcrypt';
+import { issueOtp } from '@/lib/otp';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -21,10 +20,9 @@ export async function POST() {
   });
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-  const otp          = String(crypto.randomInt(100000, 1000000));
-  const pendingToken = crypto.randomBytes(32).toString('hex');
-  const codeHash     = await bcrypt.hash(otp, 8);
-  const expiresAt    = new Date(Date.now() + 10 * 60 * 1000);
+  const { pendingToken, code: otp } = await issueOtp({
+    userId: session.userId, purpose: 'step-up', scope: session.sessionToken,
+  });
 
   // Await delivery — on serverless the function can be frozen right after the
   // response returns, dropping any un-awaited email send. Mirror the sign-in
@@ -38,10 +36,6 @@ export async function POST() {
       { status: 502 },
     );
   }
-
-  await prisma.mfaOtp.create({
-    data: { userId: session.userId, pendingToken, codeHash, rememberMe: false, expiresAt },
-  });
 
   return NextResponse.json({ pendingToken });
 }

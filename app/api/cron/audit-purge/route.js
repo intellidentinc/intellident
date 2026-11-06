@@ -1,3 +1,4 @@
+import { removeStorageObjects } from '@/lib/storage'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { isAuthorizedCron } from '@/lib/cron-auth'
@@ -56,6 +57,8 @@ export async function GET(request) {
       const recordIds = records.map((r) => r.id)
 
       if (recordIds.length > 0) {
+        const attachments = await prisma.attachment.findMany({ where: { recordId: { in: recordIds } }, select: { fileUrl: true } })
+        await removeStorageObjects('record-attachments', attachments.map((attachment) => attachment.fileUrl))
         await prisma.$transaction([
           prisma.recordHistory.deleteMany({ where: { recordId: { in: recordIds } } }),
           prisma.attachment.deleteMany({ where: { recordId: { in: recordIds } } }),

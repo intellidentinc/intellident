@@ -1,3 +1,4 @@
+const { bootstrapPassword } = require('./bootstrap.cjs');
 /**
  * prisma/seed-super.js
  *
@@ -6,7 +7,7 @@
  *
  * Credentials:
  *   Email:    superadmin@intellident.app
- *   Password: Intellident2026#
+ *   Password: supplied through SEED_ADMIN_PASSWORD
  */
 
 const { PrismaClient } = require('@prisma/client')
@@ -16,7 +17,7 @@ const prisma = new PrismaClient()
 
 const SUPERADMIN_ROLE = 0
 const EMAIL = 'superadmin@intellident.app'
-const PASSWORD = '12345678'
+const PASSWORD = bootstrapPassword(true)
 
 const enc = new TextEncoder()
 
@@ -59,6 +60,7 @@ async function main() {
       firstName: 'Super',
       lastName: 'Admin',
       password: hashedPassword,
+      mustChangePassword: true,
       passwordHistory: [hashedPassword],
       role: SUPERADMIN_ROLE,
       clinicId: null,
@@ -70,7 +72,6 @@ async function main() {
   console.log('─────────────────────────────────────')
   console.log('Super admin created!')
   console.log(`  Email   : ${EMAIL}`)
-  console.log(`  Password: ${PASSWORD}`)
   console.log('─────────────────────────────────────')
 }
 

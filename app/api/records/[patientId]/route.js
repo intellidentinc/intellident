@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (!isStepUpValid(session)) {
+  if (!isStepUpValid(session, 'otp')) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
 
@@ -65,6 +65,9 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStepUpValid(session, 'otp')) {
+    return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
+  }
 
   const dentist = await getDentistForClinic(session)
   if (!dentist) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

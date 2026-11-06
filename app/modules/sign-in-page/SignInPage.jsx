@@ -15,6 +15,7 @@ import Button from '@/components/commons/Button';
 import Input from '@/components/commons/Input';
 import { useToast } from '@/app/providers/ToastProvider';
 import { useCrypto } from '@/app/providers/CryptoProvider';
+import { setPendingLogin, clearPendingLogin } from '@/lib/pending-login';
 import { loadOrProvisionKeys } from '@/lib/clientKeys';
 
 export default function SignInPage() {
@@ -29,6 +30,8 @@ export default function SignInPage() {
   const { setKeys } = useCrypto();
 
   useEffect(() => {
+    clearPendingLogin();
+    sessionStorage.removeItem('mfa_pending');
     const verified = searchParams.get('verified');
     const reason   = searchParams.get('reason');
 
@@ -73,7 +76,8 @@ export default function SignInPage() {
       // exists. Stash only the password; the server releases the E2EE key material
       // (wrappedKey/keySalt) after the OTP is verified, not before.
       if (data.mfaPending) {
-        sessionStorage.setItem('mfa_pending', JSON.stringify({ password }));
+        setPendingLogin(data.pendingToken, password);
+        setPassword('');
         router.push(`/verify-otp?token=${data.pendingToken}`);
         return;
       }

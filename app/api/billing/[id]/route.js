@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRequestMeta, logAudit } from '@/lib/audit'
 import { parseJsonBody, str } from '@/lib/validate'
-import { computeBillingStatus, generateReceiptNumber } from '@/lib/billing'
+import { recordPayment } from '@/lib/payments'
+import { generateReceiptNumber } from '@/lib/billing'
 import { getActivePatientContext } from '@/lib/patient-context'
 
 async function getStaffCaller() {
@@ -97,7 +98,7 @@ export async function PATCH(request, { params }) {
 
   // Cash payment recording
   const rawAmount = parseFloat(parsed.body.amount)
-  if (isNaN(rawAmount) || rawAmount <= 0) {
+  if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
     return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 })
   }
   if (rawAmount > billing.balance + 0.001) {
@@ -110,22 +111,10 @@ export async function PATCH(request, { params }) {
   const notes  = str(parsed.body.notes, 500)
   const method = str(parsed.body.method, 50) ?? 'CASH'
 
-  const newAmountPaid = billing.amountPaid + rawAmount
-  const newBalance    = Math.max(0, billing.balance - rawAmount)
-  const newStatus     = computeBillingStatus(newAmountPaid, billing.amount)
-
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.payment.create({
-      data: { billingId: id, amount: rawAmount, method, notes: notes || null, type: 'FULL' },
-    })
-
-    const data = { amountPaid: newAmountPaid, balance: newBalance, status: newStatus }
-    if (newStatus === 'PAID' && !billing.receiptNumber) {
-      data.receiptNumber = await generateReceiptNumber(caller.clinicId, tx)
-    }
-
-    return tx.billing.update({ where: { id }, data, include: BILLING_INCLUDE })
-  })
+  const result = await recordPayment({ billingId: id, clinicId: caller.clinicId, amount: rawAmount, method, notes: notes || null })
+  if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
+  const updated = await prisma.billing.findUnique({ where: { id }, include: BILLING_INCLUDE })
+  const newStatus = updated.status
 
   logAudit({ userId: caller.id, clinicId: caller.clinicId, action: 'CREATE', entity: 'Payment', entityId: id, ipAddress: ip, userAgent, metadata: { amount: rawAmount, method, newStatus } })
 

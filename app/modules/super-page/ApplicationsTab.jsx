@@ -408,7 +408,7 @@ export default function ApplicationsTab() {
                       </Typography>
                       <Box sx={{ bgcolor: '#f8fafc', borderRadius: 2, p: 2, border: '1px solid', borderColor: 'divider' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7, fontStyle: 'italic' }}>
-                          "{detailTarget.message}"
+                          &quot;{detailTarget.message}&quot;
                         </Typography>
                       </Box>
                     </Box>

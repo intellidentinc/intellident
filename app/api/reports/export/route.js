@@ -26,7 +26,7 @@ export async function GET(request) {
   const caller = await getAuthContext()
   if (!caller || !isAdmin(caller.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  if (!isStepUpValid(session)) {
+  if (!isStepUpValid(session, 'password')) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
 

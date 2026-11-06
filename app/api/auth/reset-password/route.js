@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { revokeUserSessions } from '@/lib/session-state';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { getRequestMeta } from '@/lib/audit';
 import { sendPasswordChangedEmail } from '@/lib/email';
 import { parseJsonBody, hexToken, secret } from '@/lib/validate';
 
@@ -9,6 +12,9 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
 
 export async function POST(request) {
   try {
+    const { ip } = getRequestMeta(request);
+    const limit = await checkRateLimit(ip + ':reset-password', 10, 15 * 60);
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     const parsed = await parseJsonBody(request);
     if (parsed.error) {
       return NextResponse.json({ error: parsed.error }, { status: parsed.status });
@@ -40,7 +46,7 @@ export async function POST(request) {
     }
 
     const user = await prisma.user.findUnique({ where: { email: resetToken.email } });
-    if (!user || user.isDeleted) {
+    if (!user || user.isDeleted || !user.isActive) {
       return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     }
 
@@ -74,14 +80,20 @@ export async function POST(request) {
       clinic.passwordExpiryRoles.includes(user.role);
     const expiryDays = clinic?.passwordExpiryDays ?? 90;
 
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: user.id },
+    const changed = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: resetToken.id, usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count !== 1) return false;
+      await tx.user.update({
+        where: { id: user.id, password: user.password, isActive: true, isDeleted: false },
         // A reset mints a fresh master key, so the old envelope keypair (its private key
         // was encrypted under the now-lost master key) is unrecoverable. Clear it; a fresh
         // keypair is provisioned on next login and record access auto-heals via reshare.
         data: {
           password: hashedPassword,
+          mustChangePassword: false,
           passwordHistory: newHistory,
           wrappedKey,
           keySalt,
@@ -92,14 +104,14 @@ export async function POST(request) {
             ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
             : null,
         },
-      }),
-      prisma.passwordResetToken.update({
-        where: { id: resetToken.id },
-        data: { usedAt: new Date() },
-      }),
-    ]);
+      });
+      await tx.recordKey.deleteMany({ where: { userId: user.id } });
+      await revokeUserSessions(user.id, tx);
+      return true;
+    });
+    if (!changed) return NextResponse.json({ error: 'Reset link is invalid or has expired.' }, { status: 400 });
 
-    await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName });
+    await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName }).catch(() => {});
 
     return NextResponse.json({ message: 'Password reset successfully.' });
   } catch (error) {

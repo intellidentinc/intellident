@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession, getAuthContext } from '@/lib/auth'
+import { getSession, getAuthContext, isStepUpValid } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
 import { getRecordsDentist, dentistTreatsPatient, getRecordRecipients } from '@/lib/records-access'
@@ -20,6 +20,9 @@ import { parseJsonBody } from '@/lib/validate'
 export async function POST(request, { params }) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStepUpValid(session, 'otp')) {
+    return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
+  }
 
   const { patientId, recordId } = await params
 
@@ -62,10 +65,11 @@ export async function POST(request, { params }) {
 
   const existing = await prisma.recordKey.findMany({ where: { recordId }, select: { userId: true } })
   const have = new Set(existing.map((r) => r.userId))
+  if (!have.has(session.userId)) return NextResponse.json({ error: 'An existing key holder must reshare this record' }, { status: 403 })
 
   const toCreate = []
   for (const k of body.keys) {
-    if (!k || typeof k.userId !== 'string' || typeof k.wrappedKey !== 'string') continue
+    if (!k || typeof k.userId !== 'string' || typeof k.wrappedKey !== 'string' || k.wrappedKey.length > 4096) continue
     if (!recipientIds.has(k.userId) || have.has(k.userId)) continue
     toCreate.push({ recordId, userId: k.userId, wrappedKey: k.wrappedKey })
     have.add(k.userId)

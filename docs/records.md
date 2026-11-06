@@ -85,7 +85,7 @@ This is best-effort and idempotent — access heals on the next holder view.
 
 ## API routes
 
-All record routes require an authenticated session **and** valid step-up auth (`isStepUpValid`); see [`security.md`](./security.md) — Step-Up Mode 1 (OTP). The client-side gate (`OtpStepUpModal`) resets on every page navigation, so users must verify via email OTP each time they load the records page, regardless of the 15-min server TTL. Dentist routes additionally pass the `dentistTreatsPatient` gate.
+Patient-specific record routes require an authenticated session **and** valid OTP step-up auth (`isStepUpValid(session, 'otp')`), including creation, recipient lookup, reshare, history, and attachment upload/deletion; see [`security.md`](./security.md). The treating-patient directory (`GET /api/records`) is available before step-up. The client-side gate (`OtpStepUpModal`) resets on every page navigation, so users must verify via email OTP when opening a patient's records, regardless of the 15-min server TTL. Dentist routes additionally pass the `dentistTreatsPatient` gate.
 
 | Method | Route | Role | Purpose |
 |---|---|---|---|
@@ -135,3 +135,7 @@ See [`data-models.md`](./data-models.md) and [`schema.md`](./schema.md) for full
 ## `contentHash` tamper detection
 
 A SHA-256 `contentHash` is computed over the record content on every write and re-verified on read (`RecordFormModal.jsx`, `RecordViewModal.jsx`). A mismatch surfaces a tamper warning — this complements the AAD binding (AAD prevents cross-patient swaps; `contentHash` detects in-place modification of stored ciphertext).
+
+## Key lifecycle security update
+
+POST /api/profile/keys requires expectedWrappedKey with the candidate pair and returns the canonical stored publicKey, encryptedPrivateKey, privateKeyIv, wrappedKey, and keySalt. Provisioning conditionally updates only a null public key whose current master-key wrap matches that context. Clients use the canonical response and fail on provisioning errors. A password reset deletes the old RecordKey rows for the reset account; another authorized holder must reshare access. No holder means no server-side recovery. Record access and transfers require an OTP-specific step-up grant.

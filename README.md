@@ -6,8 +6,8 @@
 4. add the env vars (see the **Environment Variables** table in `CLAUDE.md` — at minimum `DATABASE_URL`, `SESSION_SECRET`; plus `GMAIL_*`, `SUPABASE_*`, `OPENAI_API_KEY`, `PAYMONGO_*`, `CRON_SECRET` for full functionality)
 5. npx prisma generate
 6. npx prisma db push (sync schema to the database)
-7. npx prisma db seed (3 clinics + 4 users per clinic; password `12345678`)
-8. node prisma/seed-super.js (super admin: `superadmin@intellident.app` / `12345678`)
+7. Set ALLOW_DEMO_SEED=true and a unique SEED_PASSWORD (12+ characters with uppercase, lowercase, number, and symbol), then run npx prisma db seed in a non-production environment.
+8. Set ALLOW_ADMIN_BOOTSTRAP=true and a unique SEED_ADMIN_PASSWORD, then run node prisma/seed-super.js if you need an administrator. Bootstrapped accounts must change their password on first login.
 9. npm run dev to run in local
 10. BOOM!
 
@@ -27,4 +27,8 @@ For local & code shits:
 ## Docs
 
 Architecture & feature reference lives in `CLAUDE.md` and `docs/` (security, records E2EE, appointments, billing, notifications, AI, schema, super-admin).
+
+## Security and validation
+
+Run npm run lint (Oxlint), npm run build, and npm audit before deployment. Security controls and deployment requirements are documented in [docs/security.md](docs/security.md). Use Node 22.12+ for the lint tooling.
 

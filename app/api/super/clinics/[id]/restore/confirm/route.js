@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
-import bcrypt from 'bcrypt'
+import { consumeOtp } from '@/lib/otp'
 import { getSession, isStepUpValid, getAuthContext } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ROLES } from '@/lib/roles'
@@ -9,7 +9,6 @@ import { logAudit, getRequestMeta } from '@/lib/audit'
 import { checkRateLimit } from '@/lib/rateLimit'
 import { importClinicBackup } from '@/lib/restore'
 
-const MAX_OTP_ATTEMPTS = 5
 const MAX_BACKUP_BYTES = 25 * 1024 * 1024 // 25 MB
 
 async function requireSuperAdmin() {
@@ -24,7 +23,7 @@ export async function POST(request, { params }) {
   const session = await requireSuperAdmin()
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  if (!isStepUpValid(session)) {
+  if (!isStepUpValid(session, 'password')) {
     return NextResponse.json({ error: 'Step-up authentication required', requiresStepUp: true }, { status: 403 })
   }
 
@@ -87,37 +86,11 @@ export async function POST(request, { params }) {
   })
   if (!clinic) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
 
-  const mfa = await prisma.mfaOtp.findUnique({ where: { pendingToken } })
-
-  if (!mfa || mfa.userId !== session.userId) {
-    return NextResponse.json({ error: 'Invalid or expired restore session' }, { status: 400 })
-  }
-  if (mfa.usedAt) {
-    return NextResponse.json({ error: 'This code has already been used' }, { status: 400 })
-  }
-  if (mfa.expiresAt < new Date()) {
-    return NextResponse.json({ error: 'Code has expired. Request a new one.' }, { status: 400 })
-  }
-  if (mfa.attempts >= MAX_OTP_ATTEMPTS) {
-    return NextResponse.json({ error: 'Too many incorrect attempts. Request a new code.' }, { status: 429 })
-  }
-
-  const isValid = await bcrypt.compare(String(code).trim(), mfa.codeHash)
-
-  if (!isValid) {
-    const newAttempts = mfa.attempts + 1
-    await prisma.mfaOtp.update({ where: { id: mfa.id }, data: { attempts: newAttempts } })
-    const remaining = MAX_OTP_ATTEMPTS - newAttempts
-    if (remaining <= 0) {
-      return NextResponse.json({ error: 'Too many incorrect attempts. Request a new code.' }, { status: 429 })
-    }
-    return NextResponse.json(
-      { error: `Incorrect code. ${remaining} attempt(s) remaining.` },
-      { status: 401 }
-    )
-  }
-
-  await prisma.mfaOtp.update({ where: { id: mfa.id }, data: { usedAt: new Date() } })
+  const result = await consumeOtp({
+    pendingToken, code: code.trim(), purpose: 'restore',
+    scope: session.sessionToken + ':' + clinicId, userId: session.userId,
+  })
+  if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
 
   // Confirmation token the operator retains as proof of authorization
   const confirmationToken = crypto.randomBytes(16).toString('hex').toUpperCase()

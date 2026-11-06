@@ -10,6 +10,7 @@ import TextField from '@mui/material/TextField';
 import Button from '@/components/commons/Button';
 import { useToast } from '@/app/providers/ToastProvider';
 import { useCrypto } from '@/app/providers/CryptoProvider';
+import { getPendingLogin, clearPendingLogin } from '@/lib/pending-login';
 import { loadOrProvisionKeys } from '@/lib/clientKeys';
 import { ShieldCheck } from 'lucide-react';
 
@@ -29,7 +30,7 @@ export default function VerifyOtpPage() {
   useEffect(() => {
     const token = searchParams.get('token');
     // Verify we have everything needed
-    if (!token || !sessionStorage.getItem('mfa_pending')) {
+    if (!token || !getPendingLogin(token)) {
       router.replace('/sign-in');
       return;
     }
@@ -78,7 +79,7 @@ export default function VerifyOtpPage() {
 
     setLoading(true);
     try {
-      const stored = JSON.parse(sessionStorage.getItem('mfa_pending') || 'null');
+      const stored = getPendingLogin(pendingToken);
       if (!stored) {
         showToast('Session expired. Please sign in again.', 'error');
         router.replace('/sign-in');
@@ -97,7 +98,7 @@ export default function VerifyOtpPage() {
         showToast(data.error || 'Verification failed', 'error');
         // If the token is dead, send back to sign-in
         if (res.status === 400 || res.status === 429) {
-          sessionStorage.removeItem('mfa_pending');
+          clearPendingLogin();
           setTimeout(() => router.replace('/sign-in'), 1500);
         } else {
           // Wrong code — clear digits and refocus
@@ -110,10 +111,11 @@ export default function VerifyOtpPage() {
 
       // The E2EE key material is returned by verify-otp (only after the OTP passes).
       // Unwrap the master key + load/provision the envelope keypair locally.
+      clearPendingLogin();
       const keys = await loadOrProvisionKeys(data, stored.password);
       setKeys(keys);
 
-      sessionStorage.removeItem('mfa_pending');
+      clearPendingLogin();
       showToast('Signed in successfully!', 'success');
 
       // Honor the same post-login routing flags the sign-in page does.
@@ -139,6 +141,8 @@ export default function VerifyOtpPage() {
       }
       router.push(data.clinicId ? `/${data.clinicId}/dashboard` : '/super');
     } catch {
+      clearPendingLogin();
+      await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => {});
       showToast('Something went wrong. Please try again.', 'error');
       setLoading(false);
     }
