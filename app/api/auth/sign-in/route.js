@@ -142,7 +142,7 @@ export async function POST(request) {
     const { pendingToken, code: otp } = await issueOtp({ userId: user.id, purpose: 'login', rememberMe, expectedPasswordHash: user.password });
 
     try {
-      if (!judgesOtpEnabled('login')) {
+      if (!judgesOtpEnabled('login', user.email)) {
         await sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
       }
     } catch (emailError) {

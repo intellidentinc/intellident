@@ -29,7 +29,7 @@ export async function POST() {
   // response returns, dropping any un-awaited email send. Mirror the sign-in
   // MFA path (which awaits sendMfaOtpEmail) so the code reliably goes out.
   try {
-    if (!judgesOtpEnabled('step-up')) {
+    if (!judgesOtpEnabled('step-up', user.email)) {
       await sendStepUpOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
     }
   } catch (err) {

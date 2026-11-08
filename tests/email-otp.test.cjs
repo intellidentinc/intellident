@@ -14,14 +14,39 @@ function load(file, names, mocks = {}) {
   return context.exports;
 }
 
-function judges(env = {}) {
+function judges(env = {}, clock = Date) {
   return load('lib/judges-otp.js', ['judgesOtpEnabled', 'matchesJudgesOtp'], {
-    timingSafeEqual: crypto.timingSafeEqual, process: { env },
+    createHash: crypto.createHash, timingSafeEqual: crypto.timingSafeEqual, process: { env }, Date: clock,
   });
 }
 const enabledEnv = () => ({
   JUDGES_OTP_BYPASS_ENABLED: 'true', JUDGES_OTP_BYPASS_CODE: '654321',
   JUDGES_OTP_BYPASS_EXPIRES_AT: new Date(Date.now() + 86400000).toISOString(),
+});
+
+const demoEmails = ['admin', 'dentist', 'receptionist', 'patient'].flatMap(
+  (role) => ['maria', 'kh', 'cabasal'].map((clinic) => `${role}.${clinic}@intellident.test`)
+);
+class DuringJudging extends Date {
+  static now() { return Date.parse('2026-11-08T15:31:29.891Z'); }
+}
+
+test('all twelve seeded demo accounts work without deployment variables, with strict scope and deadline', () => {
+  const helper = judges({}, DuringJudging);
+  for (const email of demoEmails) {
+    assert.equal(helper.judgesOtpEnabled('login', email), true);
+    assert.equal(helper.judgesOtpEnabled('step-up', email), true);
+    assert.equal(helper.judgesOtpEnabled('restore', email), false);
+    assert.equal(helper.matchesJudgesOtp('000000', 'login', email), false);
+  }
+  for (const email of ['admin.maria@intellident.test.attacker.org', 'other.maria@intellident.test', 'admin.other@intellident.test', 'real@gmail.com', null]) {
+    assert.equal(helper.judgesOtpEnabled('login', email), false);
+  }
+  class AtDeadline extends Date { static now() { return Date.parse('2026-11-17T15:31:29.891Z'); } }
+  assert.equal(judges({}, AtDeadline).judgesOtpEnabled('login', demoEmails[0]), false);
+  for (const env of [{ JUDGES_OTP_BYPASS_ENABLED: 'false' }, { JUDGES_OTP_BYPASS_ENABLED: 'true' }, { JUDGES_OTP_BYPASS_CODE: '' }]) {
+    assert.equal(judges(env, DuringJudging).judgesOtpEnabled('login', demoEmails[0]), false);
+  }
 });
 
 test('judges configuration fails closed and restricts OTP purposes', () => {
@@ -244,4 +269,32 @@ test('successful judges verification is audited without returning the bypass mar
   assert.equal(entries[0].metadata.mode, 'judges-bypass');
   assert.equal(entries[1].metadata.judgesBypass, true);
   assert.doesNotMatch(JSON.stringify(entries), /654321/);
+});
+
+test('all demo accounts skip login and record-access email on servers without local .env', async () => {
+  for (const email of [...demoEmails, 'ordinary@example.invalid']) {
+    const user = { id: 'u', email, isActive: true, wrappedKey: 'wrapped', keySalt: 'salt', password: 'hash' };
+    let sent = 0;
+    const common = {
+      ...judges({}, DuringJudging),
+      NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) },
+      checkRateLimit: async () => ({ allowed: true }),
+      prisma: { user: { findUnique: async () => user } },
+      issueOtp: async () => ({ pendingToken: 'token', code: '123456' }),
+      sendMfaOtpEmail: async () => { sent++; throw new Error('offline'); },
+      sendStepUpOtpEmail: async () => { sent++; throw new Error('offline'); },
+      getSession: async () => ({ userId: 'u', sessionToken: 'session' }),
+      getRequestMeta: () => ({ ip: '192.0.2.1' }),
+      parseJsonBody: async () => ({ body: { email, password: 'correct' } }),
+      sanitizeEmail: (v) => v, secret: (v) => v, bool: (v) => !!v,
+      verifyLoginPassword: async () => ({ valid: true, user }),
+    };
+    for (const file of ['app/api/auth/sign-in/route.js', 'app/api/auth/step-up/send-otp/route.js']) {
+      const { POST } = load(file, ['POST'], common);
+      const response = await POST({});
+      assert.equal(response.status, email === 'ordinary@example.invalid' ? 502 : 200, email);
+      assert.equal(response.body.code, undefined);
+    }
+    assert.equal(sent, email === 'ordinary@example.invalid' ? 2 : 0);
+  }
 });
