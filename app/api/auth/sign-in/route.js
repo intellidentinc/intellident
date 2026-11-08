@@ -23,7 +23,8 @@ import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { issueOtp } from '@/lib/otp';
-import { judgesOtpEnabled } from '@/lib/judges-otp';
+import { isEmailOtpRequired } from '@/lib/email-otp-policy';
+import { finalizeLogin } from '@/lib/login';
 import { verifyLoginPassword } from '@/lib/login-attempts';
 import { sendMfaOtpEmail, sendAccountLockedAlert } from '@/lib/email';
 
@@ -137,14 +138,25 @@ export async function POST(request) {
       );
     }
 
+    if (!isEmailOtpRequired()) {
+      const flags = await finalizeLogin({ user, clinic, rememberMe, ip, userAgent });
+      return NextResponse.json({
+        clinicId: user.clinicId,
+        wrappedKey: user.wrappedKey,
+        keySalt: user.keySalt,
+        publicKey: user.publicKey,
+        encryptedPrivateKey: user.encryptedPrivateKey,
+        privateKeyIv: user.privateKeyIv,
+        ...flags,
+      });
+    }
+
     // MFA (email OTP) step — credentials are valid; issue a one-time code and defer session
     // creation to POST /api/auth/verify-otp, which runs finalizeLogin() once the code is confirmed.
     const { pendingToken, code: otp } = await issueOtp({ userId: user.id, purpose: 'login', rememberMe, expectedPasswordHash: user.password });
 
     try {
-      if (!judgesOtpEnabled('login', user.email)) {
-        await sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
-      }
+      await sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
     } catch (emailError) {
       console.error('Failed to send MFA OTP email:', emailError);
       return NextResponse.json(

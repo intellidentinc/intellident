@@ -129,7 +129,7 @@ test('sign-in still issues MFA for an enabled clinic without returning encryptio
     checkRateLimit: async () => ({ allowed: true }), logAudit: () => {}, after: () => {},
     issueOtp: async ({ expectedPasswordHash }) => { assert.equal(expectedPasswordHash, fixture.user.password); issued++; return { pendingToken: 'fixture-token', code: '123456' }; },
     sendMfaOtpEmail: async () => {},
-    judgesOtpEnabled: () => false,
+    isEmailOtpRequired: () => true,
   });
   const response = await POST({});
   assert.equal(response.status, 200);
@@ -325,7 +325,7 @@ test('an exhausted password budget does not block the separate OTP grant', async
   assert.deepEqual(fixture.stats().grants, ['otp']);
 });
 
-const { isStepUpValid } = load('lib/auth.js', ['isStepUpValid'], { cache: (fn) => fn });
+const { isStepUpValid } = load('lib/auth.js', ['isStepUpValid'], { cache: (fn) => fn, isEmailOtpRequired: () => true });
 const recordRoutes = [
   ['app/api/records/[patientId]/route.js', 'POST'],
   ['app/api/records/[patientId]/recipients/route.js', 'GET'],

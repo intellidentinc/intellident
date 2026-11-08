@@ -20,8 +20,32 @@ export default function OtpStepUpModal({ open, onClose, onSuccess, description }
   const [sending, setSending]           = useState(false)
   const [verifying, setVerifying]       = useState(false)
   const [cooldown, setCooldown]         = useState(0)
+  const [checking, setChecking]         = useState(true)
   const inputRefs                       = useRef([])
   const timerRef                        = useRef(null)
+  const successRef                      = useRef(onSuccess)
+
+  useEffect(() => { successRef.current = onSuccess }, [onSuccess])
+
+  useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+    fetch('/api/auth/step-up?mode=otp', { cache: 'no-store', signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Unable to check verification status. Please try again.')
+        const data = await res.json()
+        if (controller.signal.aborted) return
+        if (data.otpRequired === false || data.valid === true) successRef.current()
+        else setChecking(false)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setError('Unable to check verification status. Please try again.')
+          setChecking(false)
+        }
+      })
+    return () => controller.abort()
+  }, [open])
 
   useEffect(() => {
     if (!open) {
@@ -32,6 +56,7 @@ export default function OtpStepUpModal({ open, onClose, onSuccess, description }
       setSending(false)
       setVerifying(false)
       setCooldown(0)
+      setChecking(true)
       clearInterval(timerRef.current)
     }
   }, [open])
@@ -63,6 +88,10 @@ export default function OtpStepUpModal({ open, onClose, onSuccess, description }
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Failed to send code. Please try again.')
+        return false
+      }
+      if (data.otpRequired === false) {
+        successRef.current()
         return false
       }
       setPendingToken(data.pendingToken)
@@ -151,6 +180,9 @@ export default function OtpStepUpModal({ open, onClose, onSuccess, description }
   }
 
   const busy = sending || verifying
+
+  // No code-entry dialog while the server checks the temporary OTP policy.
+  if (checking) return null
 
   return (
     <Dialog

@@ -247,7 +247,7 @@ RESCHEDULED → bg #ede9fe  color #7c3aed   (purple)
 - Sign-up creates `EmailVerification` (not `User`) until email verified; token single-use. Email-verification and password-reset tokens are stored **SHA-256 hashed at rest** — the raw token lives only in the emailed link; routes hash the incoming token before lookup
 - Password reset generates fresh E2EE keys (old data inaccessible); change-password re-wraps existing key
 - Password history: cannot reuse last 3
-- MFA (email OTP): enabled and enforced on every sign-in. `app/api/auth/sign-in/route.js` issues a 6-digit OTP (bcrypt-hashed `MfaOtp`, emailed) and defers session creation to `verify-otp`; `wrappedKey`/`keySalt` are withheld until the OTP is confirmed. Code: `MfaOtp` model, `verify-otp` route, `VerifyOtpPage`
+- MFA (email OTP): normally enforced on every sign-in; temporarily disabled for all accounts until `2026-11-17T15:31:29.891Z` by `lib/email-otp-policy.js`, including record-access OTP. Backup-restore OTP and password step-up remain required. During the window, sign-in calls `finalizeLogin` directly and returns encrypted key material. Outside the window, `app/api/auth/sign-in/route.js` issues a 6-digit OTP (bcrypt-hashed `MfaOtp`, emailed) and defers session creation to `verify-otp`; `wrappedKey`/`keySalt` are withheld until the OTP is confirmed. Code: `MfaOtp` model, `verify-otp` route, `VerifyOtpPage`
 
 **RBAC:**
 
@@ -347,7 +347,7 @@ All appointment events → in-app bell + Gmail email. No Reminders page — bell
 - [x] User Access & Authentication
   - [x] Sign up / email verification
   - [x] Sign in / sign out
-  - [x] Multi-factor authentication — email OTP (6-digit, 10 min expiry, 5-attempt limit, bcrypt-hashed); enforced for all users on every sign-in; see `docs/security.md#multi-factor-authentication-email-otp`
+  - [x] Multi-factor authentication — email OTP (6-digit, 10 min expiry, 5-attempt limit, bcrypt-hashed); normally enforced for all users; login and record OTP waived until `2026-11-17T15:31:29.891Z`; see `docs/security.md#multi-factor-authentication-email-otp`
   - [x] Password policy enforcement
   - [x] Account lockout
   - [x] Session expiry + inactivity logout

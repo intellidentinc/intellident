@@ -6,11 +6,18 @@ import { prisma } from '@/lib/prisma';
 import { parseJsonBody, secret, hexToken } from '@/lib/validate';
 import { getRequestMeta, logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { isEmailOtpRequired } from '@/lib/email-otp-policy';
 
 
-export async function GET() {
+export async function GET(request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ valid: false }, { status: 401 });
+  if (new URL(request.url).searchParams.get('mode') === 'otp') {
+    return NextResponse.json(
+      { valid: isStepUpValid(session, 'otp'), otpRequired: isEmailOtpRequired() },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
   return NextResponse.json({ valid: isStepUpValid(session, 'password') });
 }
 
@@ -50,7 +57,7 @@ export async function POST(request) {
       entity: 'StepUp',
       ipAddress: ip,
       userAgent,
-      metadata: { mode: 'otp', success: true, ...(result.judgesBypass && { judgesBypass: true }) },
+      metadata: { mode: 'otp', success: true },
     });
 
     const granted = await grantStepUp('otp');

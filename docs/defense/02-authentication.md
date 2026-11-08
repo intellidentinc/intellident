@@ -1,5 +1,7 @@
 # 02 — Authentication & Session Management
 
+> Temporary judging policy: login and record-access email OTP are disabled for all accounts until November 17, 2026, 11:31:29 PM Philippine time (`2026-11-17T15:31:29.891Z`). Passwords, authorization, encryption, password step-up, and restore OTP remain enforced. The normal OTP flow described below resumes automatically afterward.
+
 ## What it is
 
 A **custom-built**, session-based authentication system: password sign-in → mandatory email-OTP MFA → HMAC-signed cookie backed by a database session row. It also carries the E2EE key material handoff (the browser, not the server, decrypts patient data — see `05-records-e2ee.md`). We built it ourselves because no off-the-shelf auth library models our combination of MFA-gated key release, step-up re-auth, and per-clinic password policies.

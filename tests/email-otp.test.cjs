@@ -9,65 +9,189 @@ function load(file, names, mocks = {}) {
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
     .replace(/^import\s+[\s\S]*?from\s+['"][^'"]+['"];?\r?\n/gm, '')
     .replace(/\bexport (?=(?:async )?function|const)/g, '');
-  const context = vm.createContext({ Buffer, Date, console: { error() {} }, process: { env: {} }, ...mocks });
+  const context = vm.createContext({ Buffer, Date, URL, console: { error() {} }, process: { env: {} }, ...mocks });
   vm.runInContext(`${source}\nglobalThis.exports = { ${names.join(', ')} };`, context);
   return context.exports;
 }
 
-function judges(env = {}, clock = Date) {
-  return load('lib/judges-otp.js', ['judgesOtpEnabled', 'matchesJudgesOtp'], {
-    createHash: crypto.createHash, timingSafeEqual: crypto.timingSafeEqual, process: { env }, Date: clock,
+const deadline = Date.parse('2026-11-17T15:31:29.891Z');
+function policyAt(time) {
+  class Clock extends Date { static now() { return time; } }
+  return load('lib/email-otp-policy.js', ['isEmailOtpRequired'], { Date: Clock });
+}
+function recordGate(policy) {
+  return load('lib/auth.js', ['isStepUpValid'], { ...policy, cache: (fn) => fn }).isStepUpValid;
+}
+const json = (body, options = {}) => ({ body, status: options.status || 200, headers: options.headers });
+
+test('fixed judging deadline restores OTP exactly at expiry without environment settings', () => {
+  assert.equal(policyAt(deadline - 1).isEmailOtpRequired(), false);
+  assert.equal(policyAt(deadline).isEmailOtpRequired(), true);
+  assert.equal(policyAt(deadline + 1).isEmailOtpRequired(), true);
+});
+
+function signInFixture({ required = false, email = 'ordinary@example.invalid', valid = true, active = true, enabled = true } = {}) {
+  const user = { id: 'u', email, role: 2, clinicId: 'c', isActive: active, wrappedKey: 'wrapped', keySalt: 'salt', password: 'hash' };
+  let finalized = 0;
+  let sent = 0;
+  let issued = 0;
+  const { POST } = load('app/api/auth/sign-in/route.js', ['POST'], {
+    NextResponse: { json }, isEmailOtpRequired: () => required,
+    getRequestMeta: () => ({ ip: '192.0.2.1' }),
+    checkRateLimit: async () => ({ allowed: true }),
+    parseJsonBody: async () => ({ body: { email, password: 'correct', rememberMe: true } }),
+    sanitizeEmail: (v) => v, secret: (v) => v, bool: (v) => !!v,
+    prisma: { user: { findUnique: async () => user }, clinic: { findUnique: async () => ({ isEnabled: enabled }) } },
+    verifyLoginPassword: async () => ({ valid, user }),
+    finalizeLogin: async (args) => {
+      finalized++;
+      assert.equal(args.user, user);
+      assert.equal(args.rememberMe, true);
+      return { requiresTerms: true, mustChangePassword: true, passwordExpired: true, requiresStepUp: true };
+    },
+    issueOtp: async () => { issued++; return { pendingToken: 'token', code: '123456' }; },
+    sendMfaOtpEmail: async () => { sent++; },
   });
-}
-const enabledEnv = () => ({
-  JUDGES_OTP_BYPASS_ENABLED: 'true', JUDGES_OTP_BYPASS_CODE: '654321',
-  JUDGES_OTP_BYPASS_EXPIRES_AT: new Date(Date.now() + 86400000).toISOString(),
-});
-
-const demoEmails = ['admin', 'dentist', 'receptionist', 'patient'].flatMap(
-  (role) => ['maria', 'kh', 'cabasal'].map((clinic) => `${role}.${clinic}@intellident.test`)
-);
-class DuringJudging extends Date {
-  static now() { return Date.parse('2026-11-08T15:31:29.891Z'); }
+  return { POST, stats: () => ({ finalized, sent, issued }) };
 }
 
-test('all twelve seeded demo accounts work without deployment variables, with strict scope and deadline', () => {
-  const helper = judges({}, DuringJudging);
-  for (const email of demoEmails) {
-    assert.equal(helper.judgesOtpEnabled('login', email), true);
-    assert.equal(helper.judgesOtpEnabled('step-up', email), true);
-    assert.equal(helper.judgesOtpEnabled('restore', email), false);
-    assert.equal(helper.matchesJudgesOtp('000000', 'login', email), false);
-  }
-  for (const email of ['admin.maria@intellident.test.attacker.org', 'other.maria@intellident.test', 'admin.other@intellident.test', 'real@gmail.com', null]) {
-    assert.equal(helper.judgesOtpEnabled('login', email), false);
-  }
-  class AtDeadline extends Date { static now() { return Date.parse('2026-11-17T15:31:29.891Z'); } }
-  assert.equal(judges({}, AtDeadline).judgesOtpEnabled('login', demoEmails[0]), false);
-  for (const env of [{ JUDGES_OTP_BYPASS_ENABLED: 'false' }, { JUDGES_OTP_BYPASS_ENABLED: 'true' }, { JUDGES_OTP_BYPASS_CODE: '' }]) {
-    assert.equal(judges(env, DuringJudging).judgesOtpEnabled('login', demoEmails[0]), false);
+test('ordinary and demo accounts sign in directly during judging and retain key material and routing flags', async () => {
+  for (const email of ['admin.maria@intellident.test', 'ordinary@example.invalid', 'superadmin@intellident.app']) {
+    const f = signInFixture({ email });
+    const res = await f.POST({});
+    assert.equal(res.status, 200);
+    assert.equal(res.body.mfaPending, undefined);
+    assert.equal(res.body.pendingToken, undefined);
+    assert.equal(res.body.wrappedKey, 'wrapped');
+    assert.equal(res.body.keySalt, 'salt');
+    for (const flag of ['requiresTerms', 'mustChangePassword', 'passwordExpired', 'requiresStepUp']) assert.equal(res.body[flag], true);
+    assert.deepEqual(f.stats(), { finalized: 1, sent: 0, issued: 0 });
   }
 });
 
-test('judges configuration fails closed and restricts OTP purposes', () => {
-  const env = enabledEnv();
-  const helper = judges(env);
-  assert.equal(helper.matchesJudgesOtp('654321', 'login'), true);
-  assert.equal(helper.matchesJudgesOtp('654321', 'step-up'), true);
-  assert.equal(helper.matchesJudgesOtp('654321', 'restore'), false);
-  assert.equal(helper.matchesJudgesOtp('123456', 'login'), false);
-  assert.equal(helper.matchesJudgesOtp(null, 'login'), false);
-  for (const patch of [
-    { JUDGES_OTP_BYPASS_ENABLED: 'false' }, { JUDGES_OTP_BYPASS_CODE: '' },
-    { JUDGES_OTP_BYPASS_CODE: 'abcdef' }, { JUDGES_OTP_BYPASS_EXPIRES_AT: '' },
-    { JUDGES_OTP_BYPASS_EXPIRES_AT: 'invalid' }, { JUDGES_OTP_BYPASS_EXPIRES_AT: '2099-01-01' },
-    { JUDGES_OTP_BYPASS_EXPIRES_AT: new Date(Date.now() - 1000).toISOString() },
-  ]) assert.equal(judges({ ...env, ...patch }).matchesJudgesOtp('654321', 'login'), false);
+test('password, lockout result, account and clinic restrictions precede temporary OTP waiver', async () => {
+  for (const [settings, status] of [[{ valid: false }, 401], [{ active: false }, 403], [{ enabled: false }, 403]]) {
+    const f = signInFixture(settings);
+    const res = await f.POST({});
+    assert.equal(res.status, status);
+    assert.equal(res.body.wrappedKey, undefined);
+    assert.deepEqual(f.stats(), { finalized: 0, sent: 0, issued: 0 });
+  }
+});
+
+test('after judging login sends OTP and withholds session and keys', async () => {
+  const f = signInFixture({ required: policyAt(deadline).isEmailOtpRequired() });
+  const res = await f.POST({});
+  assert.equal(res.status, 200);
+  assert.equal(res.body.mfaPending, true);
+  assert.equal(res.body.wrappedKey, undefined);
+  assert.deepEqual(f.stats(), { finalized: 0, sent: 1, issued: 1 });
+});
+
+test('record waiver applies only to authenticated OTP checks and leaves no grant after expiry', () => {
+  const session = { userId: 'u', sessionToken: 'session' };
+  const before = recordGate(policyAt(deadline - 1));
+  const after = recordGate(policyAt(deadline));
+  assert.equal(before(session, 'otp'), true);
+  assert.equal(before(session, 'password'), false);
+  assert.equal(before(session), false);
+  assert.equal(before(null, 'otp'), false);
+  assert.equal(before({ userId: 'u' }, 'otp'), false);
+  assert.equal(after(session, 'otp'), false);
+  assert.equal(session.stepUpGrantedAt, undefined);
+  const passwordGrant = { ...session, stepUpMode: 'password', stepUpGrantedAt: Date.now() };
+  assert.equal(before(passwordGrant, 'password'), true);
+});
+
+test('OTP status and issuance endpoints require a session and return waiver without creating or sending OTP', async () => {
+  for (const required of [false, true]) {
+    const policy = { isEmailOtpRequired: () => required };
+    const session = { userId: 'u', sessionToken: 'session' };
+    let sent = 0;
+    let issued = 0;
+    const mocks = {
+      ...policy, NextResponse: { json }, isStepUpValid: recordGate(policy),
+      getSession: async () => session,
+      checkRateLimit: async () => ({ allowed: true }),
+      prisma: { user: { findUnique: async () => ({ email: 'ordinary@example.invalid' }) } },
+      issueOtp: async () => { issued++; return { pendingToken: 'token', code: '123456' }; },
+      sendStepUpOtpEmail: async () => { sent++; },
+    };
+    const { GET } = load('app/api/auth/step-up/route.js', ['GET'], mocks);
+    const status = await GET({ url: 'https://example.invalid/api/auth/step-up?mode=otp' });
+    assert.equal(status.body.otpRequired, required);
+    assert.equal(status.body.valid, !required);
+    assert.equal(status.headers['Cache-Control'], 'no-store');
+    assert.equal((await GET({ url: 'https://example.invalid/api/auth/step-up' })).body.valid, false);
+    const { POST } = load('app/api/auth/step-up/send-otp/route.js', ['POST'], mocks);
+    const response = await POST();
+    assert.equal(response.status, 200);
+    assert.equal(response.body.otpRequired, required ? undefined : false);
+    assert.equal(issued, required ? 1 : 0);
+    assert.equal(sent, required ? 1 : 0);
+    const anonymous = { ...mocks, getSession: async () => null };
+    assert.equal((await load('app/api/auth/step-up/route.js', ['GET'], anonymous).GET({ url: 'https://example.invalid/?mode=otp' })).status, 401);
+    assert.equal((await load('app/api/auth/step-up/send-otp/route.js', ['POST'], anonymous).POST()).status, 401);
+  }
+});
+
+test('record waiver retains patient ownership and treating-dentist clinic restrictions', async () => {
+  const roles = { DENTIST: 2, PATIENT: 4 };
+  for (const role of [roles.DENTIST, roles.PATIENT]) {
+    for (const authorized of [false, true]) {
+      let accessed = 0;
+      const session = { userId: 'u', sessionToken: 'session', clinicId: 'clinic-a' };
+      const { GET } = load('app/api/records/[patientId]/recipients/route.js', ['GET'], {
+        NextResponse: { json }, ROLES: roles,
+        getSession: async () => session,
+        getAuthContext: async () => ({ ...session, role }),
+        isStepUpValid: recordGate(policyAt(deadline - 1)),
+        getRecordsDentist: async () => ({ dentistId: 'dentist', clinicId: 'clinic-a' }),
+        dentistTreatsPatient: async (args) => { assert.equal(args.clinicId, 'clinic-a'); return authorized; },
+        prisma: { patient: { findFirst: async ({ where }) => {
+          assert.equal(where.clinicId, 'clinic-a'); assert.equal(where.userId, 'u');
+          return authorized ? { id: 'patient' } : null;
+        } } },
+        getRecordRecipients: async ({ clinicId }) => { assert.equal(clinicId, 'clinic-a'); accessed++; return { recipients: [] }; },
+      });
+      const res = await GET({}, { params: Promise.resolve({ patientId: 'patient' }) });
+      assert.equal(res.status, authorized ? 200 : 404);
+      assert.equal(accessed, authorized ? 1 : 0);
+    }
+  }
+});
+
+test('backup restore still requires password step-up and sends its own email OTP during judging', async () => {
+  const policy = policyAt(deadline - 1);
+  const session = { userId: 'admin', sessionToken: 'session' };
+  let issued = 0;
+  let sent = 0;
+  const pending = [];
+  const { POST } = load('app/api/super/clinics/[id]/restore/request-otp/route.js', ['POST'], {
+    NextResponse: { json }, ROLES: { SUPERADMIN: 0 },
+    getSession: async () => session,
+    getAuthContext: async () => ({ role: 0, email: 'admin@example.invalid' }),
+    isStepUpValid: recordGate(policy),
+    getRequestMeta: () => ({ ip: '192.0.2.1' }), logAudit: () => {},
+    checkRateLimit: async () => ({ allowed: true }),
+    prisma: { clinic: { findUnique: async () => ({ id: 'clinic', name: 'Clinic' }) }, mfaOtp: { updateMany: async () => {} } },
+    issueOtp: async ({ purpose }) => { assert.equal(purpose, 'restore'); issued++; return { pendingToken: 'restore-token', code: '123456' }; },
+    sendRestoreOtpEmail: async ({ code }) => { assert.equal(code, '123456'); sent++; },
+    after: (promise) => { pending.push(promise); },
+  });
+  assert.equal((await POST({}, { params: Promise.resolve({ id: 'clinic' }) })).status, 403);
+  assert.equal(issued, 0);
+  session.stepUpMode = 'password'; session.stepUpGrantedAt = Date.now();
+  const res = await POST({}, { params: Promise.resolve({ id: 'clinic' }) });
+  await Promise.all(pending);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.pendingToken, 'restore-token');
+  assert.equal(issued, 1);
+  assert.equal(sent, 1);
 });
 
 async function otpFixture(purpose = 'login', scope = '') {
   const user = { id: 'user', password: 'hash', email: 'test@example.invalid', role: 2, isActive: true, isDeleted: false };
-  const env = enabledEnv();
   let row;
   const table = {
     create: async ({ data }) => { row = { id: 'otp', attempts: 0, usedAt: null, ...data, user }; },
@@ -76,25 +200,22 @@ async function otpFixture(purpose = 'login', scope = '') {
   };
   const tx = { $executeRaw: async () => {}, mfaOtp: table };
   const api = load('lib/otp.js', ['issueOtp', 'consumeOtp'], {
-    ...crypto, randomInt: () => 123456, ...judges(env),
+    ...crypto, randomInt: () => 123456,
     bcrypt: { hash: async (code) => `hash-${code}`, compare: async (code, hash) => hash === `hash-${code}` },
     prisma: { user: { findUnique: async () => user }, mfaOtp: table, $transaction: async (cb) => cb(tx) },
   });
   const issued = await api.issueOtp({ userId: user.id, purpose, scope, expectedPasswordHash: user.password });
-  return { ...api, issued, row, user, env, consume: (changes = {}) => api.consumeOtp({ pendingToken: issued.pendingToken, code: '654321', purpose, scope, ...changes }) };
+  return { ...api, issued, row, user, consume: (changes = {}) => api.consumeOtp({ pendingToken: issued.pendingToken, code: issued.code, purpose, scope, ...changes }) };
 }
 
-test('judges code consumes a real challenge once and normal emailed codes still work', async () => {
+test('emailed OTP consumes a challenge once and rejects the former shared code', async () => {
   const f = await otpFixture();
-  assert.equal((await f.consume()).judgesBypass, true);
+  assert.ok((await f.consume({ code: '654321' })).error);
+  assert.ok((await f.consume()).challenge);
   assert.ok((await f.consume()).error);
-  const normal = await otpFixture();
-  normal.env.JUDGES_OTP_BYPASS_ENABLED = 'false';
-  assert.ok((await normal.consume()).error);
-  assert.ok((await normal.consume({ code: normal.issued.code })).challenge);
 });
 
-test('judges code retains expiry, attempts, account, token, purpose and session restrictions', async () => {
+test('emailed OTP retains expiry, attempts, account, token, purpose and session restrictions', async () => {
   const cases = [
     (f) => { f.row.expiresAt = new Date(0); },
     (f) => { f.row.attempts = 5; },
@@ -104,16 +225,16 @@ test('judges code retains expiry, attempts, account, token, purpose and session 
     (f) => { f.user.email = 'changed@example.invalid'; },
     (f) => { f.user.role = 0; },
     (f) => { f.row.usedAt = new Date(); },
-    (f) => { f.env.JUDGES_OTP_BYPASS_EXPIRES_AT = new Date(0).toISOString(); },
   ];
   for (const mutate of cases) { const f = await otpFixture(); mutate(f); assert.ok((await f.consume()).error); }
   const f = await otpFixture('step-up', 'session-1');
   for (const changes of [{ pendingToken: 'bogus' }, { purpose: 'login' }, { scope: 'session-2' }, { userId: 'other' }]) {
     assert.ok((await f.consume(changes)).error);
   }
-  assert.equal((await f.consume()).judgesBypass, true);
+  assert.ok((await f.consume()).challenge);
   const restore = await otpFixture('restore', 'clinic');
-  assert.ok((await restore.consume()).error);
+  assert.ok((await restore.consume({ code: '654321' })).error);
+  assert.ok((await restore.consume()).challenge);
   const wrong = await otpFixture();
   for (let i = 0; i < 5; i++) assert.ok((await wrong.consume({ code: 'wrong' })).error);
   assert.equal((await wrong.consume()).status, 429);
@@ -211,90 +332,4 @@ test('reminder cron keeps failed items eligible and continues to later appointme
   const result = await GET({});
   assert.deepEqual(marked, ['success']);
   assert.equal(result.sent1, 1);
-});
-
-test('OTP issuance skips mail only while judges mode is active and never returns the code', async () => {
-  for (const active of [true, false]) {
-    let sent = 0;
-    let issued = 0;
-    const user = { id: 'u', email: 'r@example.invalid', isActive: true, wrappedKey: 'wrapped', keySalt: 'salt', password: 'hash' };
-    const common = {
-      NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) },
-      judgesOtpEnabled: () => active,
-      checkRateLimit: async () => ({ allowed: true }),
-      prisma: { user: { findUnique: async () => user } },
-      issueOtp: async () => { issued++; return { pendingToken: 'token', code: '123456' }; },
-      sendMfaOtpEmail: async () => { sent++; throw new Error('offline'); },
-      sendStepUpOtpEmail: async () => { sent++; throw new Error('offline'); },
-      getSession: async () => ({ userId: 'u', sessionToken: 'session' }),
-      getRequestMeta: () => ({ ip: '192.0.2.1' }),
-      parseJsonBody: async () => ({ body: { email: user.email, password: 'correct' } }),
-      sanitizeEmail: (v) => v, secret: (v) => v, bool: (v) => !!v,
-      verifyLoginPassword: async () => ({ valid: true, user }),
-    };
-    for (const file of ['app/api/auth/sign-in/route.js', 'app/api/auth/step-up/send-otp/route.js']) {
-      const { POST } = load(file, ['POST'], common);
-      const result = await POST({});
-      assert.equal(result.status, active ? 200 : 502);
-      assert.equal(result.body.code, undefined);
-      assert.equal(result.body.wrappedKey, undefined);
-      if (active) assert.equal(result.body.pendingToken, 'token');
-    }
-    assert.equal(sent, active ? 0 : 2);
-    assert.equal(issued, 2);
-  }
-});
-
-test('successful judges verification is audited without returning the bypass marker or code', async () => {
-  const entries = [];
-  const common = {
-    NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) },
-    getRequestMeta: () => ({ ip: '192.0.2.1' }),
-    checkRateLimit: async () => ({ allowed: true }),
-    parseJsonBody: async () => ({ body: { pendingToken: 'token', code: '654321' } }),
-    hexToken: (v) => v, secret: (v) => v,
-    consumeOtp: async () => ({ challenge: { user: { id: 'u' }, rememberMe: false }, judgesBypass: true }),
-    finalizeLogin: async () => ({}),
-    logAudit: async (entry) => { entries.push(entry); },
-    getSession: async () => ({ userId: 'u', sessionToken: 'session' }),
-    grantStepUp: async () => true,
-  };
-  for (const file of ['app/api/auth/verify-otp/route.js', 'app/api/auth/step-up/route.js']) {
-    const { POST } = load(file, ['POST'], common);
-    const response = await POST({});
-    assert.equal(response.status, 200);
-    assert.equal(response.body.judgesBypass, undefined);
-  }
-  assert.equal(entries.length, 2);
-  assert.equal(entries[0].metadata.mode, 'judges-bypass');
-  assert.equal(entries[1].metadata.judgesBypass, true);
-  assert.doesNotMatch(JSON.stringify(entries), /654321/);
-});
-
-test('all demo accounts skip login and record-access email on servers without local .env', async () => {
-  for (const email of [...demoEmails, 'ordinary@example.invalid']) {
-    const user = { id: 'u', email, isActive: true, wrappedKey: 'wrapped', keySalt: 'salt', password: 'hash' };
-    let sent = 0;
-    const common = {
-      ...judges({}, DuringJudging),
-      NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) },
-      checkRateLimit: async () => ({ allowed: true }),
-      prisma: { user: { findUnique: async () => user } },
-      issueOtp: async () => ({ pendingToken: 'token', code: '123456' }),
-      sendMfaOtpEmail: async () => { sent++; throw new Error('offline'); },
-      sendStepUpOtpEmail: async () => { sent++; throw new Error('offline'); },
-      getSession: async () => ({ userId: 'u', sessionToken: 'session' }),
-      getRequestMeta: () => ({ ip: '192.0.2.1' }),
-      parseJsonBody: async () => ({ body: { email, password: 'correct' } }),
-      sanitizeEmail: (v) => v, secret: (v) => v, bool: (v) => !!v,
-      verifyLoginPassword: async () => ({ valid: true, user }),
-    };
-    for (const file of ['app/api/auth/sign-in/route.js', 'app/api/auth/step-up/send-otp/route.js']) {
-      const { POST } = load(file, ['POST'], common);
-      const response = await POST({});
-      assert.equal(response.status, email === 'ordinary@example.invalid' ? 502 : 200, email);
-      assert.equal(response.body.code, undefined);
-    }
-    assert.equal(sent, email === 'ordinary@example.invalid' ? 2 : 0);
-  }
 });
