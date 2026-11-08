@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { issueOtp } from '@/lib/otp';
+import { judgesOtpEnabled } from '@/lib/judges-otp';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -28,7 +29,9 @@ export async function POST() {
   // response returns, dropping any un-awaited email send. Mirror the sign-in
   // MFA path (which awaits sendMfaOtpEmail) so the code reliably goes out.
   try {
-    await sendStepUpOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
+    if (!judgesOtpEnabled('step-up')) {
+      await sendStepUpOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
+    }
   } catch (err) {
     console.error('step-up send-otp email failed', err);
     return NextResponse.json(

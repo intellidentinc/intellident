@@ -23,6 +23,7 @@ import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { issueOtp } from '@/lib/otp';
+import { judgesOtpEnabled } from '@/lib/judges-otp';
 import { verifyLoginPassword } from '@/lib/login-attempts';
 import { sendMfaOtpEmail, sendAccountLockedAlert } from '@/lib/email';
 
@@ -141,7 +142,9 @@ export async function POST(request) {
     const { pendingToken, code: otp } = await issueOtp({ userId: user.id, purpose: 'login', rememberMe, expectedPasswordHash: user.password });
 
     try {
-      await sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
+      if (!judgesOtpEnabled('login')) {
+        await sendMfaOtpEmail({ to: user.email, firstName: user.firstName, code: otp });
+      }
     } catch (emailError) {
       console.error('Failed to send MFA OTP email:', emailError);
       return NextResponse.json(

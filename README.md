@@ -32,3 +32,13 @@ Architecture & feature reference lives in `CLAUDE.md` and `docs/` (security, rec
 
 Run npm run lint (Oxlint), npm run build, and npm audit before deployment. Security controls and deployment requirements are documented in [docs/security.md](docs/security.md). Use Node 22.12+ for the lint tooling.
 
+## Email delivery and temporary judges access
+
+Email uses `GMAIL_USER` and a Google **App Password** in `GMAIL_APP_PASSWORD`, not the normal account password. Formatting spaces are removed automatically. SMTP authentication error `EAUTH` / `535` means the configured credentials need replacement. Update the local `.env` and the deployment environment, then restart/redeploy. Successful SMTP acceptance does not guarantee inbox placement; verify delivery to a controlled inbox before judging.
+
+Judges can enter a temporary six-digit code at the existing login and record-access OTP prompts. Passwords and record permissions are still required. Read the private code from `JUDGES_OTP_BYPASS_CODE` in the local `.env` and share it privately with judges.
+
+The server requires all three settings: `JUDGES_OTP_BYPASS_ENABLED=true`, `JUDGES_OTP_BYPASS_CODE` (exactly six digits), and `JUDGES_OTP_BYPASS_EXPIRES_AT` (a fixed ISO timestamp with a timezone). The initial local configuration lasts nine days. For hosted testing, copy these settings to the deployment environment and redeploy; use the same fixed expiry so redeployments do not extend the window. Never use `NEXT_PUBLIC_` variables for the code.
+
+While active, login and record-access OTP emails are skipped. Challenges still expire after ten minutes and retain five-attempt and single-use protections. Backup-restore OTPs always require the emailed code. After the fixed deadline, normal email OTP behavior resumes automatically; judges must request a new challenge. Disable early by setting `JUDGES_OTP_BYPASS_ENABLED=false`, or remove all three settings, then restart/redeploy. The code is never returned by an API or written to audit logs; successful bypass use is audited.
+

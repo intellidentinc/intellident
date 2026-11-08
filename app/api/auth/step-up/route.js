@@ -43,14 +43,14 @@ export async function POST(request) {
     });
     if (result.error) return NextResponse.json({ error: result.error }, { status: result.status });
 
-    logAudit({
+    await logAudit({
       userId: session.userId,
       clinicId: session.clinicId,
       action: 'VERIFY',
       entity: 'StepUp',
       ipAddress: ip,
       userAgent,
-      metadata: { mode: 'otp', success: true },
+      metadata: { mode: 'otp', success: true, ...(result.judgesBypass && { judgesBypass: true }) },
     });
 
     const granted = await grantStepUp('otp');

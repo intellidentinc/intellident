@@ -129,6 +129,7 @@ test('sign-in still issues MFA for an enabled clinic without returning encryptio
     checkRateLimit: async () => ({ allowed: true }), logAudit: () => {}, after: () => {},
     issueOtp: async ({ expectedPasswordHash }) => { assert.equal(expectedPasswordHash, fixture.user.password); issued++; return { pendingToken: 'fixture-token', code: '123456' }; },
     sendMfaOtpEmail: async () => {},
+    judgesOtpEnabled: () => false,
   });
   const response = await POST({});
   assert.equal(response.status, 200);

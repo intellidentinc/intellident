@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { consumeOtp } from '@/lib/otp';
 import { prisma } from '@/lib/prisma';
 import { finalizeLogin } from '@/lib/login';
-import { getRequestMeta } from '@/lib/audit';
+import { getRequestMeta, logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { parseJsonBody, hexToken, secret } from '@/lib/validate';
 
@@ -56,6 +56,12 @@ export async function POST(request) {
 
     // Post-authentication: device fingerprint, suspicious detection, session creation, audit, flags.
     const flags = await finalizeLogin({ user, clinic, rememberMe: mfa.rememberMe, ip, userAgent });
+    if (result.judgesBypass) {
+      await logAudit({
+        userId: user.id, clinicId: user.clinicId, action: 'VERIFY', entity: 'MfaOtp',
+        ipAddress: ip, userAgent, metadata: { mode: 'judges-bypass', purpose: 'login', success: true },
+      });
+    }
 
     // Only now — after the second factor is confirmed — is the E2EE key material
     // released so the client can unwrap the master key locally.

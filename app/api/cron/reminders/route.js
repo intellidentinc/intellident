@@ -51,7 +51,8 @@ export async function GET(request) {
     })
 
     for (const appt of due1) {
-      await sendAppointmentReminder({ appointment: appt, hoursAhead: h1, notifConfig: clinic.notifConfig })
+      const result = await sendAppointmentReminder({ appointment: appt, hoursAhead: h1, notifConfig: clinic.notifConfig })
+      if (!result.delivered) continue
       await prisma.appointment.update({ where: { id: appt.id }, data: { reminderSent24h: true } })
       sent1++
     }
@@ -75,7 +76,8 @@ export async function GET(request) {
     })
 
     for (const appt of due2) {
-      await sendAppointmentReminder({ appointment: appt, hoursAhead: h2, notifConfig: clinic.notifConfig })
+      const result = await sendAppointmentReminder({ appointment: appt, hoursAhead: h2, notifConfig: clinic.notifConfig })
+      if (!result.delivered) continue
       await prisma.appointment.update({ where: { id: appt.id }, data: { reminderSent2h: true } })
       sent2++
     }
