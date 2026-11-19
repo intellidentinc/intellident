@@ -326,6 +326,74 @@ test('mail normalizes configuration, bounds timeouts, and sanitizes errors', asy
   await assert.rejects(sendMfaOtpEmail({ to: 'recipient@example.invalid', code: '123456' }));
 });
 
+function resetRequestFixture({ mailFails = false, appUrl = 'https://example.invalid/', user = { isActive: true, firstName: 'Patient' }, allowed = true } = {}) {
+  const existing = { token: 'previous-delivered-token', email: 'patient@example.invalid', expiresAt: new Date(Date.now() + 60000) };
+  const rows = [existing];
+  const messages = [];
+  const logs = [];
+  const { POST } = load('app/api/auth/forgot-password/route.js', ['POST'], {
+    ...crypto, NextResponse: { json },
+    process: { env: { NEXT_PUBLIC_APP_URL: appUrl } },
+    console: { error: (...args) => logs.push(args) },
+    getRequestMeta: () => ({ ip: '192.0.2.1' }),
+    checkRateLimit: async () => ({ allowed }),
+    parseJsonBody: async () => ({ body: { email: existing.email } }),
+    sanitizeEmail: (value) => value,
+    prisma: {
+      user: { findUnique: async () => user },
+      passwordResetToken: {
+        create: async ({ data }) => { rows.push(data); },
+        deleteMany: async ({ where }) => {
+          for (let i = rows.length - 1; i >= 0; i--) {
+            if (where.token ? rows[i].token === where.token : rows[i].email === where.email && (!where.expiresAt || rows[i].expiresAt <= where.expiresAt.lte)) rows.splice(i, 1);
+          }
+        },
+      },
+    },
+    sendPasswordResetEmail: async (message) => {
+      messages.push(message);
+      if (mailFails) throw Object.assign(new Error('SECRET SMTP CONTENT'), { code: 'EAUTH' });
+    },
+  });
+  return { POST, rows, existing, messages, logs };
+}
+
+test('reset email failure preserves delivered links and removes only the failed challenge', async () => {
+  const f = resetRequestFixture({ mailFails: true });
+  const result = await f.POST({});
+  assert.equal(result.status, 502);
+  assert.match(result.body.error, /Unable to send/);
+  assert.deepEqual(f.rows, [f.existing]);
+  assert.doesNotMatch(JSON.stringify(f.logs), /SECRET|patient@example|reset-password\?token=/);
+});
+
+test('reset mail contains a valid absolute link while the database stores only its hash', async () => {
+  const f = resetRequestFixture();
+  assert.equal((await f.POST({})).status, 200);
+  assert.equal(f.messages.length, 1);
+  const link = new URL(f.messages[0].resetUrl);
+  assert.equal(link.origin, 'https://example.invalid');
+  assert.equal(link.pathname, '/reset-password');
+  const token = link.searchParams.get('token');
+  assert.match(token, /^[a-f0-9]{64}$/);
+  assert.equal(f.rows[1].token, crypto.createHash('sha256').update(token).digest('hex'));
+  assert.notEqual(f.rows[1].token, token);
+  assert.equal(f.rows[0], f.existing);
+});
+
+test('invalid reset URL, inactive accounts and rate limits prevent token issuance and email', async () => {
+  for (const [options, status] of [
+    [{ appUrl: '' }, 500], [{ appUrl: 'javascript:alert(1)' }, 500],
+    [{ user: null }, 200], [{ user: { isActive: false } }, 200],
+    [{ user: { isActive: true, isDeleted: true } }, 200], [{ allowed: false }, 429],
+  ]) {
+    const f = resetRequestFixture(options);
+    assert.equal((await f.POST({})).status, status);
+    assert.equal(f.messages.length, 0);
+    assert.deepEqual(f.rows, [f.existing]);
+  }
+});
+
 function notificationFixture({ fail = false, custom = false } = {}) {
   let release;
   let deliveries = 0;
