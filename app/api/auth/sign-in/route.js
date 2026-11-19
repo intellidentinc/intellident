@@ -9,7 +9,7 @@
  *    Resets on successful login.
  *
  * 2. E2EE Key Material Handoff
- *    On success, the server returns `wrappedKey` and `keySalt` to the client.
+ *    Only after OTP verification, the server returns `wrappedKey` and `keySalt`.
  *    The browser re-derives the KEK from the user's password + keySalt (PBKDF2),
  *    then unwraps the master key locally. The server never sees the plaintext key.
  *
@@ -23,8 +23,6 @@ import { getRequestMeta, logAudit } from '@/lib/audit';
 import { parseJsonBody, sanitizeEmail, secret, bool } from '@/lib/validate';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { issueOtp } from '@/lib/otp';
-import { isEmailOtpRequired } from '@/lib/email-otp-policy';
-import { finalizeLogin } from '@/lib/login';
 import { verifyLoginPassword } from '@/lib/login-attempts';
 import { sendMfaOtpEmail, sendAccountLockedAlert } from '@/lib/email';
 
@@ -136,19 +134,6 @@ export async function POST(request) {
         { error: 'This clinic has been disabled. Please contact support.' },
         { status: 403 }
       );
-    }
-
-    if (!isEmailOtpRequired()) {
-      const flags = await finalizeLogin({ user, clinic, rememberMe, ip, userAgent });
-      return NextResponse.json({
-        clinicId: user.clinicId,
-        wrappedKey: user.wrappedKey,
-        keySalt: user.keySalt,
-        publicKey: user.publicKey,
-        encryptedPrivateKey: user.encryptedPrivateKey,
-        privateKeyIv: user.privateKeyIv,
-        ...flags,
-      });
     }
 
     // MFA (email OTP) step — credentials are valid; issue a one-time code and defer session

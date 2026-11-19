@@ -35,7 +35,7 @@ export default function OtpStepUpModal({ open, onClose, onSuccess, description }
         if (!res.ok) throw new Error('Unable to check verification status. Please try again.')
         const data = await res.json()
         if (controller.signal.aborted) return
-        if (data.otpRequired === false || data.valid === true) successRef.current()
+        if (data.valid === true) successRef.current()
         else setChecking(false)
       })
       .catch(() => {
@@ -88,10 +88,6 @@ export default function OtpStepUpModal({ open, onClose, onSuccess, description }
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Failed to send code. Please try again.')
-        return false
-      }
-      if (data.otpRequired === false) {
-        successRef.current()
         return false
       }
       setPendingToken(data.pendingToken)
@@ -181,7 +177,7 @@ export default function OtpStepUpModal({ open, onClose, onSuccess, description }
 
   const busy = sending || verifying
 
-  // No code-entry dialog while the server checks the temporary OTP policy.
+  // Check for an existing, unexpired OTP grant before showing code entry.
   if (checking) return null
 
   return (

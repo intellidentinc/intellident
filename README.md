@@ -32,12 +32,12 @@ Architecture & feature reference lives in `CLAUDE.md` and `docs/` (security, rec
 
 Run npm run lint (Oxlint), npm run build, and npm audit before deployment. Security controls and deployment requirements are documented in [docs/security.md](docs/security.md). Use Node 22.12+ for the lint tooling.
 
-## Email delivery and temporary judges access
+## Email delivery and mandatory OTP
 
 Email uses `GMAIL_USER` and a Google **App Password** in `GMAIL_APP_PASSWORD`, not the normal account password. Formatting spaces are removed automatically. SMTP authentication error `EAUTH` / `535` means the configured credentials need replacement. Update the local `.env` and the deployment environment, then restart/redeploy. Successful SMTP acceptance does not guarantee inbox placement; verify delivery to a controlled inbox before judging.
 
-Login and record-access email OTP are disabled for **all accounts** until **November 17, 2026, 11:31:29 PM Philippine time** (`2026-11-17T15:31:29.891Z`). Sign in with the normal account password; no judges code is needed. Record permissions and encryption remain enforced. Backup-restore email codes, signup verification links, password-reset links, and password step-up for exports/backup remain active.
+Email OTP is mandatory for **all accounts**, including demo and super-admin accounts. Login creates a session and returns encryption key material only after the emailed code is verified. Protected record access requires a separate OTP step-up grant, valid for 15 minutes.
 
-The deadline is fixed in the server-side `lib/email-otp-policy.js` policy and checked on each request. OTP resumes automatically at expiry, including for record access from existing sessions. There is no persistent waiver in the session. The previous `JUDGES_OTP_BYPASS_*` settings and shared code are obsolete and have no effect; remove those settings from deployment environments.
+There is no date-based waiver or shared bypass code. The previous `JUDGES_OTP_BYPASS_*` settings are obsolete and have no effect; remove those settings from deployment environments. Backup restore retains its separate email code, and exports/backup retain password step-up.
 
-Deploy this version to activate the policy on the hosted website. No environment changes or database migration are required. Verify hosted password login and record access after deployment. Gmail credentials must be working before the deadline for normal OTP delivery to resume successfully.
+Redeploy this version to activate the change on the hosted website. No database migration is required. Existing login sessions remain valid, but protected record access requires OTP step-up. Verify hosted login, record access, and delivery to a controlled inbox after deployment; working Gmail credentials are required.

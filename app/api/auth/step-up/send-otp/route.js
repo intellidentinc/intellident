@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { issueOtp } from '@/lib/otp';
-import { isEmailOtpRequired } from '@/lib/email-otp-policy';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -9,9 +8,6 @@ import { sendStepUpOtpEmail } from '@/lib/email';
 export async function POST() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!isEmailOtpRequired()) {
-    return NextResponse.json({ otpRequired: false }, { headers: { 'Cache-Control': 'no-store' } });
-  }
 
   const { allowed } = await checkRateLimit(`step-up-send:${session.userId}`, 5, 15 * 60);
   if (!allowed) {

@@ -24,19 +24,20 @@ function recordGate(policy) {
 }
 const json = (body, options = {}) => ({ body, status: options.status || 200, headers: options.headers });
 
-test('fixed judging deadline restores OTP exactly at expiry without environment settings', () => {
-  assert.equal(policyAt(deadline - 1).isEmailOtpRequired(), false);
+test('OTP is mandatory before, at and after the former judging deadline', () => {
+  assert.equal(policyAt(0).isEmailOtpRequired(), true);
+  assert.equal(policyAt(deadline - 1).isEmailOtpRequired(), true);
   assert.equal(policyAt(deadline).isEmailOtpRequired(), true);
   assert.equal(policyAt(deadline + 1).isEmailOtpRequired(), true);
 });
 
-function signInFixture({ required = false, email = 'ordinary@example.invalid', valid = true, active = true, enabled = true } = {}) {
-  const user = { id: 'u', email, role: 2, clinicId: 'c', isActive: active, wrappedKey: 'wrapped', keySalt: 'salt', password: 'hash' };
+function signInFixture({ email = 'ordinary@example.invalid', role = 2, valid = true, active = true, enabled = true, mailFails = false } = {}) {
+  const user = { id: 'u', email, role, clinicId: role === 0 ? null : 'c', isActive: active, wrappedKey: 'wrapped', keySalt: 'salt', password: 'hash' };
   let finalized = 0;
   let sent = 0;
   let issued = 0;
   const { POST } = load('app/api/auth/sign-in/route.js', ['POST'], {
-    NextResponse: { json }, isEmailOtpRequired: () => required,
+    NextResponse: { json },
     getRequestMeta: () => ({ ip: '192.0.2.1' }),
     checkRateLimit: async () => ({ allowed: true }),
     parseJsonBody: async () => ({ body: { email, password: 'correct', rememberMe: true } }),
@@ -50,26 +51,24 @@ function signInFixture({ required = false, email = 'ordinary@example.invalid', v
       return { requiresTerms: true, mustChangePassword: true, passwordExpired: true, requiresStepUp: true };
     },
     issueOtp: async () => { issued++; return { pendingToken: 'token', code: '123456' }; },
-    sendMfaOtpEmail: async () => { sent++; },
+    sendMfaOtpEmail: async () => { sent++; if (mailFails) throw new Error('SMTP unavailable'); },
   });
   return { POST, stats: () => ({ finalized, sent, issued }) };
 }
 
-test('ordinary and demo accounts sign in directly during judging and retain key material and routing flags', async () => {
-  for (const email of ['admin.maria@intellident.test', 'ordinary@example.invalid', 'superadmin@intellident.app']) {
-    const f = signInFixture({ email });
+test('ordinary, demo and super-admin accounts must verify OTP before session and key handoff', async () => {
+  for (const [email, role] of [['admin.maria@intellident.test', 1], ['ordinary@example.invalid', 2], ['superadmin@intellident.app', 0]]) {
+    const f = signInFixture({ email, role });
     const res = await f.POST({});
     assert.equal(res.status, 200);
-    assert.equal(res.body.mfaPending, undefined);
-    assert.equal(res.body.pendingToken, undefined);
-    assert.equal(res.body.wrappedKey, 'wrapped');
-    assert.equal(res.body.keySalt, 'salt');
-    for (const flag of ['requiresTerms', 'mustChangePassword', 'passwordExpired', 'requiresStepUp']) assert.equal(res.body[flag], true);
-    assert.deepEqual(f.stats(), { finalized: 1, sent: 0, issued: 0 });
+    assert.equal(res.body.mfaPending, true);
+    assert.equal(res.body.pendingToken, 'token');
+    for (const field of ['wrappedKey', 'keySalt', 'publicKey', 'encryptedPrivateKey', 'privateKeyIv']) assert.equal(res.body[field], undefined);
+    assert.deepEqual(f.stats(), { finalized: 0, sent: 1, issued: 1 });
   }
 });
 
-test('password, lockout result, account and clinic restrictions precede temporary OTP waiver', async () => {
+test('password, lockout result, account and clinic restrictions precede OTP issuance', async () => {
   for (const [settings, status] of [[{ valid: false }, 401], [{ active: false }, 403], [{ enabled: false }, 403]]) {
     const f = signInFixture(settings);
     const res = await f.POST({});
@@ -79,20 +78,72 @@ test('password, lockout result, account and clinic restrictions precede temporar
   }
 });
 
-test('after judging login sends OTP and withholds session and keys', async () => {
-  const f = signInFixture({ required: policyAt(deadline).isEmailOtpRequired() });
+test('login email failure cannot finalize login or return encryption keys', async () => {
+  const f = signInFixture({ mailFails: true });
   const res = await f.POST({});
-  assert.equal(res.status, 200);
-  assert.equal(res.body.mfaPending, true);
+  assert.equal(res.status, 502);
+  assert.equal(res.body.pendingToken, undefined);
   assert.equal(res.body.wrappedKey, undefined);
   assert.deepEqual(f.stats(), { finalized: 0, sent: 1, issued: 1 });
 });
 
-test('record waiver applies only to authenticated OTP checks and leaves no grant after expiry', () => {
+test('only a verified login challenge releases keys and preserves onboarding flags', async () => {
+  for (const verified of [false, true]) {
+    let finalized = 0;
+    const user = { clinicId: 'c', wrappedKey: 'wrapped', keySalt: 'salt', publicKey: 'public', encryptedPrivateKey: 'private', privateKeyIv: 'iv' };
+    const flags = { requiresTerms: true, mustChangePassword: true, passwordExpired: true, requiresStepUp: true };
+    const { POST } = load('app/api/auth/verify-otp/route.js', ['POST'], {
+      NextResponse: { json },
+      getRequestMeta: () => ({ ip: '192.0.2.1' }),
+      checkRateLimit: async () => ({ allowed: true }),
+      parseJsonBody: async () => ({ body: { pendingToken: 'token', code: '123456' } }),
+      hexToken: (value) => value, secret: (value) => value,
+      consumeOtp: async ({ purpose }) => {
+        assert.equal(purpose, 'login');
+        return verified ? { challenge: { user, rememberMe: true } } : { error: 'Invalid code', status: 401 };
+      },
+      prisma: { clinic: { findUnique: async () => ({ isEnabled: true }) } },
+      finalizeLogin: async (args) => {
+        finalized++;
+        assert.equal(args.user, user);
+        assert.equal(args.rememberMe, true);
+        return flags;
+      },
+    });
+    const response = await POST({});
+    assert.equal(response.status, verified ? 200 : 401);
+    assert.equal(finalized, verified ? 1 : 0);
+    for (const field of ['wrappedKey', 'keySalt', 'publicKey', 'encryptedPrivateKey', 'privateKeyIv']) {
+      assert.equal(response.body[field], verified ? user[field] : undefined);
+    }
+    if (verified) for (const flag of Object.keys(flags)) assert.equal(response.body[flag], true);
+  }
+});
+
+test('record-access email failure does not return a challenge or grant access', async () => {
+  const session = { userId: 'u', sessionToken: 'session' };
+  const { POST } = load('app/api/auth/step-up/send-otp/route.js', ['POST'], {
+    NextResponse: { json }, getSession: async () => session,
+    checkRateLimit: async () => ({ allowed: true }),
+    prisma: { user: { findUnique: async () => ({ email: 'ordinary@example.invalid' }) } },
+    issueOtp: async ({ purpose, scope }) => {
+      assert.equal(purpose, 'step-up');
+      assert.equal(scope, session.sessionToken);
+      return { pendingToken: 'token', code: '123456' };
+    },
+    sendStepUpOtpEmail: async () => { throw new Error('SMTP unavailable'); },
+  });
+  const response = await POST();
+  assert.equal(response.status, 502);
+  assert.equal(response.body.pendingToken, undefined);
+  assert.equal(recordGate(policyAt(0))(session, 'otp'), false);
+});
+
+test('record access requires an unexpired OTP grant and password grants remain separate', () => {
   const session = { userId: 'u', sessionToken: 'session' };
   const before = recordGate(policyAt(deadline - 1));
   const after = recordGate(policyAt(deadline));
-  assert.equal(before(session, 'otp'), true);
+  assert.equal(before(session, 'otp'), false);
   assert.equal(before(session, 'password'), false);
   assert.equal(before(session), false);
   assert.equal(before(null, 'otp'), false);
@@ -101,11 +152,17 @@ test('record waiver applies only to authenticated OTP checks and leaves no grant
   assert.equal(session.stepUpGrantedAt, undefined);
   const passwordGrant = { ...session, stepUpMode: 'password', stepUpGrantedAt: Date.now() };
   assert.equal(before(passwordGrant, 'password'), true);
+  assert.equal(before(passwordGrant, 'otp'), false);
+  const otpGrant = { ...session, stepUpMode: 'otp', stepUpGrantedAt: Date.now() };
+  assert.equal(before(otpGrant, 'otp'), true);
+  assert.equal(before(otpGrant, 'password'), false);
+  assert.equal(before({ ...otpGrant, stepUpGrantedAt: Date.now() - 15 * 60 * 1000 }, 'otp'), false);
+  assert.equal(before({ ...otpGrant, stepUpGrantedAt: Date.now() + 60000 }, 'otp'), false);
 });
 
-test('OTP status and issuance endpoints require a session and return waiver without creating or sending OTP', async () => {
-  for (const required of [false, true]) {
-    const policy = { isEmailOtpRequired: () => required };
+test('OTP status and issuance always require verification for existing sessions', async () => {
+  for (const time of [deadline - 1, deadline + 1]) {
+    const policy = policyAt(time);
     const session = { userId: 'u', sessionToken: 'session' };
     let sent = 0;
     let issued = 0;
@@ -119,28 +176,28 @@ test('OTP status and issuance endpoints require a session and return waiver with
     };
     const { GET } = load('app/api/auth/step-up/route.js', ['GET'], mocks);
     const status = await GET({ url: 'https://example.invalid/api/auth/step-up?mode=otp' });
-    assert.equal(status.body.otpRequired, required);
-    assert.equal(status.body.valid, !required);
+    assert.equal(status.body.otpRequired, true);
+    assert.equal(status.body.valid, false);
     assert.equal(status.headers['Cache-Control'], 'no-store');
     assert.equal((await GET({ url: 'https://example.invalid/api/auth/step-up' })).body.valid, false);
     const { POST } = load('app/api/auth/step-up/send-otp/route.js', ['POST'], mocks);
     const response = await POST();
     assert.equal(response.status, 200);
-    assert.equal(response.body.otpRequired, required ? undefined : false);
-    assert.equal(issued, required ? 1 : 0);
-    assert.equal(sent, required ? 1 : 0);
+    assert.equal(response.body.pendingToken, 'token');
+    assert.equal(issued, 1);
+    assert.equal(sent, 1);
     const anonymous = { ...mocks, getSession: async () => null };
     assert.equal((await load('app/api/auth/step-up/route.js', ['GET'], anonymous).GET({ url: 'https://example.invalid/?mode=otp' })).status, 401);
     assert.equal((await load('app/api/auth/step-up/send-otp/route.js', ['POST'], anonymous).POST()).status, 401);
   }
 });
 
-test('record waiver retains patient ownership and treating-dentist clinic restrictions', async () => {
+test('verified OTP retains patient ownership and treating-dentist clinic restrictions', async () => {
   const roles = { DENTIST: 2, PATIENT: 4 };
   for (const role of [roles.DENTIST, roles.PATIENT]) {
     for (const authorized of [false, true]) {
       let accessed = 0;
-      const session = { userId: 'u', sessionToken: 'session', clinicId: 'clinic-a' };
+      const session = { userId: 'u', sessionToken: 'session', clinicId: 'clinic-a', stepUpMode: 'otp', stepUpGrantedAt: Date.now() };
       const { GET } = load('app/api/records/[patientId]/recipients/route.js', ['GET'], {
         NextResponse: { json }, ROLES: roles,
         getSession: async () => session,
@@ -161,7 +218,7 @@ test('record waiver retains patient ownership and treating-dentist clinic restri
   }
 });
 
-test('backup restore still requires password step-up and sends its own email OTP during judging', async () => {
+test('backup restore still requires password step-up and sends its own email OTP', async () => {
   const policy = policyAt(deadline - 1);
   const session = { userId: 'admin', sessionToken: 'session' };
   let issued = 0;
