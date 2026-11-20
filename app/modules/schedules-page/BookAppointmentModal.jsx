@@ -126,6 +126,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
 
   const [services, setServices]     = useState([])
   const [dentists, setDentists]     = useState([])
+  const [dentistsLoading, setDentistsLoading] = useState(false)
   const [slots, setSlots]           = useState([])
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [closures, setClosures]     = useState([])
@@ -141,7 +142,7 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
     setTimeSlot(''); setNotes(''); setErrors({})
     setSlots([]); setAiSuggestions([])
 
-    fetch('/api/appointments/services')
+    fetch('/api/appointments/services', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => setServices(d.services ?? []))
       .catch(() => { setServices([]); showToast('Could not load services. Please try again.', 'error') })
@@ -155,15 +156,25 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
       .catch(() => setClosures([]))
   }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch dentists when services change
+  // Ignore obsolete responses when services change or the dialog closes.
   useEffect(() => {
-    if (serviceIds.length === 0) { setDentists([]); setDentistId(''); return }
-    fetch(`/api/appointments/dentists?serviceIds=${serviceIds.join(',')}`)
+    setDentists([]); setDentistId(''); setDentistsLoading(false)
+    setDate(null); setTimeSlot(''); setSlots([])
+    if (!open || serviceIds.length === 0) return
+    let active = true
+    setDentistsLoading(true)
+    fetch(`/api/appointments/dentists?serviceIds=${serviceIds.join(',')}`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setDentists(d.dentists ?? []))
-      .catch(() => { setDentists([]); showToast('Could not load dentists. Please try again.', 'error') })
-    setDentistId(''); setDate(null); setTimeSlot(''); setSlots([])
-  }, [serviceIds.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
+      .then(d => { if (active) setDentists(d.dentists ?? []) })
+      .catch(() => {
+        if (active) {
+          setDentists([])
+          showToast('Could not load dentists. Please try again.', 'error')
+        }
+      })
+      .finally(() => { if (active) setDentistsLoading(false) })
+    return () => { active = false }
+  }, [open, serviceIds.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch slots when date + dentist + services all set
   useEffect(() => {
@@ -389,7 +400,12 @@ export default function BookAppointmentModal({ open, onClose, onSuccess }) {
               {errors.dentistId && (
                 <Typography variant='caption' color='error' sx={{ mt: 0.5, display: 'block' }}>{errors.dentistId}</Typography>
               )}
-              {dentists.length === 0 && (
+              {dentistsLoading && (
+                <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
+                  Loading assigned dentists…
+                </Typography>
+              )}
+              {!dentistsLoading && dentists.length === 0 && (
                 <Box sx={{ mt: 1.5, bgcolor: '#fef9c3', color: '#854d0e', borderRadius: 2, px: 2, py: 1.5 }}>
                   <Typography variant='body2' fontWeight={500}>
                     No dentist is currently available for the selected service(s). Please choose another service or contact the clinic.

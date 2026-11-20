@@ -18,6 +18,8 @@ export async function GET() {
   })
 
   const res = NextResponse.json({ services })
-  res.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600')
+  // The active clinic comes from the session, so this URL must not reuse a
+  // previous clinic's service IDs after a patient switches clinics.
+  res.headers.set('Cache-Control', 'private, no-store')
   return res
 }
